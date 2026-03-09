@@ -10,13 +10,14 @@ import org.springframework.web.socket.handler.TextWebSocketHandler
 class SignalingHandler(private val registry: SessionRegistry) : TextWebSocketHandler() {
 
     override fun afterConnectionEstablished(session: WebSocketSession) {
-        if (!registry.register(session)) {
-            session.close(CloseStatus.SERVICE_OVERLOAD)
-        }
+        registry.register(session)
+            .onFailure { session.close(CloseStatus.SERVICE_OVERLOAD) }
     }
 
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
-        registry.getOther(session)?.takeIf { it.isOpen }?.sendMessage(message)
+        registry.peer(session)
+            ?.takeIf { it.isOpen }
+            ?.sendMessage(message)
     }
 
     override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) {
