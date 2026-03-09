@@ -4,20 +4,44 @@
 
 ```mermaid
 graph TB
-    subgraph "GitHub"
-        REPO[RyanDur/battleship<br/>Bare Kotlin project]
-        PROJ[GitHub Project Board<br/>11 stories planned]
+    subgraph "Backend (Spring Boot - Kotlin)"
+        HC[HealthController<br/>GET /health]
+        WC[WebSocketConfig<br/>Origin + Token Auth]
+        AH[AuthHandshakeInterceptor<br/>Result pipeline validation]
+        SH[SignalingHandler<br/>Relay messages to peer]
+        SR[SessionRegistry<br/>Max 2 sessions]
     end
 
-    REPO -.->|empty scaffold| REPO
-    PROJ -.->|Iteration 1| PROJ
+    subgraph "Shared (Kotlin)"
+        RT[Result of S and F<br/>map / flatMap / either]
+        SM[SignalingMessage<br/>Offer / Answer / ICE / Error]
+    end
 
-    style REPO fill:#f9f,stroke:#333
-    style PROJ fill:#bbf,stroke:#333
+    subgraph "Frontend (React + Vite)"
+        APP[App scaffold<br/>Vitest configured]
+        PT[Protocol Types<br/>TS mirror of SignalingMessage]
+        WT[Worker Message Types<br/>WorkerCommand / WorkerEvent]
+    end
+
+    WC --> AH --> SR
+    SH --> SR
+    AH -.->|uses| RT
+    SR -.->|uses| RT
+
+    style HC fill:#90EE90,stroke:#333
+    style WC fill:#90EE90,stroke:#333
+    style AH fill:#90EE90,stroke:#333
+    style SH fill:#90EE90,stroke:#333
+    style SR fill:#90EE90,stroke:#333
+    style RT fill:#90EE90,stroke:#333
+    style SM fill:#90EE90,stroke:#333
+    style APP fill:#90EE90,stroke:#333
+    style PT fill:#90EE90,stroke:#333
+    style WT fill:#90EE90,stroke:#333
 ```
 
-> **Status:** Project setup not yet started. No modules, no frontend, no backend.
-> Updated as implementation progresses.
+> **Status:** Backend signaling complete (Stories #1-5). Frontend scaffolded with type definitions. WebWorker and React UI not yet implemented.
+> Green = implemented and tested.
 
 ---
 
