@@ -37,4 +37,4 @@ export const nothing = <T = never>(): Nothing<T> => Object.freeze({
 })
 
 export const maybe = <T>(value: T | null | undefined): Maybe<T> =>
-  value == null ? nothing() : some(value)
+  value !== undefined && value !== null ? some(value) : nothing()
