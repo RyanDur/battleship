@@ -4,7 +4,7 @@
 
 ```mermaid
 graph TB
-    subgraph "Backend (Spring Boot - Kotlin)"
+    subgraph "applications/signaling-server"
         HC[HealthController<br/>GET /health]
         WC[WebSocketConfig<br/>Origin + Token Auth]
         AH[AuthHandshakeInterceptor<br/>Result pipeline validation]
@@ -12,14 +12,17 @@ graph TB
         SR[SessionRegistry<br/>Max 2 sessions]
     end
 
-    subgraph "Shared (Kotlin)"
-        RT[Result of S and F<br/>map / flatMap / either]
+    subgraph "components/signaling-protocol"
+        RT[Result of S and F<br/>map / flatMap / or / either]
         SM[SignalingMessage<br/>Offer / Answer / ICE / Error]
     end
 
-    subgraph "Frontend (React + Vite)"
+    subgraph "applications/web-client"
         APP[App scaffold<br/>Vitest configured]
-        PT[Protocol Types<br/>TS mirror of SignalingMessage]
+        RS[Result / Maybe<br/>Frozen immutable types]
+        DC[SignalingMessage Decoder<br/>schemawax runtime validation]
+        CH[ConnectionHandler<br/>State machine / WebRTC]
+        CS[ConnectionStatus<br/>UI component]
         WT[Worker Message Types<br/>WorkerCommand / WorkerEvent]
     end
 
@@ -36,11 +39,14 @@ graph TB
     style RT fill:#2e7d32,stroke:#1b5e20,color:#fff
     style SM fill:#2e7d32,stroke:#1b5e20,color:#fff
     style APP fill:#2e7d32,stroke:#1b5e20,color:#fff
-    style PT fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style RS fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style DC fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style CH fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style CS fill:#2e7d32,stroke:#1b5e20,color:#fff
     style WT fill:#2e7d32,stroke:#1b5e20,color:#fff
 ```
 
-> **Status:** Backend signaling complete (Stories #1-5). Frontend scaffolded with type definitions. WebWorker and React UI not yet implemented.
+> **Status:** Backend signaling complete (Stories #1-5). Frontend has Result/Maybe types, schemawax decoders, connection handler state machine, and ConnectionStatus component. WebWorker thread and React hook not yet wired.
 > Green = implemented and tested.
 
 ---
