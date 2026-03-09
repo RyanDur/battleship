@@ -29,17 +29,6 @@ sealed class Result<out S, out F> {
         is Success -> onSuccess(value)
         is Failure -> onFailure(reason)
     }
-
-    fun onSuccess(action: (S) -> Unit): Result<S, F> = also {
-        if (this is Success) action(value)
-    }
-
-    fun onFailure(action: (F) -> Unit): Result<S, F> = also {
-        if (this is Failure) action(reason)
-    }
-
-    val isSuccess: Boolean get() = this is Success
-    val isFailure: Boolean get() = this is Failure
 }
 
 fun <S> S.asSuccess(): Result<S, Nothing> = Result.Success(this)

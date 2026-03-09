@@ -50,9 +50,10 @@ class AuthHandshakeInterceptor(private val sessionRegistry: SessionRegistry) : H
         attributes: MutableMap<String, Any>
     ): Boolean = validateToken(request)
         .flatMap { token -> validateCapacity(token) }
-        .onSuccess { token -> attributes["token"] = token }
-        .onFailure { error -> response.setStatusCode(error.status) }
-        .isSuccess
+        .either(
+            onSuccess = { token -> attributes["token"] = token; true },
+            onFailure = { error -> response.setStatusCode(error.status); false }
+        )
 
     private fun validateToken(request: ServerHttpRequest): Result<String, HandshakeError> {
         val token = request.uri.query
