@@ -1,16 +1,16 @@
 type Some<T> = {
   isNothing: false
-  map<U>(fn: (value: T) => U): Maybe<U>
+  map<U>(fn: (value: T) => U): Some<U>
   mBind<U>(fn: (value: T) => Maybe<U>): Maybe<U>
-  or(_fn: () => Maybe<T>): Maybe<T>
+  or(_fn: () => Maybe<T>): Some<T>
   orElse(_fallback: T): T
   orNull(): T
 }
 
 type Nothing<T> = {
   isNothing: true
-  map<U>(_fn: (value: T) => U): Maybe<U>
-  mBind<U>(_fn: (value: T) => Maybe<U>): Maybe<U>
+  map<U>(_fn: (value: T) => U): Nothing<U>
+  mBind<U>(_fn: (value: T) => Maybe<U>): Nothing<U>
   or(fn: () => Maybe<T>): Maybe<T>
   orElse(fallback: T): T
   orNull(): null
@@ -18,19 +18,19 @@ type Nothing<T> = {
 
 export type Maybe<T> = Some<T> | Nothing<T>
 
-export const some = <T>(value: T): Maybe<T> => ({
-  isNothing: false,
+export const some = <T>(value: T): Some<T> => Object.freeze({
+  isNothing: false as const,
   map: (fn) => some(fn(value)),
   mBind: (fn) => fn(value),
-  or: (_fn) => some(value),
-  orElse: (_fallback) => value,
+  or: () => some(value),
+  orElse: () => value,
   orNull: () => value,
 })
 
-export const nothing = <T = never>(): Maybe<T> => ({
-  isNothing: true,
-  map: (_fn) => nothing(),
-  mBind: (_fn) => nothing(),
+export const nothing = <T = never>(): Nothing<T> => Object.freeze({
+  isNothing: true as const,
+  map: () => nothing(),
+  mBind: () => nothing(),
   or: (fn) => fn(),
   orElse: (fallback) => fallback,
   orNull: () => null,

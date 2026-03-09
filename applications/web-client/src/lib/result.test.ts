@@ -6,7 +6,8 @@ describe('Result', () => {
     it('maps over the value', () => {
       const result = success(2).map(n => n * 3)
 
-      expect(result).toEqual(success(6))
+      expect(result.kind).toBe('success')
+      expect(result.or(() => 0)).toBe(6)
     })
 
     it('flatMaps into another Result', () => {
@@ -15,7 +16,8 @@ describe('Result', () => {
 
       const result = success(2).flatMap(safeDivide)
 
-      expect(result).toEqual(success(5))
+      expect(result.kind).toBe('success')
+      expect(result.or(() => 0)).toBe(5)
     })
 
     it('unwraps with or, ignoring the fallback', () => {
@@ -38,17 +40,19 @@ describe('Result', () => {
     it('passes through map unchanged', () => {
       const result = failure<string>('oops').map((n: number) => n * 3)
 
-      expect(result).toEqual(failure('oops'))
+      expect(result.kind).toBe('failure')
+      expect(result.either(() => '', reason => reason)).toBe('oops')
     })
 
     it('passes through flatMap unchanged', () => {
       const result = failure<string>('oops').flatMap(() => success(42))
 
-      expect(result).toEqual(failure('oops'))
+      expect(result.kind).toBe('failure')
+      expect(result.either(() => '', reason => reason)).toBe('oops')
     })
 
     it('unwraps with or, using the fallback', () => {
-      const value = failure<string>('oops').or(reason => reason.length)
+      const value = failure<string, number>('oops').or(reason => reason.length)
 
       expect(value).toBe(4)
     })
@@ -74,7 +78,8 @@ describe('Result', () => {
         .flatMap(parse)
         .map(n => n * 2)
 
-      expect(result).toEqual(failure('not a number'))
+      expect(result.kind).toBe('failure')
+      expect(result.either(() => '', reason => reason)).toBe('not a number')
     })
 
     it('composes map and flatMap through a pipeline', () => {
@@ -87,7 +92,7 @@ describe('Result', () => {
         .flatMap(parse)
         .map(n => n * 2)
 
-      expect(result).toEqual(success(42))
+      expect(result.or(() => 0)).toBe(42)
     })
   })
 })

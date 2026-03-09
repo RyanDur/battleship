@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { WorkerCommand, WorkerEvent } from '../types/worker-messages'
+import type { WorkerEvent } from '../types/worker-messages'
 
 // Story #6: WebWorker bridges UI to local service via WebSocket
 // Story #7: WebWorker establishes WebRTC peer connection
@@ -182,7 +182,7 @@ describe('Connection Worker', () => {
 
     return createConnectionHandler({
       postMessage: mockPostMessage,
-      createWebSocket: (_url: string) => mockWebSocket as unknown as WebSocket,
+      createWebSocket: () => mockWebSocket as unknown as WebSocket,
       createPeerConnection: () => mockRTCPeerConnection as unknown as RTCPeerConnection,
     })
   }

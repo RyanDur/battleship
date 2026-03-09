@@ -1,0 +1,10 @@
+use_nvm() {
+  local node_version=$1
+  nvm_sh=$([ -s "$NVM_DIR/nvm.sh" ] && echo "$NVM_DIR/nvm.sh")
+  if [ -n "$nvm_sh" ]; then
+    source "$nvm_sh"
+    nvm use "$node_version"
+  fi
+}
+
+use_nvm 24
