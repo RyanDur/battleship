@@ -1,10 +1,17 @@
 ### IntelliJ IDEA ###
+.idea/
+*.iml
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
 
 ### Kotlin ###
 .kotlin
+
+### Gradle ###
+build/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
 
 ### Eclipse ###
 .apt_generated
@@ -30,3 +37,7 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Node ###
+frontend/node_modules/
+frontend/dist/
