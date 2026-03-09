@@ -3,4 +3,4 @@ plugins {
 }
 
 rootProject.name = "battleship"
-include("shared", "backend")
+include("components:signaling-protocol", "applications:signaling-server")

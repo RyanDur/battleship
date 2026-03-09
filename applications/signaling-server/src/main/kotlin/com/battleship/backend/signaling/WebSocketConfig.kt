@@ -1,7 +1,5 @@
-package com.battleship.backend.config
+package com.battleship.backend.signaling
 
-import com.battleship.backend.signaling.SessionRegistry
-import com.battleship.backend.signaling.SignalingHandler
 import com.battleship.shared.Result
 import com.battleship.shared.asFailure
 import com.battleship.shared.asSuccess
