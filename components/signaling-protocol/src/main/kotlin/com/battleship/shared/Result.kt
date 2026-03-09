@@ -15,11 +15,6 @@ sealed class Result<out S, out F> {
         is Failure -> this
     }
 
-    fun <T> mapFailure(transform: (@UnsafeVariance F) -> T): Result<S, T> = when (this) {
-        is Success -> this
-        is Failure -> Failure(transform(reason))
-    }
-
     fun or(fallback: (F) -> @UnsafeVariance S): S = when (this) {
         is Success -> value
         is Failure -> fallback(reason)
