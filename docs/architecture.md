@@ -28,16 +28,16 @@ graph TB
     AH -.->|uses| RT
     SR -.->|uses| RT
 
-    style HC fill:#90EE90,stroke:#333
-    style WC fill:#90EE90,stroke:#333
-    style AH fill:#90EE90,stroke:#333
-    style SH fill:#90EE90,stroke:#333
-    style SR fill:#90EE90,stroke:#333
-    style RT fill:#90EE90,stroke:#333
-    style SM fill:#90EE90,stroke:#333
-    style APP fill:#90EE90,stroke:#333
-    style PT fill:#90EE90,stroke:#333
-    style WT fill:#90EE90,stroke:#333
+    style HC fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style WC fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style AH fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style SH fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style SR fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style RT fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style SM fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style APP fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style PT fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style WT fill:#2e7d32,stroke:#1b5e20,color:#fff
 ```
 
 > **Status:** Backend signaling complete (Stories #1-5). Frontend scaffolded with type definitions. WebWorker and React UI not yet implemented.
