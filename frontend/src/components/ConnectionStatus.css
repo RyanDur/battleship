@@ -1,0 +1,21 @@
+/* Structural layout for the connection status indicator */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.connection-status[data-state="connected"],
+.connection-status[data-state="peer_connected"] {
+  color: var(--color-success);
+}
+
+.connection-status[data-state="connecting"] {
+  color: var(--color-warning);
+}
+
+.connection-status[data-state="disconnected"] {
+  color: var(--color-error);
+}

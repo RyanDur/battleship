@@ -1,3 +1,5 @@
+import './ConnectionStatus.css'
+
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'peer_connected'
 
 const statusLabel: Record<ConnectionState, string> = {
@@ -10,5 +12,7 @@ const statusLabel: Record<ConnectionState, string> = {
 type Props = { status: ConnectionState }
 
 export const ConnectionStatus = ({ status }: Props) => (
-  <span>{statusLabel[status]}</span>
+  <p className="connection-status" data-state={status}>
+    {statusLabel[status]}
+  </p>
 )
