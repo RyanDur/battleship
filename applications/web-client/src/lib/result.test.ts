@@ -7,7 +7,7 @@ describe('Result', () => {
       const result = success(2).map(n => n * 3)
 
       expect(result.kind).toBe('success')
-      expect(result.or(() => 0)).toBe(6)
+      expect(result.either(v => v, () => 0)).toBe(6)
     })
 
     it('flatMaps into another Result', () => {
@@ -17,13 +17,14 @@ describe('Result', () => {
       const result = success(2).flatMap(safeDivide)
 
       expect(result.kind).toBe('success')
-      expect(result.or(() => 0)).toBe(5)
+      expect(result.either(v => v, () => 0)).toBe(5)
     })
 
-    it('unwraps with or, ignoring the fallback', () => {
-      const value = success(42).or(() => 0)
+    it('passes through or, ignoring the recovery function', () => {
+      const result = success<number, string>(42).or(() => failure('recovered'))
 
-      expect(value).toBe(42)
+      expect(result.kind).toBe('success')
+      expect(result.either(v => v, () => 0)).toBe(42)
     })
 
     it('folds with either, calling onSuccess', () => {
@@ -51,10 +52,18 @@ describe('Result', () => {
       expect(result.either(() => '', reason => reason)).toBe('oops')
     })
 
-    it('unwraps with or, using the fallback', () => {
-      const value = failure<string, number>('oops').or(reason => reason.length)
+    it('recovers with or, applying the recovery function', () => {
+      const result = failure<string, number>('oops').or(reason => success(reason.length))
 
-      expect(value).toBe(4)
+      expect(result.kind).toBe('success')
+      expect(result.either(v => v, () => 0)).toBe(4)
+    })
+
+    it('can recover to another failure with or', () => {
+      const result = failure<string, number>('oops').or(() => failure(42))
+
+      expect(result.kind).toBe('failure')
+      expect(result.either(() => 0, v => v)).toBe(42)
     })
 
     it('folds with either, calling onFailure', () => {
@@ -92,7 +101,22 @@ describe('Result', () => {
         .flatMap(parse)
         .map(n => n * 2)
 
-      expect(result.or(() => 0)).toBe(42)
+      expect(result.either(v => v, () => 0)).toBe(42)
+    })
+
+    it('recovers from failure mid-chain with or', () => {
+      const parse = (s: string): Result<number, string> => {
+        const n = Number(s)
+        return isNaN(n) ? failure('not a number') : success(n)
+      }
+
+      const result = success('abc')
+        .flatMap(parse)
+        .or(() => success(0))
+        .map(n => n + 1)
+
+      expect(result.kind).toBe('success')
+      expect(result.either(v => v, () => -1)).toBe(1)
     })
   })
 })

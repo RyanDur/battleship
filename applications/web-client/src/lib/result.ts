@@ -4,7 +4,7 @@ export type Success<S, F> = {
     readonly kind: 'success'
     map<T>(fn: (value: S) => T): Success<T, F>
     flatMap<T, F2>(fn: (value: S) => Result<T, F2>): Result<T, F2>
-    or(_fn: (reason: F) => S): S
+    or<F2>(_fn: (reason: F) => Result<S, F2>): Result<S, F2>
     either<T>(onSuccess: (value: S) => T, onFailure: (reason: F) => T): T
 }
 
@@ -12,7 +12,7 @@ export type Failure<S, F> = {
     readonly kind: 'failure'
     map<T>(_fn: (value: S) => T): Failure<T, F>
     flatMap<T, F2>(_fn: (value: S) => Result<T, F2>): Failure<T, F>
-    or(fn: (reason: F) => S): S
+    or<F2>(fn: (reason: F) => Result<S, F2>): Result<S, F2>
     either<T>(onSuccess: (value: S) => T, onFailure: (reason: F) => T): T
 }
 
@@ -20,7 +20,7 @@ export const success = <S, F = never>(value: S): Success<S, F> => Object.freeze(
     kind: 'success' as const,
     map: (fn) => success(fn(value)),
     flatMap: (fn) => fn(value),
-    or: () => value,
+    or: () => success(value),
     either: (onSuccess) => onSuccess(value),
 })
 

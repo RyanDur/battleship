@@ -15,9 +15,9 @@ sealed class Result<out S, out F> {
         is Failure -> this
     }
 
-    fun or(fallback: (F) -> @UnsafeVariance S): S = when (this) {
-        is Success -> value
-        is Failure -> fallback(reason)
+    fun <F2> or(recover: (F) -> Result<@UnsafeVariance S, F2>): Result<S, F2> = when (this) {
+        is Success -> this
+        is Failure -> recover(reason)
     }
 
     fun <T> either(onSuccess: (S) -> T, onFailure: (F) -> T): T = when (this) {
