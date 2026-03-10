@@ -1,13 +1,22 @@
 import {defineConfig} from '@playwright/test'
-import {readdirSync} from 'fs'
+import {existsSync, readdirSync} from 'fs'
 import {resolve} from 'path'
 import {fileURLToPath} from 'url'
 
 const dir = fileURLToPath(new URL('.', import.meta.url))
 const libsDir = resolve(dir, '../../applications/signaling-server/build/libs')
+
+if (!existsSync(libsDir)) {
+  throw new Error('Backend jar not found. Run: ./gradlew :applications:signaling-server:bootJar')
+}
+
 const bootJar = readdirSync(libsDir)
   .filter(f => f.startsWith('signaling-server') && f.endsWith('.jar') && !f.endsWith('-plain.jar'))
   .map(f => resolve(libsDir, f))[0]
+
+if (!bootJar) {
+  throw new Error('Backend jar not found in build/libs. Run: ./gradlew :applications:signaling-server:bootJar')
+}
 
 export default defineConfig({
   testDir: './e2e',
