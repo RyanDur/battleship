@@ -6,4 +6,10 @@ describe('App', () => {
     render(<App />)
     expect(screen.getByRole('heading')).toBeInTheDocument()
   })
+
+  it('has a download link to the latest release', () => {
+    render(<App />)
+    const link = screen.getByRole('link', { name: /download/i })
+    expect(link).toHaveAttribute('href', 'https://github.com/RyanDur/battleship/releases/latest')
+  })
 })
