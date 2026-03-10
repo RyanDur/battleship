@@ -39,7 +39,15 @@ See [docs/architecture.md](docs/architecture.md) for detailed diagrams and conne
 **Mixed paradigm** — message passing from OOP, immutability and referential transparency from functional.
 
 - **Minimize mutation** — use discriminated unions and state machines over mutable objects. A single `let` binding for state is acceptable when the alternatives are worse.
-- **Result types for error handling** — `map`, `flatMap`, `or`, `either`. No exceptions for expected failures. No `mapFailure` — if we fail, we handle it.
+- **Railway Oriented Programming** — the Result type follows the [two-track model](https://fsharpforfunandprofit.com/rop/). Functions stay on the railway as long as possible:
+  - `map` — transform the success track
+  - `flatMap` — bind on the success track (returns Result)
+  - `or` — bind on the failure track, the dual of `flatMap` (returns Result)
+  - `tee` — side effects on the success track, returns self
+  - `either` — bind on both tracks (returns Result)
+  - `mapEither` — terminal fold, the only off-ramp from the railway
+  - `tryCatch` — bridges exception-throwing code into the two-track model
+  - No exceptions for expected failures. No `mapFailure` — if we fail, we handle it.
 - **Maybe for nullable boundaries** — `maybe()` wraps `T | null` into a chainable type. Used to bridge schemawax decoder results.
 - **Semantic naming within the domain** — `peer` not `getOther`, `signalingMessage` not `parseData`. Names should convey intent and meaning.
 - **No generic names** — no `common/`, `util/`, `shared/`, or single-letter aliases. Name things for what they are.
@@ -56,7 +64,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed diagrams and conne
 ### Backend (Kotlin)
 
 - **Sealed classes** for algebraic types — `Result<S, F>`, `SignalingMessage`, `RegistrationError`.
-- **`either()` for side effects** on Result, not `onSuccess`/`onFailure`. The bare Result is pure.
+- **`mapEither()` for terminal folds**, **`either()` for compositional branching** — both tracks handled explicitly, no `onSuccess`/`onFailure`. The bare Result is pure.
 - **kotlinx-serialization** with `@SerialName` for JSON discriminators.
 - **Feature-based packages** — everything for signaling lives in `signaling/`, not scattered across `config/`, `handlers/`, `services/`.
 
@@ -138,6 +146,7 @@ Environment variables are managed via [direnv](https://direnv.net/). Copy `.envr
 | `ALLOWED_ORIGINS` | `http://localhost:5173,...` | Backend | CORS allowed origins (comma-separated) |
 | `LOG_LEVEL` | `INFO` | Backend | Logging level (DEBUG, INFO, WARN, ERROR) |
 | `VITE_SERVICE_URL` | `http://localhost:8080` | Frontend | Local service URL for health checks |
+| `VITE_APP_VERSION` | `dev` | Frontend | Expected backend version (set from git tag at release) |
 
 ### Testing
 
