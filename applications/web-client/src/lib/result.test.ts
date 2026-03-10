@@ -7,7 +7,7 @@ describe('Result', () => {
       const result = success(2).map(n => n * 3)
 
       expect(result.kind).toBe('success')
-      expect(result.either(v => v, () => 0)).toBe(6)
+      expect(result.mapEither(v => v, () => 0)).toBe(6)
     })
 
     it('flatMaps into another Result', () => {
@@ -17,14 +17,14 @@ describe('Result', () => {
       const result = success(2).flatMap(safeDivide)
 
       expect(result.kind).toBe('success')
-      expect(result.either(v => v, () => 0)).toBe(5)
+      expect(result.mapEither(v => v, () => 0)).toBe(5)
     })
 
     it('passes through or, ignoring the recovery function', () => {
       const result = success<number, string>(42).or(() => failure('recovered'))
 
       expect(result.kind).toBe('success')
-      expect(result.either(v => v, () => 0)).toBe(42)
+      expect(result.mapEither(v => v, () => 0)).toBe(42)
     })
 
     it('runs a side effect with tee and returns self', () => {
@@ -33,11 +33,21 @@ describe('Result', () => {
 
       expect(spy).toHaveBeenCalledWith(42)
       expect(result.kind).toBe('success')
-      expect(result.either(v => v, () => 0)).toBe(42)
+      expect(result.mapEither(v => v, () => 0)).toBe(42)
     })
 
-    it('folds with either, calling onSuccess', () => {
-      const value = success(42).either(
+    it('either applies onSuccess and returns a Result', () => {
+      const result = success<number, string>(42).either(
+        n => success(`got ${n}`),
+        () => failure('failed')
+      )
+
+      expect(result.kind).toBe('success')
+      expect(result.mapEither(v => v, () => '')).toBe('got 42')
+    })
+
+    it('folds with mapEither, calling onSuccess', () => {
+      const value = success(42).mapEither(
         n => `got ${n}`,
         () => 'failed'
       )
@@ -51,28 +61,28 @@ describe('Result', () => {
       const result = failure<string>('oops').map((n: number) => n * 3)
 
       expect(result.kind).toBe('failure')
-      expect(result.either(() => '', reason => reason)).toBe('oops')
+      expect(result.mapEither(() => '', reason => reason)).toBe('oops')
     })
 
     it('passes through flatMap unchanged', () => {
       const result = failure<string>('oops').flatMap(() => success(42))
 
       expect(result.kind).toBe('failure')
-      expect(result.either(() => '', reason => reason)).toBe('oops')
+      expect(result.mapEither(() => '', reason => reason)).toBe('oops')
     })
 
     it('recovers with or, applying the recovery function', () => {
       const result = failure<string, number>('oops').or(reason => success(reason.length))
 
       expect(result.kind).toBe('success')
-      expect(result.either(v => v, () => 0)).toBe(4)
+      expect(result.mapEither(v => v, () => 0)).toBe(4)
     })
 
     it('can recover to another failure with or', () => {
       const result = failure<string, number>('oops').or(() => failure(42))
 
       expect(result.kind).toBe('failure')
-      expect(result.either(() => 0, v => v)).toBe(42)
+      expect(result.mapEither(() => 0, v => v)).toBe(42)
     })
 
     it('skips tee side effect and passes through', () => {
@@ -81,11 +91,21 @@ describe('Result', () => {
 
       expect(spy).not.toHaveBeenCalled()
       expect(result.kind).toBe('failure')
-      expect(result.either(() => '', r => r)).toBe('oops')
+      expect(result.mapEither(() => '', r => r)).toBe('oops')
     })
 
-    it('folds with either, calling onFailure', () => {
-      const value = failure('oops').either(
+    it('either applies onFailure and returns a Result', () => {
+      const result = failure<string, number>('oops').either(
+        () => success(0),
+        reason => success(reason.length)
+      )
+
+      expect(result.kind).toBe('success')
+      expect(result.mapEither(v => v, () => 0)).toBe(4)
+    })
+
+    it('folds with mapEither, calling onFailure', () => {
+      const value = failure('oops').mapEither(
         () => 'succeeded',
         reason => `failed: ${reason}`
       )
@@ -106,7 +126,7 @@ describe('Result', () => {
         .map(n => n * 2)
 
       expect(result.kind).toBe('failure')
-      expect(result.either(() => '', reason => reason)).toBe('not a number')
+      expect(result.mapEither(() => '', reason => reason)).toBe('not a number')
     })
 
     it('composes map and flatMap through a pipeline', () => {
@@ -119,7 +139,7 @@ describe('Result', () => {
         .flatMap(parse)
         .map(n => n * 2)
 
-      expect(result.either(v => v, () => 0)).toBe(42)
+      expect(result.mapEither(v => v, () => 0)).toBe(42)
     })
 
     it('tee runs side effects mid-chain without disrupting flow', () => {
@@ -131,7 +151,7 @@ describe('Result', () => {
         .map(n => n * 10)
 
       expect(log).toEqual([2])
-      expect(result.either(v => v, () => 0)).toBe(20)
+      expect(result.mapEither(v => v, () => 0)).toBe(20)
     })
 
     it('recovers from failure mid-chain with or', () => {
@@ -146,7 +166,23 @@ describe('Result', () => {
         .map(n => n + 1)
 
       expect(result.kind).toBe('success')
-      expect(result.either(v => v, () => -1)).toBe(1)
+      expect(result.mapEither(v => v, () => -1)).toBe(1)
+    })
+
+    it('either branches both tracks into new Results', () => {
+      const parse = (s: string): Result<number, string> => {
+        const n = Number(s)
+        return isNaN(n) ? failure('not a number') : success(n)
+      }
+
+      const toMessage = (result: Result<number, string>) =>
+        result.either(
+          n => success(`value: ${n}`),
+          e => success(`error: ${e}`)
+        )
+
+      expect(toMessage(success('21').flatMap(parse)).mapEither(v => v, () => '')).toBe('value: 21')
+      expect(toMessage(success('abc').flatMap(parse)).mapEither(v => v, () => '')).toBe('error: not a number')
     })
   })
 
@@ -155,14 +191,14 @@ describe('Result', () => {
       const result = tryCatch(() => JSON.parse('{"x":1}'), () => 'parse error')
 
       expect(result.kind).toBe('success')
-      expect(result.either(v => v.x, () => 0)).toBe(1)
+      expect(result.mapEither(v => v.x, () => 0)).toBe(1)
     })
 
     it('wraps a thrown exception in failure', () => {
       const result = tryCatch(() => JSON.parse('bad json'), (e) => `error: ${e}`)
 
       expect(result.kind).toBe('failure')
-      expect(result.either(() => '', r => r)).toMatch(/error:/)
+      expect(result.mapEither(() => '', r => r)).toMatch(/error:/)
     })
 
     it('maps the error using the onError function', () => {
@@ -172,7 +208,7 @@ describe('Result', () => {
       )
 
       expect(result.kind).toBe('failure')
-      expect(result.either(() => '', r => r)).toBe('boom')
+      expect(result.mapEither(() => '', r => r)).toBe('boom')
     })
   })
 })

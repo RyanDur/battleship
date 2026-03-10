@@ -6,7 +6,8 @@ export type Success<S, F> = {
     flatMap<T, F2>(fn: (value: S) => Result<T, F2>): Result<T, F2>
     or<F2>(_fn: (reason: F) => Result<S, F2>): Result<S, F2>
     tee(fn: (value: S) => void): Success<S, F>
-    either<T>(onSuccess: (value: S) => T, onFailure: (reason: F) => T): T
+    either<S2, F2>(onSuccess: (value: S) => Result<S2, F2>, _onFailure: (reason: F) => Result<S2, F2>): Result<S2, F2>
+    mapEither<T>(onSuccess: (value: S) => T, _onFailure: (reason: F) => T): T
 }
 
 export type Failure<S, F> = {
@@ -15,7 +16,8 @@ export type Failure<S, F> = {
     flatMap<T, F2>(_fn: (value: S) => Result<T, F2>): Failure<T, F>
     or<F2>(fn: (reason: F) => Result<S, F2>): Result<S, F2>
     tee(_fn: (value: S) => void): Failure<S, F>
-    either<T>(onSuccess: (value: S) => T, onFailure: (reason: F) => T): T
+    either<S2, F2>(_onSuccess: (value: S) => Result<S2, F2>, onFailure: (reason: F) => Result<S2, F2>): Result<S2, F2>
+    mapEither<T>(_onSuccess: (value: S) => T, onFailure: (reason: F) => T): T
 }
 
 export const success = <S, F = never>(value: S): Success<S, F> => Object.freeze({
@@ -25,6 +27,7 @@ export const success = <S, F = never>(value: S): Success<S, F> => Object.freeze(
     or: () => success(value),
     tee: (fn) => { fn(value); return success(value) },
     either: (onSuccess) => onSuccess(value),
+    mapEither: (onSuccess) => onSuccess(value),
 })
 
 export const failure = <F, S = never>(reason: F): Failure<S, F> => Object.freeze({
@@ -34,6 +37,7 @@ export const failure = <F, S = never>(reason: F): Failure<S, F> => Object.freeze
     or: (fn) => fn(reason),
     tee: () => failure(reason),
     either: (_onSuccess, onFailure) => onFailure(reason),
+    mapEither: (_onSuccess, onFailure) => onFailure(reason),
 })
 
 export const tryCatch = <S, F>(fn: () => S, onError: (error: unknown) => F): Result<S, F> => {

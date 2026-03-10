@@ -43,7 +43,7 @@ class AuthHandshakeInterceptor(private val sessionRegistry: SessionRegistry) : H
         attributes: MutableMap<String, Any>
     ): Boolean = validateToken(request)
         .flatMap { token -> validateCapacity(token) }
-        .either(
+        .mapEither(
             onSuccess = { token -> attributes["token"] = token; true },
             onFailure = { error -> response.setStatusCode(error.status); false }
         )

@@ -25,7 +25,12 @@ sealed class Result<out S, out F> {
         is Failure -> this
     }
 
-    fun <T> either(onSuccess: (S) -> T, onFailure: (F) -> T): T = when (this) {
+    fun <S2, F2> either(onSuccess: (@UnsafeVariance S) -> Result<S2, F2>, onFailure: (F) -> Result<S2, F2>): Result<S2, F2> = when (this) {
+        is Success -> onSuccess(value)
+        is Failure -> onFailure(reason)
+    }
+
+    fun <T> mapEither(onSuccess: (@UnsafeVariance S) -> T, onFailure: (F) -> T): T = when (this) {
         is Success -> onSuccess(value)
         is Failure -> onFailure(reason)
     }
