@@ -124,7 +124,7 @@ npm test
 
 # Frontend lint
 cd applications/web-client
-npx eslint .
+npm run lint
 ```
 
 ## Tech Stack
