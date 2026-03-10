@@ -20,6 +20,11 @@ sealed class Result<out S, out F> {
         is Failure -> recover(reason)
     }
 
+    fun tee(action: (@UnsafeVariance S) -> Unit): Result<S, F> = when (this) {
+        is Success -> also { action(value) }
+        is Failure -> this
+    }
+
     fun <T> either(onSuccess: (S) -> T, onFailure: (F) -> T): T = when (this) {
         is Success -> onSuccess(value)
         is Failure -> onFailure(reason)
@@ -28,3 +33,7 @@ sealed class Result<out S, out F> {
 
 fun <S> S.asSuccess(): Result<S, Nothing> = Result.Success(this)
 fun <F> F.asFailure(): Result<Nothing, F> = Result.Failure(this)
+
+inline fun <S, F> tryCatch(fn: () -> S, onError: (Throwable) -> F): Result<S, F> =
+    try { fn().asSuccess() }
+    catch (e: Throwable) { onError(e).asFailure() }
