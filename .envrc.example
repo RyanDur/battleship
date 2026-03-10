@@ -8,3 +8,12 @@ use_nvm() {
 }
 
 use_nvm 24
+
+# Backend (signaling-server) — all have defaults, override as needed
+# export SERVER_ADDRESS=localhost
+# export SERVER_PORT=8080
+# export ALLOWED_ORIGINS=http://localhost:5173,http://localhost:4173,https://ryandur.github.io
+# export LOG_LEVEL=INFO
+
+# Frontend (web-client) — Vite build-time env vars
+# export VITE_SERVICE_URL=http://localhost:8080

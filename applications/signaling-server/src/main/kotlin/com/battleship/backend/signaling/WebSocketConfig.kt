@@ -3,6 +3,7 @@ package com.battleship.backend.signaling
 import com.battleship.shared.Result
 import com.battleship.shared.asFailure
 import com.battleship.shared.asSuccess
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpStatus
 import org.springframework.http.server.ServerHttpRequest
@@ -22,20 +23,14 @@ sealed class HandshakeError(val status: HttpStatus) {
 @EnableWebSocket
 class WebSocketConfig(
     private val signalingHandler: SignalingHandler,
-    private val sessionRegistry: SessionRegistry
+    private val sessionRegistry: SessionRegistry,
+    @Value("\${app.allowed-origins}") private val allowedOrigins: String
 ) : WebSocketConfigurer {
-
-    companion object {
-        val ALLOWED_ORIGINS = setOf(
-            "http://localhost:5173",
-            "https://ryandur.github.io"
-        )
-    }
 
     override fun registerWebSocketHandlers(registry: WebSocketHandlerRegistry) {
         registry.addHandler(signalingHandler, "/ws/signaling")
             .addInterceptors(AuthHandshakeInterceptor(sessionRegistry))
-            .setAllowedOrigins(*ALLOWED_ORIGINS.toTypedArray())
+            .setAllowedOrigins(*allowedOrigins.split(",").toTypedArray())
     }
 }
 

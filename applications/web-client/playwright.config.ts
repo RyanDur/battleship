@@ -16,10 +16,11 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `java -jar ${bootJar} --spring.profiles.active=e2e`,
+      command: `java -jar ${bootJar}`,
       url: 'http://localhost:8081/health',
       reuseExistingServer: false,
       timeout: 30000,
+      env: {SERVER_PORT: '8081'},
     },
     {
       command: 'npm run preview',
