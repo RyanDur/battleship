@@ -17,3 +17,4 @@ use_nvm 24
 
 # Frontend (web-client) — Vite build-time env vars
 # export VITE_SERVICE_URL=http://localhost:8080
+# export VITE_APP_VERSION=dev

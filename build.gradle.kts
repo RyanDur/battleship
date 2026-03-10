@@ -6,7 +6,7 @@ plugins {
 
 allprojects {
     group = "com.battleship"
-    version = "0.1.0"
+    version = findProperty("version")?.toString()?.takeIf { it != "unspecified" } ?: "0.0.0-dev"
 
     repositories {
         mavenCentral()

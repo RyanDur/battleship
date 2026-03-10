@@ -38,4 +38,13 @@ describe('ServiceHealth', () => {
     await screen.findByText('Service online')
     expect(screen.queryByText('Update available')).not.toBeInTheDocument()
   })
+
+  it('shows service online in dev mode regardless of backend version', async () => {
+    const checkHealth = () => Promise.resolve({status: 'up' as const, version: '0.0.0-dev'})
+
+    render(<ServiceHealth checkHealth={checkHealth} expectedVersion='dev'/>)
+
+    expect(await screen.findByText('Service online')).toBeInTheDocument()
+    expect(screen.queryByText('Update available')).not.toBeInTheDocument()
+  })
 })

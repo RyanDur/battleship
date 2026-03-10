@@ -1,7 +1,7 @@
 import {ServiceHealth} from './components/ServiceHealth'
 import {checkHealth} from './protocol/health'
 
-const EXPECTED_VERSION = '0.1.0'
+const EXPECTED_VERSION = import.meta.env.VITE_APP_VERSION ?? 'dev'
 
 function App() {
   return (

@@ -16,7 +16,7 @@ export function ServiceHealth({checkHealth, expectedVersion}: ServiceHealthProps
   useEffect(() => {
     checkHealth().then(response => {
       if (!response) setStatus('offline')
-      else if (response.version !== expectedVersion) setStatus('update-available')
+      else if (expectedVersion !== 'dev' && response.version !== expectedVersion) setStatus('update-available')
       else setStatus('online')
     })
   }, [checkHealth, expectedVersion])
