@@ -74,6 +74,8 @@ See [docs/architecture.md](docs/architecture.md) for detailed diagrams and conne
 - **Unit tests** drive the internal implementation (how it does it).
 - **Test packages differ from source packages** to enforce encapsulation — tests should only use the public API.
 - **Mocks via dependency injection** — no monkey-patching, no test-only seams in production code.
+- **No `act()` warnings** — every test must let all state updates settle before asserting. Synchronous assertions after render are a bug when the component has effects. Use `waitFor` to wait for async state. See [Fix the "not wrapped in act" warning](https://kentcdodds.com/blog/fix-the-not-wrapped-in-act-warning).
+- **React Testing Library best practices** — query by role/label (not test IDs), avoid `container.querySelector`, use `screen` for queries. See [Common mistakes with React Testing Library](https://kentcdodds.com/blog/common-mistakes-with-react-testing-library).
 
 ### Quality Gates
 

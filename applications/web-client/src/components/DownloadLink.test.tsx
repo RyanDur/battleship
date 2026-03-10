@@ -58,23 +58,31 @@ describe('DownloadLink', () => {
     })
   })
 
-  it('shows Gatekeeper instructions for macOS', () => {
+  it('shows Gatekeeper instructions for macOS', async () => {
     render(<DownloadLink platform="macos" fetchDownloadUrl={resolves(DIRECT_DMG)}/>)
-    expect(screen.getByText(/right-click the app and select open/i)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText(/right-click the app and select open/i)).toBeInTheDocument()
+    })
   })
 
-  it('does not show Gatekeeper instructions for Windows', () => {
+  it('does not show Gatekeeper instructions for Windows', async () => {
     render(<DownloadLink platform="windows" fetchDownloadUrl={resolves('https://example.com/Battleship.msi')}/>)
-    expect(screen.queryByText(/right-click the app and select open/i)).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText(/right-click the app and select open/i)).not.toBeInTheDocument()
+    })
   })
 
-  it('does not show Gatekeeper instructions for Linux', () => {
+  it('does not show Gatekeeper instructions for Linux', async () => {
     render(<DownloadLink platform="linux" fetchDownloadUrl={resolves('https://example.com/battleship.deb')}/>)
-    expect(screen.queryByText(/right-click the app and select open/i)).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText(/right-click the app and select open/i)).not.toBeInTheDocument()
+    })
   })
 
-  it('does not show Gatekeeper instructions for unknown platform', () => {
+  it('does not show Gatekeeper instructions for unknown platform', async () => {
     render(<DownloadLink platform="unknown" fetchDownloadUrl={resolves(RELEASES_PAGE)}/>)
-    expect(screen.queryByText(/right-click the app and select open/i)).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText(/right-click the app and select open/i)).not.toBeInTheDocument()
+    })
   })
 })
