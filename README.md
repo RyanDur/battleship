@@ -133,11 +133,11 @@ Environment variables are managed via [direnv](https://direnv.net/). Copy `.envr
 
 | Variable | Default | Used by | Purpose |
 |----------|---------|---------|---------|
-| `SERVER_ADDRESS` | `127.0.0.1` | Backend | Bind address (localhost only for security) |
+| `SERVER_ADDRESS` | `localhost` | Backend | Bind address (localhost only for security) |
 | `SERVER_PORT` | `8080` | Backend | HTTP/WebSocket port |
 | `ALLOWED_ORIGINS` | `http://localhost:5173,...` | Backend | CORS allowed origins (comma-separated) |
 | `LOG_LEVEL` | `INFO` | Backend | Logging level (DEBUG, INFO, WARN, ERROR) |
-| `VITE_SERVICE_URL` | `http://127.0.0.1:8080` | Frontend | Local service URL for health checks |
+| `VITE_SERVICE_URL` | `http://localhost:8080` | Frontend | Local service URL for health checks |
 
 ### Testing
 

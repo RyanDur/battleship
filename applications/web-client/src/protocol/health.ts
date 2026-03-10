@@ -6,7 +6,7 @@ const healthResponse = Decoder.object({
   required: {status: Decoder.literal('up'), version: Decoder.string},
 })
 
-const serviceUrl = import.meta.env.VITE_SERVICE_URL ?? 'http://127.0.0.1:8080'
+const serviceUrl = import.meta.env.VITE_SERVICE_URL ?? 'http://localhost:8080'
 
 export const checkHealth: CheckHealth = () =>
   fetch(`${serviceUrl}/health`)

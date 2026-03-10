@@ -17,7 +17,7 @@ export default defineConfig({
   webServer: [
     {
       command: `java -jar ${bootJar} --spring.profiles.active=e2e`,
-      url: 'http://127.0.0.1:8081/health',
+      url: 'http://localhost:8081/health',
       reuseExistingServer: false,
       timeout: 30000,
     },
