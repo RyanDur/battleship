@@ -48,5 +48,6 @@ test-results/
 .env
 .env.*
 !.env.example
+!.env.e2e
 .envrc
 !.envrc.example

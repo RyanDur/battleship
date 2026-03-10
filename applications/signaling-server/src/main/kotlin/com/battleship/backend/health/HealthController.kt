@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 class HealthController(@Value("\${app.version}") private val version: String) {
 
-    @CrossOrigin(origins = ["http://localhost:5173", "https://ryandur.github.io"])
+    @CrossOrigin(origins = ["http://localhost:5173", "http://localhost:4173", "https://ryandur.github.io"])
     @GetMapping("/health")
     fun health(): Map<String, String> = mapOf("status" to "up", "version" to version)
 }
