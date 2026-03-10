@@ -57,4 +57,24 @@ describe('DownloadLink', () => {
       expect(screen.getByRole('link')).toHaveAttribute('href', RELEASES_PAGE)
     })
   })
+
+  it('shows Gatekeeper instructions for macOS', () => {
+    render(<DownloadLink platform="macos" fetchDownloadUrl={resolves(DIRECT_DMG)}/>)
+    expect(screen.getByText(/right-click the app and select open/i)).toBeInTheDocument()
+  })
+
+  it('does not show Gatekeeper instructions for Windows', () => {
+    render(<DownloadLink platform="windows" fetchDownloadUrl={resolves('https://example.com/Battleship.msi')}/>)
+    expect(screen.queryByText(/right-click the app and select open/i)).not.toBeInTheDocument()
+  })
+
+  it('does not show Gatekeeper instructions for Linux', () => {
+    render(<DownloadLink platform="linux" fetchDownloadUrl={resolves('https://example.com/battleship.deb')}/>)
+    expect(screen.queryByText(/right-click the app and select open/i)).not.toBeInTheDocument()
+  })
+
+  it('does not show Gatekeeper instructions for unknown platform', () => {
+    render(<DownloadLink platform="unknown" fetchDownloadUrl={resolves(RELEASES_PAGE)}/>)
+    expect(screen.queryByText(/right-click the app and select open/i)).not.toBeInTheDocument()
+  })
 })
