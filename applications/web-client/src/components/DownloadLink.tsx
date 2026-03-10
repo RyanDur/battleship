@@ -1,7 +1,6 @@
 import {useEffect, useState} from 'react'
+import {RELEASES_PAGE} from '../protocol/download'
 import type {Platform} from '../protocol/platform'
-
-const RELEASES_PAGE = 'https://github.com/RyanDur/battleship/releases/latest'
 
 const PLATFORM_LABEL: Record<Platform, string> = {
   macos: 'Download for macOS',
