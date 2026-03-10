@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
 
 jobs:
   test:
@@ -68,7 +69,7 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: applications/web-client
-        run: npx playwright install --with-deps chromium
+        run: npm run playwright:install
 
       - name: Run e2e tests
         working-directory: applications/web-client
