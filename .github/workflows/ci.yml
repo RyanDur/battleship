@@ -28,6 +28,22 @@ jobs:
       - name: Gradle tests
         run: ./gradlew test
 
+      - name: Build boot jar
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            ./gradlew :applications:signaling-server:bootJar -Pversion=${GITHUB_REF_NAME#v}
+          else
+            ./gradlew :applications:signaling-server:bootJar
+          fi
+
+      - name: Upload boot jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-jar
+          path: applications/signaling-server/build/libs/
+          if-no-files-found: error
+
       - name: Install frontend dependencies
         working-directory: applications/web-client
         run: npm ci
@@ -58,10 +74,10 @@ jobs:
           cache: npm
           cache-dependency-path: applications/web-client/package-lock.json
 
-      - uses: gradle/actions/setup-gradle@v4
-
-      - name: Build backend jar
-        run: ./gradlew :applications:signaling-server:bootJar
+      - uses: actions/download-artifact@v4
+        with:
+          name: boot-jar
+          path: applications/signaling-server/build/libs
 
       - name: Install frontend dependencies
         working-directory: applications/web-client
