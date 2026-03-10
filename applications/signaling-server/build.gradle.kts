@@ -17,6 +17,13 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    systemProperty("APP_VERSION", project.version.toString())
+}
+
+tasks.processResources {
+    filesMatching("application.yml") {
+        filter { it.replace("@APP_VERSION@", project.version.toString()) }
+    }
 }
 
 tasks.register<Exec>("jpackage") {

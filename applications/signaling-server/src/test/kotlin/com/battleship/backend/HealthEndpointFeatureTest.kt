@@ -15,11 +15,11 @@ class HealthEndpointFeatureTest {
     lateinit var mockMvc: MockMvc
 
     @Test
-    fun `local service responds to health check with status up`() {
+    fun `local service responds to health check with status and version`() {
         mockMvc.get("/health")
             .andExpect {
                 status { isOk() }
-                content { json("""{"status":"up"}""") }
+                content { json("""{"status":"up","version":"0.1.0"}""") }
             }
     }
 }
