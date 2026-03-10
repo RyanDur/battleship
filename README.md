@@ -32,6 +32,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed diagrams and conne
 - **TDD** — tests come first, always. Feature-level tests define the contract, unit tests drive the implementation.
 - **Trunk-based development** — commit directly to main, no pull requests. The pre-push hook gates quality.
 - **Agile/XP** — small incremental stories, continuous integration, simple design.
+- **[12-factor app](https://12factor.net/)** — config in the environment, explicit dependencies, strict build/release/run separation, logs to stdout.
 
 ### Code Style
 
@@ -76,6 +77,20 @@ A **pre-push hook** runs before every push:
 
 If any step fails, the push is rejected.
 
+**CI pipeline** (GitHub Actions) runs on every push to main:
+
+1. Unit tests (Gradle + Vitest + ESLint)
+2. End-to-end tests (Playwright against real backend on port 8081)
+
+**Release pipeline** (triggered by version tags `v*`):
+
+1. CI tests pass
+2. Build native installers (dmg, msi, deb) via jpackage
+3. Deploy frontend to GitHub Pages
+4. Create GitHub Release with installer assets
+
+Frontend and backend deploy atomically — a new frontend never goes live without a matching installer available.
+
 ## Development
 
 ### Prerequisites
@@ -112,6 +127,18 @@ cd applications/web-client
 npm run dev
 ```
 
+### Configuration
+
+Environment variables are managed via [direnv](https://direnv.net/). Copy `.envrc.example` to `.envrc` and run `direnv allow`.
+
+| Variable | Default | Used by | Purpose |
+|----------|---------|---------|---------|
+| `SERVER_ADDRESS` | `127.0.0.1` | Backend | Bind address (localhost only for security) |
+| `SERVER_PORT` | `8080` | Backend | HTTP/WebSocket port |
+| `ALLOWED_ORIGINS` | `http://localhost:5173,...` | Backend | CORS allowed origins (comma-separated) |
+| `LOG_LEVEL` | `INFO` | Backend | Logging level (DEBUG, INFO, WARN, ERROR) |
+| `VITE_SERVICE_URL` | `http://127.0.0.1:8080` | Frontend | Local service URL for health checks |
+
 ### Testing
 
 ```bash
@@ -125,13 +152,18 @@ npm test
 # Frontend lint
 cd applications/web-client
 npm run lint
+
+# End-to-end tests (requires backend jar built first)
+./gradlew :applications:signaling-server:bootJar
+cd applications/web-client
+npm run e2e
 ```
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 19, Vite 7, TypeScript 5.9, Vitest 4 |
+| Frontend | React 19, Vite 7, TypeScript 5.9, Vitest 4, Playwright |
 | Backend | Kotlin 2.3.10, Spring Boot 3.4.1, JVM 21 |
 | Serialization | kotlinx-serialization (Kotlin), schemawax (TypeScript) |
 | Networking | WebSocket (signaling), WebRTC (P2P data channels) |
