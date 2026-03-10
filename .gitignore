@@ -41,6 +41,8 @@ bin/
 ### Node ###
 node_modules/
 dist/
+playwright-report/
+test-results/
 
 ### Environment ###
 .env
