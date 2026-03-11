@@ -6,10 +6,12 @@
 graph TB
     subgraph "applications/signaling-server"
         HC[HealthController<br/>GET /health]
+        HH[HealthHandler<br/>WS /ws/health<br/>Heartbeat every N ms]
         WC[WebSocketConfig<br/>Origin + Token Auth]
         AH[AuthHandshakeInterceptor<br/>Result pipeline validation]
         SH[SignalingHandler<br/>Relay messages to peer]
         SR[SessionRegistry<br/>Max 2 sessions]
+        ES["@EnableScheduling<br/>Heartbeat timer"]
     end
 
     subgraph "components/signaling-protocol"
@@ -18,35 +20,54 @@ graph TB
     end
 
     subgraph "applications/web-client"
-        APP[App scaffold<br/>Vitest configured]
+        APP[App<br/>Lifts heartbeat state<br/>Derives download action]
+        SHC[ServiceHealth<br/>Display component<br/>online / reconnecting / offline]
+        DL[DownloadLink<br/>Download / Upgrade / hidden<br/>GitHub API asset lookup]
+        HB[startHeartbeat<br/>WS state machine<br/>reconnect + retry]
         RS[Result / Maybe<br/>Frozen immutable types]
         DC[SignalingMessage Decoder<br/>schemawax runtime validation]
         CH[ConnectionHandler<br/>State machine / WebRTC]
         CS[ConnectionStatus<br/>UI component]
         WT[Worker Message Types<br/>WorkerCommand / WorkerEvent]
+        PL[Platform Detection<br/>macOS / Windows / Linux]
+        DLProto[Download Protocol<br/>GitHub API + schemawax decoder]
     end
 
     WC --> AH --> SR
+    WC --> HH
     SH --> SR
     AH -.->|uses| RT
     SR -.->|uses| RT
+    ES -.->|drives| HH
+    APP --> SHC
+    APP --> DL
+    APP -.->|calls| HB
+    HB -.->|connects to| HH
+    DL -.->|uses| DLProto
 
     style HC fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style HH fill:#2e7d32,stroke:#1b5e20,color:#fff
     style WC fill:#2e7d32,stroke:#1b5e20,color:#fff
     style AH fill:#2e7d32,stroke:#1b5e20,color:#fff
     style SH fill:#2e7d32,stroke:#1b5e20,color:#fff
     style SR fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style ES fill:#2e7d32,stroke:#1b5e20,color:#fff
     style RT fill:#2e7d32,stroke:#1b5e20,color:#fff
     style SM fill:#2e7d32,stroke:#1b5e20,color:#fff
     style APP fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style SHC fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style DL fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style HB fill:#2e7d32,stroke:#1b5e20,color:#fff
     style RS fill:#2e7d32,stroke:#1b5e20,color:#fff
     style DC fill:#2e7d32,stroke:#1b5e20,color:#fff
     style CH fill:#2e7d32,stroke:#1b5e20,color:#fff
     style CS fill:#2e7d32,stroke:#1b5e20,color:#fff
     style WT fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style PL fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style DLProto fill:#2e7d32,stroke:#1b5e20,color:#fff
 ```
 
-> **Status:** Backend signaling complete (Stories #1-5). Frontend has Result/Maybe types, schemawax decoders, connection handler state machine, and ConnectionStatus component. WebWorker thread and React hook not yet wired.
+> **Status:** Backend signaling complete. Health endpoint serves both HTTP (for readiness probes) and WebSocket heartbeat (for live status). Frontend has heartbeat state machine with reconnect/retry, conditional Download/Upgrade link via GitHub API, platform detection, Result/Maybe types, schemawax decoders, connection handler, and ConnectionStatus component. WebWorker thread and React hook not yet wired.
 > Green = implemented and tested.
 
 ---
@@ -95,6 +116,11 @@ graph TB
     GHA -->|deploy| GHP
     GHA -->|build + release| GHR
 ```
+
+> **Differences from current state:**
+> - WebWorker bridges UI ↔ local service (currently App connects directly)
+> - WebRTC data channel between players (not yet implemented)
+> - Connection flow via signaling relay (signaling handler exists, not yet wired to frontend)
 
 ### Connection Flow
 
@@ -153,19 +179,26 @@ sequenceDiagram
     B_WW-->>B_UI: PEER_CONNECTED
 ```
 
+> **Differences from current state:** This entire flow is proposed. Currently the frontend connects to the heartbeat endpoint but does not yet establish signaling or WebRTC connections.
+
 ### Component Responsibilities
 
 ```mermaid
 graph LR
-    subgraph "Frontend (React + Vite)"
-        RC[React Components<br/>UI + Status Display]
-        HK[useConnectionWorker<br/>Hook]
-        WK[WebWorker<br/>WS + WebRTC Bridge]
-        PT[Protocol Types<br/>TS message definitions]
+    subgraph "Frontend — Current"
+        RC_C[App + ServiceHealth + DownloadLink<br/>Heartbeat-driven UI]
+        HB_C[startHeartbeat<br/>WS state machine]
+        PT_C[Protocol Types<br/>schemawax decoders]
     end
 
-    subgraph "Backend (Spring Boot)"
-        HC[HealthController<br/>GET /health]
+    subgraph "Frontend — Proposed"
+        RC[React Components<br/>UI + Game Board]
+        HK[useConnectionWorker<br/>Hook]
+        WK[WebWorker<br/>WS + WebRTC Bridge]
+    end
+
+    subgraph "Backend — Current"
+        HC[HealthController + HealthHandler<br/>HTTP + WS health]
         WC[WebSocketConfig<br/>Origin + Token Auth]
         SH[SignalingHandler<br/>Message Relay]
         SR[SessionRegistry<br/>Track Connections]
@@ -173,11 +206,25 @@ graph LR
     end
 
     RC --> HK --> WK
-    WK --> PT
+    WK --> PT_C
     SH --> SR
     SH --> SP
     WC --> SH
+
+    style RC_C fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style HB_C fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style PT_C fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style HC fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style WC fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style SH fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style SR fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style SP fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style RC fill:#fff3e0,stroke:#e65100,color:#000
+    style HK fill:#fff3e0,stroke:#e65100,color:#000
+    style WK fill:#fff3e0,stroke:#e65100,color:#000
 ```
+
+> Green = implemented. Orange = proposed / not yet built.
 
 ### Security
 
