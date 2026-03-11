@@ -23,13 +23,12 @@ const releaseDecoder = Decoder.object({
 })
 
 type Asset = Decoder.Output<typeof assetDecoder>
-type FetchFn = typeof fetch
 
-export const fetchDownloadUrl = (platform: Platform, fetchFn: FetchFn): Promise<string> => {
+export const fetchDownloadUrl = (platform: Platform, apiUrl = API_URL): Promise<string> => {
   const extension = PLATFORM_EXTENSION[platform]
   if (!extension) return Promise.resolve(RELEASES_PAGE)
 
-  return fetchFn(API_URL)
+  return fetch(apiUrl)
     .then(response => {
       if (!response.ok) return RELEASES_PAGE
       return response.json().then(json => {

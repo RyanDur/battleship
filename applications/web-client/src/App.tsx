@@ -11,7 +11,6 @@ const SERVICE_URL = import.meta.env.VITE_SERVICE_URL ?? 'http://localhost:8080'
 const WS_HEALTH_URL = SERVICE_URL.replace(/^http/, 'ws') + '/ws/health'
 
 const platform = detectPlatform(navigator.userAgent)
-const downloadUrl = (p: Parameters<typeof fetchDownloadUrl>[0]) => fetchDownloadUrl(p, fetch)
 
 function actionFor(state: HeartbeatState) {
   if (state.status === 'online') return 'none' as const
@@ -38,7 +37,7 @@ function App() {
     <main>
       <h1>Battleship</h1>
       <ServiceHealth state={state} onRetry={retry}/>
-      <DownloadLink platform={platform} action={actionFor(state)} fetchDownloadUrl={downloadUrl}/>
+      <DownloadLink platform={platform} action={actionFor(state)} fetchDownloadUrl={fetchDownloadUrl}/>
     </main>
   )
 }
