@@ -1,7 +1,6 @@
 package com.battleship.backend.health
 
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.mockito.Mockito.any
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
@@ -9,8 +8,8 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.springframework.web.socket.CloseStatus
 import org.springframework.web.socket.TextMessage
-import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.WebSocketMessage
+import org.springframework.web.socket.WebSocketSession
 
 class HealthHandlerTest {
 
@@ -50,9 +49,4 @@ class HealthHandlerTest {
         verify(session, never()).sendMessage(any(WebSocketMessage::class.java))
     }
 
-    @Test
-    fun `heartbeat message contains type and version fields`() {
-        val message = TextMessage("""{"type":"heartbeat","version":"1.2.3"}""")
-        assertEquals("""{"type":"heartbeat","version":"1.2.3"}""", message.payload)
-    }
 }

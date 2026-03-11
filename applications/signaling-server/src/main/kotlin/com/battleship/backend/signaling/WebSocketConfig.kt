@@ -1,5 +1,6 @@
 package com.battleship.backend.signaling
 
+import com.battleship.backend.health.HealthHandler
 import com.battleship.shared.Result
 import com.battleship.shared.asFailure
 import com.battleship.shared.asSuccess
@@ -23,7 +24,7 @@ sealed class HandshakeError(val status: HttpStatus) {
 @EnableWebSocket
 class WebSocketConfig(
     private val signalingHandler: SignalingHandler,
-    private val healthHandler: com.battleship.backend.health.HealthHandler,
+    private val healthHandler: HealthHandler,
     private val sessionRegistry: SessionRegistry,
     @Value("\${app.allowed-origins}") private val allowedOrigins: String
 ) : WebSocketConfigurer {
