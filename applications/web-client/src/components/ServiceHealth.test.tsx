@@ -1,4 +1,5 @@
-import {act, fireEvent, render, screen} from '@testing-library/react'
+import {act, render, screen} from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import {describe, expect, it, vi} from 'vitest'
 import {ServiceHealth} from './ServiceHealth'
 import type {ConnectHeartbeat, HeartbeatHandle, HeartbeatState} from '../protocol/heartbeat'
@@ -70,11 +71,12 @@ describe('ServiceHealth', () => {
   })
 
   it('calls retry on the heartbeat handle when Try again is clicked', async () => {
+    const user = userEvent.setup()
     const {connectHeartbeat, emit, handle} = makeConnectHeartbeat()
     render(<ServiceHealth connectHeartbeat={connectHeartbeat}/>)
 
     emit({status: 'disconnected'})
-    fireEvent.click(screen.getByRole('button', {name: 'Try again'}))
+    await user.click(screen.getByRole('button', {name: 'Try again'}))
 
     expect(handle.retry).toHaveBeenCalledOnce()
   })
