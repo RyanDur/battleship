@@ -21,10 +21,6 @@ export interface HeartbeatConfig {
   maxRetries?: number
 }
 
-export type ConnectHeartbeat = (
-  onStateChange: (state: HeartbeatState) => void
-) => HeartbeatHandle
-
 const DEFAULT_TIMEOUT = 10_000
 const DEFAULT_MAX_RETRIES = 5
 const RECONNECT_DELAY = 1_000
