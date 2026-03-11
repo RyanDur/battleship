@@ -27,7 +27,7 @@ export function DownloadLink({platform, fetchDownloadUrl}: DownloadLinkProps) {
     <>
       <a href={href}>{PLATFORM_LABEL[platform]}</a>
       {platform === 'macos' && (
-        <p>macOS will block the app on first launch. Right-click the app and select Open, then click Open in the dialog.</p>
+        <p>macOS will block the app on first launch. Go to System Settings → Privacy & Security and click Open Anyway.</p>
       )}
     </>
   )
