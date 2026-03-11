@@ -1,26 +1,12 @@
-import {act, render, screen} from '@testing-library/react'
+import {render, screen} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {ServiceHealth} from './ServiceHealth'
-import type {ConnectHeartbeat, HeartbeatHandle, HeartbeatState} from '../protocol/heartbeat'
 
-function makeConnectHeartbeat() {
-  let notify: (state: HeartbeatState) => void = () => {}
-  const handle: HeartbeatHandle = {stop: vi.fn(), retry: vi.fn()}
-
-  const connectHeartbeat: ConnectHeartbeat = (onStateChange) => {
-    notify = onStateChange
-    return handle
-  }
-
-  const emit = (state: HeartbeatState) => act(() => notify(state))
-
-  return {connectHeartbeat, emit, handle}
-}
+const noop = () => {}
 
 describe('ServiceHealth', () => {
-  it('shows nothing while connecting', async () => {
-    const {connectHeartbeat} = makeConnectHeartbeat()
-    render(<ServiceHealth connectHeartbeat={connectHeartbeat}/>)
+  it('shows nothing while connecting', () => {
+    render(<ServiceHealth state={{status: 'connecting'}} onRetry={noop}/>)
 
     expect(screen.queryByText(/service online/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/service offline/i)).not.toBeInTheDocument()
@@ -28,81 +14,49 @@ describe('ServiceHealth', () => {
     expect(screen.queryByText(/update available/i)).not.toBeInTheDocument()
   })
 
-  it('shows service online when heartbeat is received', async () => {
-    const {connectHeartbeat, emit} = makeConnectHeartbeat()
-    render(<ServiceHealth connectHeartbeat={connectHeartbeat}/>)
-
-    emit({status: 'online'})
+  it('shows service online when online', () => {
+    render(<ServiceHealth state={{status: 'online'}} onRetry={noop}/>)
 
     expect(screen.getByText('Service online')).toBeInTheDocument()
   })
 
-  it('shows update available with download link when version is outdated', async () => {
-    const {connectHeartbeat, emit} = makeConnectHeartbeat()
-    render(<ServiceHealth connectHeartbeat={connectHeartbeat}/>)
-
-    emit({status: 'update-available'})
+  it('shows update available when version is outdated', () => {
+    render(<ServiceHealth state={{status: 'update-available'}} onRetry={noop}/>)
 
     expect(screen.getByText('Update available')).toBeInTheDocument()
-    expect(screen.getByRole('link', {name: /download/i})).toHaveAttribute(
-      'href',
-      'https://github.com/RyanDur/battleship/releases/latest'
-    )
   })
 
-  it('shows reconnecting with attempt number', async () => {
-    const {connectHeartbeat, emit} = makeConnectHeartbeat()
-    render(<ServiceHealth connectHeartbeat={connectHeartbeat}/>)
-
-    emit({status: 'reconnecting', attempt: 2})
+  it('shows reconnecting with attempt number', () => {
+    render(<ServiceHealth state={{status: 'reconnecting', attempt: 2}} onRetry={noop}/>)
 
     expect(screen.getByText('Reconnecting... (attempt 2)')).toBeInTheDocument()
   })
 
-  it('shows service offline with retry button when disconnected', async () => {
-    const {connectHeartbeat, emit} = makeConnectHeartbeat()
-    render(<ServiceHealth connectHeartbeat={connectHeartbeat}/>)
-
-    emit({status: 'disconnected'})
+  it('shows service offline with retry button when disconnected', () => {
+    render(<ServiceHealth state={{status: 'disconnected'}} onRetry={noop}/>)
 
     expect(screen.getByText('Service offline')).toBeInTheDocument()
     expect(screen.getByRole('button', {name: 'Try again'})).toBeInTheDocument()
   })
 
-  it('calls retry on the heartbeat handle when Try again is clicked', async () => {
+  it('calls onRetry when Try again is clicked', async () => {
     const user = userEvent.setup()
-    const {connectHeartbeat, emit, handle} = makeConnectHeartbeat()
-    render(<ServiceHealth connectHeartbeat={connectHeartbeat}/>)
+    const onRetry = vi.fn()
+    render(<ServiceHealth state={{status: 'disconnected'}} onRetry={onRetry}/>)
 
-    emit({status: 'disconnected'})
     await user.click(screen.getByRole('button', {name: 'Try again'}))
 
-    expect(handle.retry).toHaveBeenCalledOnce()
+    expect(onRetry).toHaveBeenCalledOnce()
   })
 
-  it('stops the heartbeat handle when unmounted', async () => {
-    const {connectHeartbeat, handle} = makeConnectHeartbeat()
-    const {unmount} = render(<ServiceHealth connectHeartbeat={connectHeartbeat}/>)
-
-    unmount()
-
-    expect(handle.stop).toHaveBeenCalledOnce()
-  })
-
-  it('does not show online text while reconnecting', async () => {
-    const {connectHeartbeat, emit} = makeConnectHeartbeat()
-    render(<ServiceHealth connectHeartbeat={connectHeartbeat}/>)
-
-    emit({status: 'reconnecting', attempt: 1})
+  it('does not show online text while reconnecting', () => {
+    render(<ServiceHealth state={{status: 'reconnecting', attempt: 1}} onRetry={noop}/>)
 
     expect(screen.queryByText('Service online')).not.toBeInTheDocument()
   })
 
-  it('does not show Gatekeeper-style instructions', async () => {
-    const {connectHeartbeat, emit} = makeConnectHeartbeat()
-    render(<ServiceHealth connectHeartbeat={connectHeartbeat}/>)
-
-    emit({status: 'online'})
+  it('does not show a retry button when online', () => {
+    render(<ServiceHealth state={{status: 'online'}} onRetry={noop}/>)
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })

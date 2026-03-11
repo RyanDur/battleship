@@ -1,7 +1,9 @@
+import {useEffect, useRef, useState} from 'react'
 import {DownloadLink} from './components/DownloadLink'
 import {ServiceHealth} from './components/ServiceHealth'
 import {fetchDownloadUrl} from './protocol/download'
 import {startHeartbeat} from './protocol/heartbeat'
+import type {HeartbeatHandle, HeartbeatState} from './protocol/heartbeat'
 import {detectPlatform} from './protocol/platform'
 
 const EXPECTED_VERSION = import.meta.env.VITE_APP_VERSION ?? 'dev'
@@ -11,18 +13,32 @@ const WS_HEALTH_URL = SERVICE_URL.replace(/^http/, 'ws') + '/ws/health'
 const platform = detectPlatform(navigator.userAgent)
 const downloadUrl = (p: Parameters<typeof fetchDownloadUrl>[0]) => fetchDownloadUrl(p, fetch)
 
-const connectHeartbeat: Parameters<typeof ServiceHealth>[0]['connectHeartbeat'] = (onStateChange) =>
-  startHeartbeat(
-    {createWebSocket: (url) => new WebSocket(url), url: WS_HEALTH_URL, expectedVersion: EXPECTED_VERSION},
-    onStateChange
-  )
+function actionFor(state: HeartbeatState) {
+  if (state.status === 'online') return 'none' as const
+  if (state.status === 'update-available') return 'upgrade' as const
+  return 'download' as const
+}
 
 function App() {
+  const [state, setState] = useState<HeartbeatState>({status: 'connecting'})
+  const handleRef = useRef<HeartbeatHandle | null>(null)
+
+  useEffect(() => {
+    const handle = startHeartbeat(
+      {createWebSocket: (url) => new WebSocket(url), url: WS_HEALTH_URL, expectedVersion: EXPECTED_VERSION},
+      setState
+    )
+    handleRef.current = handle
+    return () => handle.stop()
+  }, [])
+
+  const retry = () => handleRef.current?.retry()
+
   return (
     <main>
       <h1>Battleship</h1>
-      <ServiceHealth connectHeartbeat={connectHeartbeat}/>
-      <DownloadLink platform={platform} fetchDownloadUrl={downloadUrl}/>
+      <ServiceHealth state={state} onRetry={retry}/>
+      <DownloadLink platform={platform} action={actionFor(state)} fetchDownloadUrl={downloadUrl}/>
     </main>
   )
 }
