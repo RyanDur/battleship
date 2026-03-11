@@ -23,14 +23,18 @@ sealed class HandshakeError(val status: HttpStatus) {
 @EnableWebSocket
 class WebSocketConfig(
     private val signalingHandler: SignalingHandler,
+    private val healthHandler: com.battleship.backend.health.HealthHandler,
     private val sessionRegistry: SessionRegistry,
     @Value("\${app.allowed-origins}") private val allowedOrigins: String
 ) : WebSocketConfigurer {
 
     override fun registerWebSocketHandlers(registry: WebSocketHandlerRegistry) {
+        val origins = allowedOrigins.split(",").toTypedArray()
         registry.addHandler(signalingHandler, "/ws/signaling")
             .addInterceptors(AuthHandshakeInterceptor(sessionRegistry))
-            .setAllowedOrigins(*allowedOrigins.split(",").toTypedArray())
+            .setAllowedOrigins(*origins)
+        registry.addHandler(healthHandler, "/ws/health")
+            .setAllowedOrigins(*origins)
     }
 }
 

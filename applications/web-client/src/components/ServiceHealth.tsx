@@ -1,34 +1,39 @@
-import {useEffect, useState} from 'react'
-
-export type HealthResponse = { status: 'up'; version: string }
-export type CheckHealth = () => Promise<HealthResponse | undefined>
-
-type ServiceStatus = 'checking' | 'online' | 'offline' | 'update-available'
+import {useEffect, useRef, useState} from 'react'
+import {RELEASES_PAGE} from '../protocol/download'
+import type {ConnectHeartbeat, HeartbeatHandle, HeartbeatState} from '../protocol/heartbeat'
 
 interface ServiceHealthProps {
-  checkHealth: CheckHealth
-  expectedVersion: string
+  connectHeartbeat: ConnectHeartbeat
 }
 
-export function ServiceHealth({checkHealth, expectedVersion}: ServiceHealthProps) {
-  const [status, setStatus] = useState<ServiceStatus>('checking')
+export function ServiceHealth({connectHeartbeat}: ServiceHealthProps) {
+  const [state, setState] = useState<HeartbeatState>({status: 'connecting'})
+  const handleRef = useRef<HeartbeatHandle | null>(null)
 
   useEffect(() => {
-    checkHealth().then(response => {
-      if (!response) setStatus('offline')
-      else if (expectedVersion !== 'dev' && response.version !== expectedVersion) setStatus('update-available')
-      else setStatus('online')
-    })
-  }, [checkHealth, expectedVersion])
+    const handle = connectHeartbeat(setState)
+    handleRef.current = handle
+    return () => handle.stop()
+  }, [connectHeartbeat])
+
+  const retry = () => handleRef.current?.retry()
 
   return (
     <section>
-      {status === 'online' && <p>Service online</p>}
-      {status === 'offline' && <p>Service offline</p>}
-      {status === 'update-available' && (
+      {state.status === 'online' && <p>Service online</p>}
+      {state.status === 'update-available' && (
         <>
           <p>Update available</p>
-          <a href="https://github.com/RyanDur/battleship/releases/latest">Download latest version</a>
+          <a href={RELEASES_PAGE}>Download latest version</a>
+        </>
+      )}
+      {state.status === 'reconnecting' && (
+        <p>Reconnecting... (attempt {state.attempt})</p>
+      )}
+      {state.status === 'disconnected' && (
+        <>
+          <p>Service offline</p>
+          <button onClick={retry}>Try again</button>
         </>
       )}
     </section>
