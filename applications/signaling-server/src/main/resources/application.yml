@@ -5,3 +5,4 @@ server:
 app:
   version: @APP_VERSION@
   allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173,https://ryandur.github.io}
+  heartbeat-interval: ${HEARTBEAT_INTERVAL:5000}

@@ -22,7 +22,7 @@ class HealthHandler(@Value("\${app.version}") private val version: String) : Tex
         sessions.remove(session)
     }
 
-    @Scheduled(fixedRate = 5000)
+    @Scheduled(fixedRateString = "\${app.heartbeat-interval}")
     fun sendHeartbeat() {
         val message = TextMessage("""{"type":"heartbeat","version":"$version"}""")
         sessions.filter { it.isOpen }.forEach { it.sendMessage(message) }

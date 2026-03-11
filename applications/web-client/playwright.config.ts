@@ -29,7 +29,7 @@ export default defineConfig({
       url: 'http://localhost:8081/health',
       reuseExistingServer: false,
       timeout: 30000,
-      env: {SERVER_PORT: '8081'},
+      env: {SERVER_PORT: '8081', HEARTBEAT_INTERVAL: '1000'},
     },
     {
       command: 'npm run preview',

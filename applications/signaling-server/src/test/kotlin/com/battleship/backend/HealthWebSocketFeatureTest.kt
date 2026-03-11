@@ -14,7 +14,10 @@ import java.net.URI
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = ["app.heartbeat-interval=1000"]
+)
 class HealthWebSocketFeatureTest {
 
     @LocalServerPort
@@ -39,8 +42,8 @@ class HealthWebSocketFeatureTest {
             URI("ws://127.0.0.1:$port/ws/health")
         ).get(5, TimeUnit.SECONDS)
 
-        val message = messages.poll(6, TimeUnit.SECONDS)
-        assertNotNull(message, "Should receive a heartbeat within 6 seconds")
+        val message = messages.poll(2, TimeUnit.SECONDS)
+        assertNotNull(message, "Should receive a heartbeat within 2 seconds")
         assertTrue(message!!.contains("\"type\":\"heartbeat\""), "Message should have type heartbeat")
         assertTrue(message.contains("\"version\""), "Message should contain version field")
 
