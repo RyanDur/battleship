@@ -5,45 +5,46 @@
 ```mermaid
 graph TB
     subgraph "applications/signaling-server"
-        HC[HealthController<br/>GET /health]
-        HH[HealthHandler<br/>WS /ws/health<br/>Heartbeat every N ms]
-        WC[WebSocketConfig<br/>Origin + Token Auth]
-        AH[AuthHandshakeInterceptor<br/>Result pipeline validation]
-        SH[SignalingHandler<br/>Relay messages to peer]
-        SR[SessionRegistry<br/>Max 2 sessions]
-        ES["@EnableScheduling<br/>Heartbeat timer"]
+        direction TB
+        WC[WebSocketConfig] --> AH[AuthHandshakeInterceptor] --> SR[SessionRegistry]
+        WC --> HH[HealthHandler]
+        SH[SignalingHandler] --> SR
+        ES["@EnableScheduling"] -.->|drives| HH
+        HC[HealthController]
     end
 
     subgraph "components/signaling-protocol"
-        RT[Result of S and F<br/>map / flatMap / or / either]
-        SM[SignalingMessage<br/>Offer / Answer / ICE / Error]
+        RT[Result]
+        SM[SignalingMessage]
     end
 
     subgraph "applications/web-client"
-        APP[App<br/>Lifts heartbeat state<br/>Derives download action]
-        SHC[ServiceHealth<br/>Display component<br/>online / reconnecting / offline]
-        DL[DownloadLink<br/>Download / Upgrade / hidden<br/>GitHub API asset lookup]
-        HB[startHeartbeat<br/>WS state machine<br/>reconnect + retry]
-        RS[Result / Maybe<br/>Frozen immutable types]
-        DC[SignalingMessage Decoder<br/>schemawax runtime validation]
-        CH[ConnectionHandler<br/>State machine / WebRTC]
-        CS[ConnectionStatus<br/>UI component]
-        WT[Worker Message Types<br/>WorkerCommand / WorkerEvent]
-        PL[Platform Detection<br/>macOS / Windows / Linux]
-        DLProto[Download Protocol<br/>GitHub API + schemawax decoder]
+        direction TB
+        subgraph "UI"
+            APP[App] --> SHC[ServiceHealth]
+            APP --> DL[DownloadLink]
+            CS[ConnectionStatus]
+        end
+        subgraph "Protocol"
+            HB[startHeartbeat]
+            CH[ConnectionHandler]
+            DC[SignalingMessage Decoder]
+            DLProto[Download Protocol]
+            WT[Worker Message Types]
+        end
+        subgraph "Types"
+            RS[Result / Maybe]
+            PL[Platform Detection]
+        end
     end
 
-    WC --> AH --> SR
-    WC --> HH
-    SH --> SR
-    AH -.->|uses| RT
-    SR -.->|uses| RT
-    ES -.->|drives| HH
-    APP --> SHC
-    APP --> DL
     APP -.->|calls| HB
     HB -.->|connects to| HH
     DL -.->|uses| DLProto
+    AH -.->|uses| RT
+    SR -.->|uses| RT
+    HB -.->|uses| RS
+    DC -.->|decodes| SM
 
     style HC fill:#2e7d32,stroke:#1b5e20,color:#fff
     style HH fill:#2e7d32,stroke:#1b5e20,color:#fff
@@ -67,7 +68,28 @@ graph TB
     style DLProto fill:#2e7d32,stroke:#1b5e20,color:#fff
 ```
 
-> **Status:** Backend signaling complete. Health endpoint serves both HTTP (for readiness probes) and WebSocket heartbeat (for live status). Frontend has heartbeat state machine with reconnect/retry, conditional Download/Upgrade link via GitHub API, platform detection, Result/Maybe types, schemawax decoders, connection handler, and ConnectionStatus component. WebWorker thread and React hook not yet wired.
+| Node | Description |
+|------|-------------|
+| HealthController | `GET /health` — HTTP readiness probe |
+| HealthHandler | `WS /ws/health` — heartbeat every N ms |
+| WebSocketConfig | Origin + token authentication |
+| AuthHandshakeInterceptor | Result pipeline validation |
+| SignalingHandler | Relay messages to peer |
+| SessionRegistry | Max 2 WebSocket sessions |
+| Result | `map` / `flatMap` / `or` / `either` / `mapEither` |
+| SignalingMessage | Offer / Answer / ICE / Error |
+| App | Lifts heartbeat state, derives download action |
+| ServiceHealth | Display component — online / reconnecting / offline |
+| DownloadLink | Download / Upgrade / hidden — GitHub API asset lookup |
+| startHeartbeat | WebSocket state machine with reconnect + retry |
+| ConnectionHandler | State machine / WebRTC |
+| ConnectionStatus | UI component |
+| Download Protocol | GitHub API + schemawax decoder |
+| Worker Message Types | WorkerCommand / WorkerEvent |
+| Result / Maybe | Frozen immutable types |
+| Platform Detection | macOS / Windows / Linux |
+
+> **Status:** Backend signaling complete. Health endpoint serves both HTTP (readiness probes) and WebSocket heartbeat (live status). Frontend has heartbeat state machine with reconnect/retry, conditional Download/Upgrade link via GitHub API, platform detection, Result/Maybe types, schemawax decoders, connection handler, and ConnectionStatus component. WebWorker thread and React hook not yet wired.
 > Green = implemented and tested.
 
 ---
@@ -184,32 +206,25 @@ sequenceDiagram
 ### Component Responsibilities
 
 ```mermaid
-graph LR
+graph TB
     subgraph "Frontend — Current"
-        RC_C[App + ServiceHealth + DownloadLink<br/>Heartbeat-driven UI]
-        HB_C[startHeartbeat<br/>WS state machine]
-        PT_C[Protocol Types<br/>schemawax decoders]
+        RC_C[App + ServiceHealth + DownloadLink]
+        HB_C[startHeartbeat]
+        PT_C[Protocol Types + Decoders]
+        RC_C -.->|calls| HB_C
+        HB_C -.->|uses| PT_C
     end
 
     subgraph "Frontend — Proposed"
-        RC[React Components<br/>UI + Game Board]
-        HK[useConnectionWorker<br/>Hook]
-        WK[WebWorker<br/>WS + WebRTC Bridge]
+        RC[UI + Game Board] --> HK[useConnectionWorker] --> WK[WebWorker]
+        WK -.->|reuses| PT_C
     end
 
     subgraph "Backend — Current"
-        HC[HealthController + HealthHandler<br/>HTTP + WS health]
-        WC[WebSocketConfig<br/>Origin + Token Auth]
-        SH[SignalingHandler<br/>Message Relay]
-        SR[SessionRegistry<br/>Track Connections]
-        SP[Shared Protocol<br/>SignalingMessage sealed class]
+        WC[WebSocketConfig] --> SH[SignalingHandler] --> SR[SessionRegistry]
+        SH --> SP[SignalingMessage]
+        HC[Health Endpoints]
     end
-
-    RC --> HK --> WK
-    WK --> PT_C
-    SH --> SR
-    SH --> SP
-    WC --> SH
 
     style RC_C fill:#2e7d32,stroke:#1b5e20,color:#fff
     style HB_C fill:#2e7d32,stroke:#1b5e20,color:#fff
