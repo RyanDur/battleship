@@ -1,4 +1,3 @@
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {startHeartbeat} from './heartbeat'
 import type {HeartbeatConfig, HeartbeatState} from './heartbeat'
 

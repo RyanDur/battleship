@@ -1,4 +1,3 @@
-import { describe, it, expect, vi } from 'vitest'
 import { success, failure, tryCatch, type Result } from './result'
 
 describe('Result', () => {

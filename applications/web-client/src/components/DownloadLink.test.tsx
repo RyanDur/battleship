@@ -1,5 +1,4 @@
 import {render, screen, waitFor} from '@testing-library/react'
-import {describe, expect, it} from 'vitest'
 import {DownloadLink} from './DownloadLink'
 
 const RELEASES_PAGE = 'https://github.com/RyanDur/battleship/releases/latest'

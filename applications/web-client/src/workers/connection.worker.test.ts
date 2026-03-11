@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { WorkerEvent } from '../types/worker-messages'
 
 // Story #6: WebWorker bridges UI to local service via WebSocket

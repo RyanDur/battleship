@@ -1,4 +1,3 @@
-import {describe, expect, it} from 'vitest'
 import {fetchDownloadUrl} from './download'
 
 const RELEASES_PAGE = 'https://github.com/RyanDur/battleship/releases/latest'

@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest'
 import { maybe, some, nothing, type Maybe } from './maybe'
 
 describe('Maybe', () => {

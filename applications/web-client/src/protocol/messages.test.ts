@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest'
 import { signalingMessage, type SignalingMessage } from './messages'
 
 // Story: Runtime-safe decoding of signaling messages at the WebSocket boundary
