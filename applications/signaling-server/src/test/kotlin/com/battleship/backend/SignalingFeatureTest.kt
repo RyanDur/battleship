@@ -45,9 +45,25 @@ class SignalingFeatureTest {
     }
 
     @Test
+    fun `notifies first peer when second peer connects`() {
+        val (sessionA, messagesA) = connectClient()
+        val (sessionB, _) = connectClient()
+
+        val notification = messagesA.poll(5, TimeUnit.SECONDS)
+        assertNotNull(notification, "First peer should be notified when second peer connects")
+        assertTrue(notification.contains("PEER_CONNECTED"), "Notification should be PEER_CONNECTED, got: $notification")
+
+        sessionA.close()
+        sessionB.close()
+    }
+
+    @Test
     fun `two peers can exchange signaling messages`() {
         val (sessionA, messagesA) = connectClient()
         val (sessionB, messagesB) = connectClient()
+
+        // Wait until A is notified that B is ready — both are now registered
+        assertNotNull(messagesA.poll(5, TimeUnit.SECONDS), "A should receive PEER_CONNECTED before exchange begins")
 
         // Player A sends an offer
         sessionA.sendMessage(TextMessage("""{"type":"OFFER","sdp":"offer-from-A"}"""))
@@ -88,8 +104,8 @@ class SignalingFeatureTest {
         try {
             connectClient(origin = "https://evil.com")
             throw AssertionError("Should have rejected unauthorized origin")
-        } catch (e: Exception) {
-            if (e is AssertionError) throw e
+        } catch (_: Exception) {
+            // Expected — connection rejected
         }
     }
 
@@ -101,8 +117,8 @@ class SignalingFeatureTest {
         try {
             connectClient()
             throw AssertionError("Should have rejected third connection")
-        } catch (e: Exception) {
-            if (e is AssertionError) throw e
+        } catch (_: Exception) {
+            // Expected — connection rejected
         } finally {
             sessionA.close()
             sessionB.close()
