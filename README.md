@@ -30,7 +30,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed diagrams and conne
 ### Development Process
 
 - **TDD** — tests come first, always. Feature-level tests define the contract, unit tests drive the implementation.
-- **Trunk-based development** — commit directly to main, no pull requests. The pre-push hook gates quality.
+- **Trunk-based development** — commit directly to main, no pull requests. The pre-push hook gates quality. No force pushing — main is shared history.
 - **Agile/XP** — small incremental stories, continuous integration, simple design.
 - **[12-factor app](https://12factor.net/)** — config in the environment, explicit dependencies, strict build/release/run separation, logs to stdout.
 
@@ -41,12 +41,14 @@ See [docs/architecture.md](docs/architecture.md) for detailed diagrams and conne
 - **Minimize mutation** — use discriminated unions and state machines over mutable objects. A single `let` binding for state is acceptable when the alternatives are worse.
 - **Railway Oriented Programming** — the Result type follows the [two-track model](https://fsharpforfunandprofit.com/rop/). Functions stay on the railway as long as possible:
   - `map` — transform the success track
-  - `flatMap` — bind on the success track (returns Result)
-  - `or` — bind on the failure track, the dual of `flatMap` (returns Result)
-  - `tee` — side effects on the success track, returns self
+  - `andThen` — bind on the success track (returns Result)
+  - `or` — bind on the failure track, the dual of `andThen` (returns Result)
+  - `onSuccess` — side effects on the success track, returns self
+  - `onFailure` — side effects on the failure track, returns self
   - `either` — bind on both tracks (returns Result)
   - `mapEither` — terminal fold, the only off-ramp from the railway
   - `tryCatch` — bridges exception-throwing code into the two-track model
+  - `AsyncResult` — `Promise<Result<S, F>>` with the same pipeline API, lifting the railway into async
   - No exceptions for expected failures. No `mapFailure` — if we fail, we handle it.
 - **Maybe for nullable boundaries** — `maybe()` wraps `T | null` into a chainable type. Used to bridge schemawax decoder results.
 - **Semantic naming within the domain** — `peer` not `getOther`, `signalingMessage` not `parseData`. Names should convey intent and meaning.
@@ -59,6 +61,8 @@ See [docs/architecture.md](docs/architecture.md) for detailed diagrams and conne
 - **Raw CSS in separate files** — structural CSS close to the component, shared styles in reusable folders.
 - **schemawax** for runtime decoding at untrusted boundaries (WebSocket messages). Types derived from decoders via `Decoder.Output`.
 - **Dependency injection for testability** — factories and handlers accept their dependencies, no global state.
+- **Arrow functions only** — no `function` declarations or expressions. Enforced by ESLint.
+- **Named exports only** — no default exports. Enforced by ESLint.
 - **ESLint** must pass before push.
 
 ### Backend (Kotlin)
