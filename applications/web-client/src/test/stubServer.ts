@@ -8,7 +8,7 @@ export interface StubServer {
   close: () => Promise<void>
 }
 
-export function createStubServer(routes: Record<string, RouteHandler>): Promise<StubServer> {
+export const createStubServer = (routes: Record<string, RouteHandler>): Promise<StubServer> => {
   const errors: string[] = []
 
   const server = http.createServer((req, res) => {

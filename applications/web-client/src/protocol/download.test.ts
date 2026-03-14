@@ -6,14 +6,12 @@ const RELEASES_PAGE = 'https://github.com/RyanDur/battleship/releases/latest'
 
 const makeAsset = (name: string, url: string) => ({name, browser_download_url: url})
 
-function releasesStub(assets: {name: string; browser_download_url: string}[]) {
-  return {
-    'GET /': (_req: IncomingMessage, res: ServerResponse) => {
-      res.writeHead(200, {'Content-Type': 'application/json'})
-      res.end(JSON.stringify({assets}))
-    },
-  }
-}
+const releasesStub = (assets: {name: string; browser_download_url: string}[]) => ({
+  'GET /': (_req: IncomingMessage, res: ServerResponse) => {
+    res.writeHead(200, {'Content-Type': 'application/json'})
+    res.end(JSON.stringify({assets}))
+  },
+})
 
 describe('fetchDownloadUrl', () => {
   it('returns dmg URL for macOS', async () => {
