@@ -21,4 +21,8 @@ sealed class SignalingMessage {
     @Serializable
     @SerialName("ERROR")
     data class Error(val message: String) : SignalingMessage()
+
+    @Serializable
+    @SerialName("PEER_CONNECTED")
+    data object PeerConnected : SignalingMessage()
 }

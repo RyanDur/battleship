@@ -68,4 +68,17 @@ class SignalingMessageTest {
         val encoded = json.encodeToString(SignalingMessage.serializer(), error)
         assert(encoded.contains("\"type\":\"ERROR\"")) { "Expected type discriminator ERROR in: $encoded" }
     }
+
+    @Test
+    fun `PeerConnected serializes with correct type discriminator`() {
+        val encoded = json.encodeToString(SignalingMessage.serializer(), SignalingMessage.PeerConnected)
+        assert(encoded.contains("\"type\":\"PEER_CONNECTED\"")) { "Expected type discriminator PEER_CONNECTED in: $encoded" }
+    }
+
+    @Test
+    fun `serialize and deserialize PeerConnected`() {
+        val encoded = json.encodeToString(SignalingMessage.serializer(), SignalingMessage.PeerConnected)
+        val decoded = json.decodeFromString(SignalingMessage.serializer(), encoded)
+        assertEquals(SignalingMessage.PeerConnected, decoded)
+    }
 }
