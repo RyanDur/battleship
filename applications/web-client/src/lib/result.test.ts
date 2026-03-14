@@ -9,11 +9,11 @@ describe('Result', () => {
       expect(result.mapEither(v => v, () => 0)).toBe(6)
     })
 
-    it('flatMaps into another Result', () => {
+    it('andThen chains into another Result on success', () => {
       const safeDivide = (n: number): Result<number, string> =>
         n === 0 ? failure('division by zero') : success(10 / n)
 
-      const result = success(2).flatMap(safeDivide)
+      const result = success(2).andThen(safeDivide)
 
       expect(result.kind).toBe('success')
       expect(result.mapEither(v => v, () => 0)).toBe(5)
@@ -26,11 +26,20 @@ describe('Result', () => {
       expect(result.mapEither(v => v, () => 0)).toBe(42)
     })
 
-    it('runs a side effect with tee and returns self', () => {
+    it('onSuccess runs a side effect and returns self', () => {
       const spy = vi.fn()
-      const result = success(42).tee(spy)
+      const result = success(42).onSuccess(spy)
 
       expect(spy).toHaveBeenCalledWith(42)
+      expect(result.kind).toBe('success')
+      expect(result.mapEither(v => v, () => 0)).toBe(42)
+    })
+
+    it('onFailure skips side effect on success and returns self', () => {
+      const spy = vi.fn()
+      const result = success(42).onFailure(spy)
+
+      expect(spy).not.toHaveBeenCalled()
       expect(result.kind).toBe('success')
       expect(result.mapEither(v => v, () => 0)).toBe(42)
     })
@@ -63,8 +72,8 @@ describe('Result', () => {
       expect(result.mapEither(() => '', reason => reason)).toBe('oops')
     })
 
-    it('passes through flatMap unchanged', () => {
-      const result = failure<string>('oops').flatMap(() => success(42))
+    it('andThen passes through unchanged on failure', () => {
+      const result = failure<string>('oops').andThen(() => success(42))
 
       expect(result.kind).toBe('failure')
       expect(result.mapEither(() => '', reason => reason)).toBe('oops')
@@ -84,13 +93,22 @@ describe('Result', () => {
       expect(result.mapEither(() => 0, v => v)).toBe(42)
     })
 
-    it('skips tee side effect and passes through', () => {
+    it('onSuccess skips side effect on failure and passes through', () => {
       const spy = vi.fn()
-      const result = failure<string>('oops').tee(spy)
+      const result = failure<string>('oops').onSuccess(spy)
 
       expect(spy).not.toHaveBeenCalled()
       expect(result.kind).toBe('failure')
       expect(result.mapEither(() => '', r => r)).toBe('oops')
+    })
+
+    it('onFailure runs a side effect and returns self', () => {
+      const spy = vi.fn()
+      const result = failure<string, number>('oops').onFailure(spy)
+
+      expect(spy).toHaveBeenCalledWith('oops')
+      expect(result.kind).toBe('failure')
+      expect(result.mapEither(() => 0, r => r.length)).toBe(4)
     })
 
     it('either applies onFailure and returns a Result', () => {
@@ -114,39 +132,39 @@ describe('Result', () => {
   })
 
   describe('chaining', () => {
-    it('short-circuits on first failure in a flatMap chain', () => {
+    it('short-circuits on first failure in an andThen chain', () => {
       const parse = (s: string): Result<number, string> => {
         const n = Number(s)
         return isNaN(n) ? failure('not a number') : success(n)
       }
 
       const result = success('abc')
-        .flatMap(parse)
+        .andThen(parse)
         .map(n => n * 2)
 
       expect(result.kind).toBe('failure')
       expect(result.mapEither(() => '', reason => reason)).toBe('not a number')
     })
 
-    it('composes map and flatMap through a pipeline', () => {
+    it('composes map and andThen through a pipeline', () => {
       const parse = (s: string): Result<number, string> => {
         const n = Number(s)
         return isNaN(n) ? failure('not a number') : success(n)
       }
 
       const result = success('21')
-        .flatMap(parse)
+        .andThen(parse)
         .map(n => n * 2)
 
       expect(result.mapEither(v => v, () => 0)).toBe(42)
     })
 
-    it('tee runs side effects mid-chain without disrupting flow', () => {
+    it('onSuccess runs side effects mid-chain without disrupting flow', () => {
       const log: number[] = []
 
       const result = success(1)
         .map(n => n + 1)
-        .tee(n => log.push(n))
+        .onSuccess(n => log.push(n))
         .map(n => n * 10)
 
       expect(log).toEqual([2])
@@ -160,7 +178,7 @@ describe('Result', () => {
       }
 
       const result = success('abc')
-        .flatMap(parse)
+        .andThen(parse)
         .or(() => success(0))
         .map(n => n + 1)
 
@@ -180,8 +198,8 @@ describe('Result', () => {
           e => success(`error: ${e}`)
         )
 
-      expect(toMessage(success('21').flatMap(parse)).mapEither(v => v, () => '')).toBe('value: 21')
-      expect(toMessage(success('abc').flatMap(parse)).mapEither(v => v, () => '')).toBe('error: not a number')
+      expect(toMessage(success('21').andThen(parse)).mapEither(v => v, () => '')).toBe('value: 21')
+      expect(toMessage(success('abc').andThen(parse)).mapEither(v => v, () => '')).toBe('error: not a number')
     })
   })
 
