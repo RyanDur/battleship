@@ -26,7 +26,7 @@ interface DownloadLinkProps {
   fetchDownloadUrl: (platform: Platform) => Promise<string>
 }
 
-export function DownloadLink({platform, action, fetchDownloadUrl}: DownloadLinkProps) {
+export const DownloadLink = ({platform, action, fetchDownloadUrl}: DownloadLinkProps) => {
   const [href, setHref] = useState(RELEASES_PAGE)
 
   useEffect(() => {

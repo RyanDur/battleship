@@ -25,11 +25,10 @@ class FakeWebSocket {
   }
 }
 
-function latest(): FakeWebSocket {
-  return FakeWebSocket.instances[FakeWebSocket.instances.length - 1]
-}
+const latest = (): FakeWebSocket =>
+  FakeWebSocket.instances[FakeWebSocket.instances.length - 1]
 
-function makeConfig(overrides: Partial<HeartbeatConfig> = {}): HeartbeatConfig {
+const makeConfig = (overrides: Partial<HeartbeatConfig> = {}): HeartbeatConfig => {
   return {
     createWebSocket: (url) => new FakeWebSocket(url) as unknown as WebSocket,
     url: 'ws://localhost:8080/ws/health',

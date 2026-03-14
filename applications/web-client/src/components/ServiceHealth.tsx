@@ -5,7 +5,7 @@ interface ServiceHealthProps {
   onRetry: () => void
 }
 
-export function ServiceHealth({state, onRetry}: ServiceHealthProps) {
+export const ServiceHealth = ({state, onRetry}: ServiceHealthProps) => {
   return (
     <section>
       {state.status === 'online' && <p>Service online</p>}

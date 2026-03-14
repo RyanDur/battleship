@@ -176,7 +176,7 @@ describe('Connection Worker', () => {
   // Factory that wires up the worker logic with mocked dependencies.
   // The actual worker will use real WebSocket and RTCPeerConnection,
   // but the logic (handleCommand) is the same function.
-  async function createWorker() {
+  const createWorker = async () => {
     const { createConnectionHandler } = await import('./connection.handler')
 
     return createConnectionHandler({

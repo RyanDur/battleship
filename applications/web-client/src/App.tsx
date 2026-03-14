@@ -12,13 +12,13 @@ const WS_HEALTH_URL = SERVICE_URL.replace(/^http/, 'ws') + '/ws/health'
 
 const platform = detectPlatform(navigator.userAgent)
 
-function actionFor(state: HeartbeatState) {
+const actionFor = (state: HeartbeatState) => {
   if (state.status === 'online') return 'none' as const
   if (state.status === 'update-available') return 'upgrade' as const
   return 'download' as const
 }
 
-function App() {
+const App = () => {
   const [state, setState] = useState<HeartbeatState>({status: 'connecting'})
   const handleRef = useRef<HeartbeatHandle | null>(null)
 
@@ -42,4 +42,4 @@ function App() {
   )
 }
 
-export default App
+export {App}

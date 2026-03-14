@@ -19,5 +19,16 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      'no-restricted-exports': ['error', {restrictDefaultExports: {direct: true}}],
+      'func-style': ['error', 'expression'],
+      'prefer-arrow-callback': 'error',
+    },
+  },
+  {
+    files: ['*.config.ts'],
+    rules: {
+      'no-restricted-exports': 'off',
+    },
   },
 ])
