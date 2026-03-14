@@ -47,7 +47,7 @@ class AuthHandshakeInterceptor(private val sessionRegistry: SessionRegistry) : H
         wsHandler: WebSocketHandler,
         attributes: MutableMap<String, Any>
     ): Boolean = validateToken(request)
-        .flatMap { token -> validateCapacity(token) }
+        .andThen { token -> validateCapacity(token) }
         .mapEither(
             onSuccess = { token -> attributes["token"] = token; true },
             onFailure = { error -> response.setStatusCode(error.status); false }

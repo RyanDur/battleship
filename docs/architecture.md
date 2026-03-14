@@ -89,7 +89,7 @@ graph TB
 | Result / Maybe | Frozen immutable types |
 | Platform Detection | macOS / Windows / Linux |
 
-> **Status:** Backend signaling complete. Health endpoint serves both HTTP (readiness probes) and WebSocket heartbeat (live status). Frontend has heartbeat state machine with reconnect/retry, conditional Download/Upgrade link via GitHub API, platform detection, Result/Maybe types, schemawax decoders, connection handler, and ConnectionStatus component. WebWorker thread and React hook not yet wired.
+> **Status (v0.3.0):** Backend signaling complete. Health endpoint serves both HTTP (readiness probes) and WebSocket heartbeat (live status). Frontend has heartbeat state machine with reconnect/retry, conditional Download/Upgrade link via GitHub API, platform detection, Result/Maybe types, schemawax decoders, connection handler, and ConnectionStatus component. ESLint enforces arrow functions, named exports. WebWorker thread and React hook not yet wired.
 > Green = implemented and tested.
 
 ---
@@ -139,8 +139,8 @@ graph TB
     GHA -->|build + release| GHR
 ```
 
-> **Differences from current state:**
-> - WebWorker bridges UI ↔ local service (currently App connects directly)
+> **Differences from current state (v0.3.0):**
+> - WebWorker bridges UI ↔ local service (currently App connects directly via startHeartbeat)
 > - WebRTC data channel between players (not yet implemented)
 > - Connection flow via signaling relay (signaling handler exists, not yet wired to frontend)
 

@@ -10,7 +10,7 @@ sealed class Result<out S, out F> {
         is Failure -> this
     }
 
-    fun <T> flatMap(transform: (@UnsafeVariance S) -> Result<T, @UnsafeVariance F>): Result<T, F> = when (this) {
+    fun <T> andThen(transform: (@UnsafeVariance S) -> Result<T, @UnsafeVariance F>): Result<T, F> = when (this) {
         is Success -> transform(value)
         is Failure -> this
     }
@@ -20,9 +20,14 @@ sealed class Result<out S, out F> {
         is Failure -> recover(reason)
     }
 
-    fun tee(action: (@UnsafeVariance S) -> Unit): Result<S, F> = when (this) {
+    fun onSuccess(action: (@UnsafeVariance S) -> Unit): Result<S, F> = when (this) {
         is Success -> also { action(value) }
         is Failure -> this
+    }
+
+    fun onFailure(action: (F) -> Unit): Result<S, F> = when (this) {
+        is Success -> this
+        is Failure -> also { action(reason) }
     }
 
     fun <S2, F2> either(onSuccess: (@UnsafeVariance S) -> Result<S2, F2>, onFailure: (F) -> Result<S2, F2>): Result<S2, F2> = when (this) {
