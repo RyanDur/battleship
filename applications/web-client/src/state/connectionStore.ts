@@ -1,10 +1,10 @@
 import {connectionsReducer, initialState} from './connections'
 import type {ConnectionsState, ConnectionsAction} from './connections'
-import type {PeerEvent} from '../types/worker-messages'
+import type {PeerCommand, PeerEvent} from '../types/worker-messages'
 import type {CodecError} from '../protocol/connection-code'
 import type {Result} from '../lib/result'
 
-type Handler = {handleCommand: (cmd: {type: string; [key: string]: unknown}) => void}
+type Handler = {handleCommand: (cmd: PeerCommand) => void}
 
 type StoreDeps = {
   createHandler: (emit: (event: PeerEvent) => void) => Handler
