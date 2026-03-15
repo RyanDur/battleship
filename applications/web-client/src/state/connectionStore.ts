@@ -20,6 +20,8 @@ export type ConnectionStore = {
   joinOffer: (code: string, passphrase: string) => AsyncResult<void, CodecError>
   acceptAnswer: (responseCode: string) => AsyncResult<void, CodecError>
   disconnect: (peerId: string) => void
+  grantTrust: (peerId: string) => void
+  revokeTrust: (peerId: string) => void
 }
 
 export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
@@ -43,6 +45,7 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
     if (event.type === 'PEER_CONNECTED') dispatch({type: 'PEER_CONNECTED', peerId: event.peerId})
     else if (event.type === 'PEER_NAMED') dispatch({type: 'PEER_NAMED', peerId: event.peerId, name: event.name})
     else if (event.type === 'PEER_DISCONNECTED') dispatch({type: 'PEER_DISCONNECTED', peerId: event.peerId})
+    else if (event.type === 'PEER_TRUST_UPDATED') dispatch({type: 'PEER_TRUST_UPDATED', peerId: event.peerId, trusts: event.trusts})
     else if (event.type === 'OFFER_CREATED') dispatch({type: 'OFFER_SDP_READY', peerId: event.peerId, sdp: event.sdp})
     else if (event.type === 'ANSWER_CREATED') dispatch({type: 'ANSWER_SDP_READY', sdp: event.sdp})
   }
@@ -85,6 +88,16 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
 
     disconnect: (peerId) => {
       handler.handleCommand({type: 'DISCONNECT', peerId})
+    },
+
+    grantTrust: (peerId) => {
+      dispatch({type: 'TRUST_PEER', peerId})
+      handler.handleCommand({type: 'GRANT_TRUST', peerId})
+    },
+
+    revokeTrust: (peerId) => {
+      dispatch({type: 'REVOKE_PEER_TRUST', peerId})
+      handler.handleCommand({type: 'REVOKE_TRUST', peerId})
     },
   }
 }

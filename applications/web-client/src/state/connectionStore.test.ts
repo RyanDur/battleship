@@ -218,6 +218,54 @@ describe('connectionStore', () => {
     })
   })
 
+  describe('trust', () => {
+    it('grantTrust sends GRANT_TRUST command', () => {
+      const {store, emit, commands} = makeStore()
+
+      emit({type: 'PEER_CONNECTED', peerId: 'p1'})
+      store.grantTrust('p1')
+
+      expect(commands).toContain('GRANT_TRUST')
+    })
+
+    it('grantTrust updates peer trusted state', () => {
+      const {store, emit} = makeStore()
+
+      emit({type: 'PEER_CONNECTED', peerId: 'p1'})
+      store.grantTrust('p1')
+
+      expect(store.getState().peers).toEqual([{id: 'p1', trusted: true}])
+    })
+
+    it('revokeTrust sends REVOKE_TRUST command', () => {
+      const {store, emit, commands} = makeStore()
+
+      emit({type: 'PEER_CONNECTED', peerId: 'p1'})
+      store.revokeTrust('p1')
+
+      expect(commands).toContain('REVOKE_TRUST')
+    })
+
+    it('revokeTrust clears peer trusted state', () => {
+      const {store, emit} = makeStore()
+
+      emit({type: 'PEER_CONNECTED', peerId: 'p1'})
+      store.grantTrust('p1')
+      store.revokeTrust('p1')
+
+      expect(store.getState().peers).toEqual([{id: 'p1', trusted: false}])
+    })
+
+    it('PEER_TRUST_UPDATED event updates peer trustsMe state', () => {
+      const {store, emit} = makeStore()
+
+      emit({type: 'PEER_CONNECTED', peerId: 'p1'})
+      emit({type: 'PEER_TRUST_UPDATED', peerId: 'p1', trusts: true})
+
+      expect(store.getState().peers).toEqual([{id: 'p1', trustsMe: true}])
+    })
+  })
+
   describe('subscribe', () => {
     it('notifies listener on state change', () => {
       const {store} = makeStore()
