@@ -99,6 +99,8 @@ export const createPeerHandler = (deps: Deps): Handler => {
     onClose: (peerId) => {
       peerNames.delete(peerId)
       dataChannels.delete(peerId)
+      const pc = connections.get(peerId)
+      if (pc) { pc.close(); connections.delete(peerId) }
       broadcastConnections()
       deps.emit({ type: 'PEER_DISCONNECTED', peerId })
     },

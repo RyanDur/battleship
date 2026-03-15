@@ -245,6 +245,16 @@ describe('Peer Handler', () => {
 
       expect(events).toContainEqual({ type: 'PEER_DISCONNECTED', peerId })
     })
+
+    it('closes peer connection when data channel closes naturally', async () => {
+      const { handleCommand } = await createHandler()
+      handleCommand({ type: 'CREATE_OFFER' })
+
+      channels[0].onopen?.()
+      channels[0].onclose?.()
+
+      expect(pcs[0].close).toHaveBeenCalled()
+    })
   })
 
   describe('name exchange', () => {
