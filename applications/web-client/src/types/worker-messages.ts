@@ -9,4 +9,5 @@ export type PeerEvent =
   | { type: 'ANSWER_CREATED'; peerId: string; sdp: string }
   | { type: 'PEER_CONNECTED'; peerId: string }
   | { type: 'PEER_DISCONNECTED'; peerId: string }
+  | { type: 'PEER_NAMED'; peerId: string; name: string }
   | { type: 'ERROR'; message: string }

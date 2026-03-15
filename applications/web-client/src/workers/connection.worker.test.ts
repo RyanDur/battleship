@@ -57,9 +57,10 @@ describe('Peer Handler', () => {
     channels = []
   })
 
-  const createHandler = async () => {
+  const createHandler = async (name = 'Alice') => {
     const { createPeerHandler } = await import('./connection.handler')
     return createPeerHandler({
+      name,
       emit: (event) => events.push(event),
       createPeerConnection: () => {
         const pc = makeMockPc()
@@ -243,6 +244,41 @@ describe('Peer Handler', () => {
       channels[0].onclose?.()
 
       expect(events).toContainEqual({ type: 'PEER_DISCONNECTED', peerId })
+    })
+  })
+
+  describe('name exchange', () => {
+    it('sends local name to peer when data channel opens', async () => {
+      const { handleCommand } = await createHandler('Alice')
+      handleCommand({ type: 'CREATE_OFFER' })
+
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => {
+        expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' }))
+      })
+
+      channels[0].onopen?.()
+
+      expect(channels[0].send).toHaveBeenCalledWith(JSON.stringify({ type: 'INTRODUCE', name: 'Alice' }))
+    })
+
+    it('emits PEER_NAMED with peerId and name when peer sends their name', async () => {
+      const { handleCommand } = await createHandler('Alice')
+      handleCommand({ type: 'CREATE_OFFER' })
+
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => {
+        expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' }))
+      })
+
+      const peerId = (events.find(e => e.type === 'OFFER_CREATED') as { peerId: string }).peerId
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCE', name: 'Bob' }) })
+
+      expect(events).toContainEqual({ type: 'PEER_NAMED', peerId, name: 'Bob' })
     })
   })
 })

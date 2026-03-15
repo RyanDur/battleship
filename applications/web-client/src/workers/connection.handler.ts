@@ -1,6 +1,7 @@
 import type { PeerCommand, PeerEvent } from '../types/worker-messages'
 
 type Deps = {
+  name: string
   emit: (event: PeerEvent) => void
   createPeerConnection: () => RTCPeerConnection
 }
@@ -18,14 +19,21 @@ const gatherIceCandidates = (pc: RTCPeerConnection): Promise<string | undefined>
     pc.onicecandidate = ({ candidate }) => { if (candidate === null) checkComplete() }
   })
 
-const wireChannel = (channel: RTCDataChannel, peerId: string, emit: (event: PeerEvent) => void) => {
-  channel.onopen = () => emit({ type: 'PEER_CONNECTED', peerId })
+const wireChannel = (channel: RTCDataChannel, peerId: string, name: string, emit: (event: PeerEvent) => void) => {
+  channel.onopen = () => {
+    emit({ type: 'PEER_CONNECTED', peerId })
+    channel.send(JSON.stringify({ type: 'INTRODUCE', name }))
+  }
   channel.onclose = () => emit({ type: 'PEER_DISCONNECTED', peerId })
+  channel.onmessage = ({ data }: MessageEvent<string>) => {
+    const msg = JSON.parse(data) as { type: string; name: string }
+    if (msg.type === 'INTRODUCE') emit({ type: 'PEER_NAMED', peerId, name: msg.name })
+  }
 }
 
-const negotiateOffer = async (pc: RTCPeerConnection, peerId: string, emit: (event: PeerEvent) => void) => {
+const negotiateOffer = async (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void) => {
   const channel = pc.createDataChannel('game')
-  wireChannel(channel, peerId, emit)
+  wireChannel(channel, peerId, name, emit)
 
   const offer = await pc.createOffer()
   await pc.setLocalDescription(offer)
@@ -33,8 +41,8 @@ const negotiateOffer = async (pc: RTCPeerConnection, peerId: string, emit: (even
   if (sdp) emit({ type: 'OFFER_CREATED', peerId, sdp })
 }
 
-const negotiateAnswer = async (pc: RTCPeerConnection, peerId: string, emit: (event: PeerEvent) => void, remoteSdp: string) => {
-  pc.ondatachannel = ({ channel }) => wireChannel(channel as RTCDataChannel, peerId, emit)
+const negotiateAnswer = async (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void, remoteSdp: string) => {
+  pc.ondatachannel = ({ channel }) => wireChannel(channel as RTCDataChannel, peerId, name, emit)
 
   await pc.setRemoteDescription({ type: 'offer', sdp: remoteSdp } as RTCSessionDescriptionInit)
   const answer = await pc.createAnswer()
@@ -52,14 +60,14 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const peerId = generatePeerId()
         const pc = deps.createPeerConnection()
         connections.set(peerId, pc)
-        negotiateOffer(pc, peerId, deps.emit)
+        negotiateOffer(pc, peerId, deps.name, deps.emit)
         break
       }
       case 'ACCEPT_OFFER': {
         const peerId = generatePeerId()
         const pc = deps.createPeerConnection()
         connections.set(peerId, pc)
-        negotiateAnswer(pc, peerId, deps.emit, command.sdp)
+        negotiateAnswer(pc, peerId, deps.name, deps.emit, command.sdp)
         break
       }
       case 'ACCEPT_ANSWER': {
