@@ -1,4 +1,4 @@
-import {render, screen, act} from '@testing-library/react';
+import {render, screen, act, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Connections} from './Connections';
 import {ConnectionProvider} from '../state/ConnectionProvider';
@@ -66,7 +66,7 @@ describe('Connections', () => {
 
     await act(async () => emit({type: 'OFFER_CREATED', peerId: 'p1', sdp: 'v=0'}));
 
-    await vi.waitFor(() => expect(screen.getByText('encoded:v=0')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('encoded:v=0')).toBeInTheDocument());
   });
 
   it('entering response code and submitting calls acceptAnswer', async () => {
@@ -80,7 +80,7 @@ describe('Connections', () => {
 
     act(() => store.createOffer('pass'));
     await act(async () => emit({type: 'OFFER_CREATED', peerId: 'p1', sdp: 'v=0'}));
-    await vi.waitFor(() => expect(screen.getByLabelText(/response code/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText(/response code/i)).toBeInTheDocument());
 
     await user.type(screen.getByLabelText(/response code/i), 'encoded:v=answer');
     await user.click(screen.getByRole('button', {name: /connect/i}));
@@ -109,7 +109,7 @@ describe('Connections', () => {
     await user.type(screen.getByLabelText(/offer code/i), 'encoded:v=0');
     await user.click(screen.getByRole('button', {name: /join/i}));
 
-    await vi.waitFor(() => expect(store.getState().flow.phase).toBe('joining'));
+    await waitFor(() => expect(store.getState().flow.phase).toBe('joining'));
   });
 
   it('shows answer code when flow is answer-ready', async () => {
@@ -123,7 +123,7 @@ describe('Connections', () => {
     await act(async () => store.joinOffer('encoded:v=0', 'pass'));
     await act(async () => emit({type: 'ANSWER_CREATED', peerId: 'p1', sdp: 'v=answer'}));
 
-    await vi.waitFor(() => expect(screen.getByText('encoded:v=answer')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('encoded:v=answer')).toBeInTheDocument());
   });
 
   it('shows connected peer by name in peers list', async () => {

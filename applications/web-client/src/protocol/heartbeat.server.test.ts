@@ -1,15 +1,12 @@
 // @vitest-environment node
-import {WebSocket} from 'ws';
 import {startHeartbeat} from './heartbeat';
 import type {HeartbeatState} from './heartbeat';
 import {createStubServer} from '../test/stubServer';
+import {makeWebSocket} from '../test/makeWebSocket';
 import type {WsConnection} from '../test/stubServer';
 
 const SHORT_TIMEOUT = 50;
 const RECONNECT_DELAY = 1_000;
-
-const makeWebSocket = (url: string): globalThis.WebSocket =>
-  new WebSocket(url) as unknown as globalThis.WebSocket;
 
 const startWithServer = async (
   serverSetup: (conn: WsConnection) => void,
