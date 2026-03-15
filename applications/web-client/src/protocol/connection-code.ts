@@ -6,7 +6,7 @@ const SALT_BYTES = 16
 const IV_BYTES = 12
 const PBKDF2_ITERATIONS = 100_000
 
-const deriveKey = async (passphrase: string, salt: Uint8Array): Promise<CryptoKey> => {
+const deriveKey = async (passphrase: string, salt: BufferSource): Promise<CryptoKey> => {
   const raw = new TextEncoder().encode(passphrase)
   const importedKey = await crypto.subtle.importKey('raw', raw, 'PBKDF2', false, ['deriveKey'])
   return crypto.subtle.deriveKey(
@@ -18,7 +18,7 @@ const deriveKey = async (passphrase: string, salt: Uint8Array): Promise<CryptoKe
   )
 }
 
-const compress = async (data: string): Promise<Uint8Array> => {
+const compress = async (data: string): Promise<ArrayBuffer> => {
   const stream = new CompressionStream('deflate-raw')
   const writer = stream.writable.getWriter()
   writer.write(new TextEncoder().encode(data))
@@ -34,10 +34,10 @@ const compress = async (data: string): Promise<Uint8Array> => {
   const out = new Uint8Array(total)
   let offset = 0
   for (const chunk of chunks) { out.set(chunk, offset); offset += chunk.length }
-  return out
+  return out.buffer as ArrayBuffer
 }
 
-const decompress = async (data: Uint8Array): Promise<string> => {
+const decompress = async (data: BufferSource): Promise<string> => {
   const stream = new DecompressionStream('deflate-raw')
   const writer = stream.writable.getWriter()
   writer.write(data)
