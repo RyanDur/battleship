@@ -180,8 +180,7 @@ describe('Connections', () => {
 
     await act(async () => emit({type: 'PEER_CONNECTED', peerId: 'p1'}))
     await act(async () => emit({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}))
-    store.grantTrust('p1')
-    await act(async () => {})
+    await act(async () => store.grantTrust('p1'))
 
     await user.click(screen.getByRole('button', {name: /revoke trust/i}))
 
