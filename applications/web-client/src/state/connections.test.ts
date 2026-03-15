@@ -97,6 +97,14 @@ describe('connectionsReducer', () => {
     expect(next.peers).toEqual([{id: 'p1', name: 'Alice'}, {id: 'p2'}])
   })
 
+  it('PEER_CONNECTIONS_UPDATED updates matching peer connections', () => {
+    const state = withPeers([{id: 'p1'}, {id: 'p2'}])
+
+    const next = connectionsReducer(state, {type: 'PEER_CONNECTIONS_UPDATED', peerId: 'p1', connections: ['Alice', 'Carol']})
+
+    expect(next.peers).toEqual([{id: 'p1', connections: ['Alice', 'Carol']}, {id: 'p2'}])
+  })
+
   it('does not mutate existing state', () => {
     const state = withPeers([{id: 'p1'}])
     const frozen = Object.freeze(state)

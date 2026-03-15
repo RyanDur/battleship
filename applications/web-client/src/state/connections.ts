@@ -1,4 +1,4 @@
-export type Peer = {id: string; name?: string}
+export type Peer = {id: string; name?: string; connections?: string[]}
 
 export type ConnectionFlow =
   | {phase: 'idle'}
@@ -25,6 +25,7 @@ export type ConnectionsAction =
   | {type: 'PEER_CONNECTED'; peerId: string}
   | {type: 'PEER_DISCONNECTED'; peerId: string}
   | {type: 'PEER_NAMED'; peerId: string; name: string}
+  | {type: 'PEER_CONNECTIONS_UPDATED'; peerId: string; connections: string[]}
 
 export const initialState: ConnectionsState = {
   flow: {phase: 'idle'},
@@ -65,5 +66,8 @@ export const connectionsReducer = (state: ConnectionsState, action: ConnectionsA
 
     case 'PEER_NAMED':
       return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, name: action.name} : p)}
+
+    case 'PEER_CONNECTIONS_UPDATED':
+      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, connections: action.connections} : p)}
   }
 }

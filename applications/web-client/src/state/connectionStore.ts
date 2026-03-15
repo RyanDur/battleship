@@ -43,6 +43,7 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
     if (event.type === 'PEER_CONNECTED') dispatch({type: 'PEER_CONNECTED', peerId: event.peerId})
     else if (event.type === 'PEER_NAMED') dispatch({type: 'PEER_NAMED', peerId: event.peerId, name: event.name})
     else if (event.type === 'PEER_DISCONNECTED') dispatch({type: 'PEER_DISCONNECTED', peerId: event.peerId})
+    else if (event.type === 'PEER_CONNECTIONS_UPDATED') dispatch({type: 'PEER_CONNECTIONS_UPDATED', peerId: event.peerId, connections: event.connections})
     else if (event.type === 'OFFER_CREATED') dispatch({type: 'OFFER_SDP_READY', peerId: event.peerId, sdp: event.sdp})
     else if (event.type === 'ANSWER_CREATED') dispatch({type: 'ANSWER_SDP_READY', sdp: event.sdp})
   }

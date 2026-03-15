@@ -143,6 +143,17 @@ describe('Connections', () => {
     expect(screen.getByText('Unknown')).toBeInTheDocument()
   })
 
+  it('shows connections of a peer when PEER_CONNECTIONS_UPDATED is received', async () => {
+    const {emit} = renderConnections()
+
+    await act(async () => emit({type: 'PEER_CONNECTED', peerId: 'p1'}))
+    await act(async () => emit({type: 'PEER_NAMED', peerId: 'p1', name: 'Bob'}))
+    await act(async () => emit({type: 'PEER_CONNECTIONS_UPDATED', peerId: 'p1', connections: ['Carol', 'Dave']}))
+
+    expect(screen.getByText('Carol')).toBeInTheDocument()
+    expect(screen.getByText('Dave')).toBeInTheDocument()
+  })
+
   it('clicking disconnect removes the peer', async () => {
     const user = userEvent.setup()
     const {store, emit} = renderConnections()

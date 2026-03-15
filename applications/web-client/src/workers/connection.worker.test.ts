@@ -336,4 +336,64 @@ describe('Peer Handler', () => {
       warn.mockRestore()
     })
   })
+
+  describe('connections broadcasting', () => {
+    it('sends current peer names to newly introduced peer', async () => {
+      const { handleCommand } = await createHandler('Alice')
+
+      handleCommand({ type: 'CREATE_OFFER' })
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCE', name: 'Bob' }) })
+
+      handleCommand({ type: 'CREATE_OFFER' })
+      channels[1].onopen?.()
+      channels[1].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCE', name: 'Carol' }) })
+
+      expect(channels[1].send).toHaveBeenCalledWith(JSON.stringify({ type: 'CONNECTIONS', names: ['Bob'] }))
+    })
+
+    it('broadcasts updated connections to existing peers when new peer introduces', async () => {
+      const { handleCommand } = await createHandler('Alice')
+
+      handleCommand({ type: 'CREATE_OFFER' })
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCE', name: 'Bob' }) })
+
+      handleCommand({ type: 'CREATE_OFFER' })
+      channels[1].onopen?.()
+      channels[1].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCE', name: 'Carol' }) })
+
+      expect(channels[0].send).toHaveBeenCalledWith(JSON.stringify({ type: 'CONNECTIONS', names: ['Carol'] }))
+    })
+
+    it('broadcasts updated connections when a peer disconnects', async () => {
+      const { handleCommand } = await createHandler('Alice')
+
+      handleCommand({ type: 'CREATE_OFFER' })
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCE', name: 'Bob' }) })
+
+      handleCommand({ type: 'CREATE_OFFER' })
+      channels[1].onopen?.()
+      channels[1].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCE', name: 'Carol' }) })
+
+      channels[1].onclose?.()
+
+      expect(channels[0].send).toHaveBeenCalledWith(JSON.stringify({ type: 'CONNECTIONS', names: [] }))
+    })
+
+    it('emits PEER_CONNECTIONS_UPDATED when peer sends CONNECTIONS message', async () => {
+      const { handleCommand } = await createHandler('Alice')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+      const peerId = (events.find(e => e.type === 'OFFER_CREATED') as { peerId: string }).peerId
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'CONNECTIONS', names: ['Bob', 'Carol'] }) })
+
+      expect(events).toContainEqual({ type: 'PEER_CONNECTIONS_UPDATED', peerId, connections: ['Bob', 'Carol'] })
+    })
+  })
 })
