@@ -1,11 +1,12 @@
 export type PeerCommand =
   | { type: 'CREATE_OFFER' }
   | { type: 'ACCEPT_OFFER'; sdp: string }
-  | { type: 'ACCEPT_ANSWER'; sdp: string }
+  | { type: 'ACCEPT_ANSWER'; peerId: string; sdp: string }
+  | { type: 'DISCONNECT'; peerId: string }
 
 export type PeerEvent =
-  | { type: 'OFFER_CREATED'; sdp: string }
-  | { type: 'ANSWER_CREATED'; sdp: string }
-  | { type: 'PEER_CONNECTED' }
-  | { type: 'PEER_DISCONNECTED' }
+  | { type: 'OFFER_CREATED'; peerId: string; sdp: string }
+  | { type: 'ANSWER_CREATED'; peerId: string; sdp: string }
+  | { type: 'PEER_CONNECTED'; peerId: string }
+  | { type: 'PEER_DISCONNECTED'; peerId: string }
   | { type: 'ERROR'; message: string }

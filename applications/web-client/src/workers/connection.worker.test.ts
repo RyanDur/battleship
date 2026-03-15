@@ -1,141 +1,248 @@
 import type { PeerEvent } from '../types/worker-messages'
 
-// Story #38: Direct peer-to-peer connection between players
+// Story #41: Support multiple simultaneous peer connections
+
+type MockPc = {
+  createOffer: ReturnType<typeof vi.fn>
+  createAnswer: ReturnType<typeof vi.fn>
+  setLocalDescription: ReturnType<typeof vi.fn>
+  setRemoteDescription: ReturnType<typeof vi.fn>
+  onicecandidate: ((event: { candidate: unknown }) => void) | null
+  ondatachannel: ((event: { channel: unknown }) => void) | null
+  createDataChannel: ReturnType<typeof vi.fn>
+  iceGatheringState: string
+  localDescription: { sdp: string } | null
+  close: ReturnType<typeof vi.fn>
+}
+
+type MockChannel = {
+  onopen: (() => void) | null
+  onclose: (() => void) | null
+  onmessage: ((event: { data: string }) => void) | null
+  send: ReturnType<typeof vi.fn>
+}
 
 describe('Peer Handler', () => {
   let events: PeerEvent[]
-  let mockChannel: {
-    onopen: (() => void) | null
-    onclose: (() => void) | null
-    onmessage: ((event: { data: string }) => void) | null
-    send: ReturnType<typeof vi.fn>
-  }
-  let mockPc: {
-    createOffer: ReturnType<typeof vi.fn>
-    createAnswer: ReturnType<typeof vi.fn>
-    setLocalDescription: ReturnType<typeof vi.fn>
-    setRemoteDescription: ReturnType<typeof vi.fn>
-    onicecandidate: ((event: { candidate: unknown }) => void) | null
-    ondatachannel: ((event: { channel: unknown }) => void) | null
-    createDataChannel: ReturnType<typeof vi.fn>
-    iceGatheringState: string
-    localDescription: { sdp: string } | null
-    close: ReturnType<typeof vi.fn>
-  }
+  let pcs: MockPc[]
+  let channels: MockChannel[]
 
-  beforeEach(() => {
-    events = []
+  const makeMockChannel = (): MockChannel => ({
+    onopen: null,
+    onclose: null,
+    onmessage: null,
+    send: vi.fn(),
+  })
 
-    mockChannel = {
-      onopen: null,
-      onclose: null,
-      onmessage: null,
-      send: vi.fn(),
-    }
-
-    mockPc = {
+  const makeMockPc = (): MockPc => {
+    const channel = makeMockChannel()
+    channels.push(channel)
+    return {
       createOffer: vi.fn().mockResolvedValue({ sdp: 'mock-offer-sdp', type: 'offer' }),
       createAnswer: vi.fn().mockResolvedValue({ sdp: 'mock-answer-sdp', type: 'answer' }),
       setLocalDescription: vi.fn().mockResolvedValue(undefined),
       setRemoteDescription: vi.fn().mockResolvedValue(undefined),
       onicecandidate: null,
       ondatachannel: null,
-      createDataChannel: vi.fn().mockReturnValue(mockChannel),
+      createDataChannel: vi.fn().mockReturnValue(channel),
       iceGatheringState: 'new',
       localDescription: null,
       close: vi.fn(),
     }
+  }
+
+  beforeEach(() => {
+    events = []
+    pcs = []
+    channels = []
   })
 
   const createHandler = async () => {
     const { createPeerHandler } = await import('./connection.handler')
     return createPeerHandler({
       emit: (event) => events.push(event),
-      createPeerConnection: () => mockPc as unknown as RTCPeerConnection,
+      createPeerConnection: () => {
+        const pc = makeMockPc()
+        pcs.push(pc)
+        return pc as unknown as RTCPeerConnection
+      },
     })
   }
 
+  const completeIceGathering = (pc: MockPc, sdp: string) => {
+    pc.iceGatheringState = 'complete'
+    pc.localDescription = { sdp }
+    pc.onicecandidate?.({ candidate: null })
+  }
+
   describe('creating an offer', () => {
-    it('emits OFFER_CREATED with full SDP when ICE gathering completes', async () => {
+    it('emits OFFER_CREATED with a peerId and full SDP when ICE gathering completes', async () => {
       const { handleCommand } = await createHandler()
       handleCommand({ type: 'CREATE_OFFER' })
 
-      mockPc.iceGatheringState = 'complete'
-      mockPc.localDescription = { sdp: 'full-offer-sdp' }
-      mockPc.onicecandidate?.({ candidate: null })
+      completeIceGathering(pcs[0], 'full-offer-sdp')
 
       await vi.waitFor(() => {
-        expect(events).toContainEqual({ type: 'OFFER_CREATED', sdp: 'full-offer-sdp' })
+        expect(events).toContainEqual(
+          expect.objectContaining({ type: 'OFFER_CREATED', sdp: 'full-offer-sdp' })
+        )
       })
+      expect(events[0]).toHaveProperty('peerId')
+      expect(typeof (events[0] as { peerId: string }).peerId).toBe('string')
     })
 
     it('creates a "game" data channel', async () => {
       const { handleCommand } = await createHandler()
       handleCommand({ type: 'CREATE_OFFER' })
 
-      expect(mockPc.createDataChannel).toHaveBeenCalledWith('game')
+      expect(pcs[0].createDataChannel).toHaveBeenCalledWith('game')
+    })
+
+    it('each offer gets a unique peer ID', async () => {
+      const { handleCommand } = await createHandler()
+      handleCommand({ type: 'CREATE_OFFER' })
+      handleCommand({ type: 'CREATE_OFFER' })
+
+      completeIceGathering(pcs[0], 'sdp-1')
+      completeIceGathering(pcs[1], 'sdp-2')
+
+      await vi.waitFor(() => {
+        expect(events.filter(e => e.type === 'OFFER_CREATED')).toHaveLength(2)
+      })
+
+      const [first, second] = events.filter(e => e.type === 'OFFER_CREATED') as Array<{ peerId: string }>
+      expect(first.peerId).not.toBe(second.peerId)
+    })
+
+    it('creating a second offer does not affect the first connection', async () => {
+      const { handleCommand } = await createHandler()
+      handleCommand({ type: 'CREATE_OFFER' })
+      handleCommand({ type: 'CREATE_OFFER' })
+
+      expect(pcs).toHaveLength(2)
+      expect(pcs[0].close).not.toHaveBeenCalled()
     })
   })
 
   describe('accepting an offer', () => {
-    it('emits ANSWER_CREATED with full SDP when ICE gathering completes', async () => {
+    it('emits ANSWER_CREATED with a peerId and full SDP when ICE gathering completes', async () => {
       const { handleCommand } = await createHandler()
       handleCommand({ type: 'ACCEPT_OFFER', sdp: 'remote-offer-sdp' })
 
-      expect(mockPc.setRemoteDescription).toHaveBeenCalledWith(
+      expect(pcs[0].setRemoteDescription).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'offer', sdp: 'remote-offer-sdp' })
       )
 
-      mockPc.iceGatheringState = 'complete'
-      mockPc.localDescription = { sdp: 'full-answer-sdp' }
-      mockPc.onicecandidate?.({ candidate: null })
+      completeIceGathering(pcs[0], 'full-answer-sdp')
 
       await vi.waitFor(() => {
-        expect(events).toContainEqual({ type: 'ANSWER_CREATED', sdp: 'full-answer-sdp' })
+        expect(events).toContainEqual(
+          expect.objectContaining({ type: 'ANSWER_CREATED', sdp: 'full-answer-sdp' })
+        )
       })
+      expect(events[0]).toHaveProperty('peerId')
     })
   })
 
   describe('accepting an answer', () => {
-    it('sets remote description on the peer connection', async () => {
+    it('sets remote description on the correct peer connection', async () => {
       const { handleCommand } = await createHandler()
       handleCommand({ type: 'CREATE_OFFER' })
-      handleCommand({ type: 'ACCEPT_ANSWER', sdp: 'remote-answer-sdp' })
+      handleCommand({ type: 'CREATE_OFFER' })
 
-      expect(mockPc.setRemoteDescription).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'answer', sdp: 'remote-answer-sdp' })
+      completeIceGathering(pcs[0], 'sdp-1')
+      completeIceGathering(pcs[1], 'sdp-2')
+
+      await vi.waitFor(() => {
+        expect(events.filter(e => e.type === 'OFFER_CREATED')).toHaveLength(2)
+      })
+
+      const firstPeerId = (events.find(e => e.type === 'OFFER_CREATED' && (e as { sdp: string }).sdp === 'sdp-1') as { peerId: string }).peerId
+
+      handleCommand({ type: 'ACCEPT_ANSWER', peerId: firstPeerId, sdp: 'remote-answer' })
+
+      expect(pcs[0].setRemoteDescription).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'answer', sdp: 'remote-answer' })
       )
+      expect(pcs[1].setRemoteDescription).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('disconnect', () => {
+    it('closes only the specified peer connection', async () => {
+      const { handleCommand } = await createHandler()
+      handleCommand({ type: 'CREATE_OFFER' })
+      handleCommand({ type: 'CREATE_OFFER' })
+
+      completeIceGathering(pcs[0], 'sdp-1')
+      completeIceGathering(pcs[1], 'sdp-2')
+
+      await vi.waitFor(() => {
+        expect(events.filter(e => e.type === 'OFFER_CREATED')).toHaveLength(2)
+      })
+
+      const firstPeerId = (events.find(e => e.type === 'OFFER_CREATED' && (e as { sdp: string }).sdp === 'sdp-1') as { peerId: string }).peerId
+
+      handleCommand({ type: 'DISCONNECT', peerId: firstPeerId })
+
+      expect(pcs[0].close).toHaveBeenCalled()
+      expect(pcs[1].close).not.toHaveBeenCalled()
     })
   })
 
   describe('data channel lifecycle', () => {
-    it('emits PEER_CONNECTED when offerer data channel opens', async () => {
+    it('emits PEER_CONNECTED with peerId when offerer data channel opens', async () => {
       const { handleCommand } = await createHandler()
       handleCommand({ type: 'CREATE_OFFER' })
 
-      mockChannel.onopen?.()
+      completeIceGathering(pcs[0], 'offer-sdp')
 
-      expect(events).toContainEqual({ type: 'PEER_CONNECTED' })
+      await vi.waitFor(() => {
+        expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' }))
+      })
+
+      const peerId = (events.find(e => e.type === 'OFFER_CREATED') as { peerId: string }).peerId
+
+      channels[0].onopen?.()
+
+      expect(events).toContainEqual({ type: 'PEER_CONNECTED', peerId })
     })
 
-    it('emits PEER_CONNECTED when answerer data channel opens', async () => {
+    it('emits PEER_CONNECTED with peerId when answerer data channel opens', async () => {
       const { handleCommand } = await createHandler()
       handleCommand({ type: 'ACCEPT_OFFER', sdp: 'remote-offer-sdp' })
 
-      mockPc.ondatachannel?.({ channel: mockChannel })
-      mockChannel.onopen?.()
+      completeIceGathering(pcs[0], 'answer-sdp')
 
-      expect(events).toContainEqual({ type: 'PEER_CONNECTED' })
+      await vi.waitFor(() => {
+        expect(events).toContainEqual(expect.objectContaining({ type: 'ANSWER_CREATED' }))
+      })
+
+      const peerId = (events.find(e => e.type === 'ANSWER_CREATED') as { peerId: string }).peerId
+      const inboundChannel = makeMockChannel()
+
+      pcs[0].ondatachannel?.({ channel: inboundChannel })
+      inboundChannel.onopen?.()
+
+      expect(events).toContainEqual({ type: 'PEER_CONNECTED', peerId })
     })
 
-    it('emits PEER_DISCONNECTED when data channel closes', async () => {
+    it('emits PEER_DISCONNECTED with peerId when data channel closes', async () => {
       const { handleCommand } = await createHandler()
       handleCommand({ type: 'CREATE_OFFER' })
 
-      mockChannel.onopen?.()
-      mockChannel.onclose?.()
+      completeIceGathering(pcs[0], 'offer-sdp')
 
-      expect(events).toContainEqual({ type: 'PEER_DISCONNECTED' })
+      await vi.waitFor(() => {
+        expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' }))
+      })
+
+      const peerId = (events.find(e => e.type === 'OFFER_CREATED') as { peerId: string }).peerId
+
+      channels[0].onopen?.()
+      channels[0].onclose?.()
+
+      expect(events).toContainEqual({ type: 'PEER_DISCONNECTED', peerId })
     })
   })
 })
