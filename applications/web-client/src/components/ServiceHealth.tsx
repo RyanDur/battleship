@@ -1,4 +1,4 @@
-import type {HeartbeatState} from '../protocol/heartbeat'
+import type {HeartbeatState} from '../protocol/heartbeat';
 
 interface ServiceHealthProps {
   state: HeartbeatState
@@ -20,5 +20,5 @@ export const ServiceHealth = ({state, onRetry}: ServiceHealthProps) => {
         </>
       )}
     </section>
-  )
-}
+  );
+};

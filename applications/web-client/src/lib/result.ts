@@ -30,11 +30,11 @@ export const success = <S, F = never>(value: S): Success<S, F> => Object.freeze(
     map: (fn) => success(fn(value)),
     andThen: (fn) => fn(value),
     or: () => success(value),
-    onSuccess: (fn) => { fn(value); return success(value) },
+    onSuccess: (fn) => { fn(value); return success(value); },
     onFailure: () => success(value),
     either: (onSuccess) => onSuccess(value),
     mapEither: (onSuccess) => onSuccess(value),
-})
+});
 
 export const failure = <F, S = never>(reason: F): Failure<S, F> => Object.freeze({
     kind: 'failure' as const,
@@ -43,12 +43,12 @@ export const failure = <F, S = never>(reason: F): Failure<S, F> => Object.freeze
     andThen: () => failure(reason),
     or: (fn) => fn(reason),
     onSuccess: () => failure(reason),
-    onFailure: (fn) => { fn(reason); return failure(reason) },
+    onFailure: (fn) => { fn(reason); return failure(reason); },
     either: (_onSuccess, onFailure) => onFailure(reason),
     mapEither: (_onSuccess, onFailure) => onFailure(reason),
-})
+});
 
 export const tryCatch = <S, F>(fn: () => S, onError: (error: unknown) => F): Result<S, F> => {
-    try { return success(fn()) }
-    catch (e) { return failure(onError(e)) }
-}
+    try { return success(fn()); }
+    catch (e) { return failure(onError(e)); }
+};

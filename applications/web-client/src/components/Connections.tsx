@@ -1,6 +1,6 @@
-import {useState} from 'react'
-import {useConnectionState, useConnectionStore} from '../state/useConnection'
-import type {ConnectionFlow, Peer} from '../state/connections'
+import {useState} from 'react';
+import {useConnectionState, useConnectionStore} from '../state/useConnection';
+import type {ConnectionFlow, Peer} from '../state/connections';
 
 type FlowPhase =
   | {phase: 'idle'}
@@ -10,21 +10,21 @@ type FlowPhase =
   | {phase: 'answer-ready'; code: string}
 
 const toFlowPhase = (flow: ConnectionFlow): FlowPhase => {
-  if (flow.phase === 'offer-ready') return {phase: 'offer-ready', code: flow.code}
-  if (flow.phase === 'answer-ready') return {phase: 'answer-ready', code: flow.code}
-  if (flow.phase === 'encoding-offer') return {phase: 'creating'}
-  if (flow.phase === 'encoding-answer') return {phase: 'joining'}
-  return {phase: flow.phase}
-}
+  if (flow.phase === 'offer-ready') return {phase: 'offer-ready', code: flow.code};
+  if (flow.phase === 'answer-ready') return {phase: 'answer-ready', code: flow.code};
+  if (flow.phase === 'encoding-offer') return {phase: 'creating'};
+  if (flow.phase === 'encoding-answer') return {phase: 'joining'};
+  return {phase: flow.phase};
+};
 
 type Props = {
   serviceOnline: boolean
 }
 
 const PeerRow = ({peer, otherTrustingPeers}: {peer: Peer; otherTrustingPeers: Peer[]}) => {
-  const store = useConnectionStore()
-  const [introducing, setIntroducing] = useState(false)
-  const showIntroduceButton = peer.trustsMe && otherTrustingPeers.length > 0
+  const store = useConnectionStore();
+  const [introducing, setIntroducing] = useState(false);
+  const showIntroduceButton = peer.trustsMe && otherTrustingPeers.length > 0;
 
   return (
     <li>
@@ -36,7 +36,7 @@ const PeerRow = ({peer, otherTrustingPeers}: {peer: Peer; otherTrustingPeers: Pe
       {introducing && otherTrustingPeers.map(other => (
         <button
           key={other.id}
-          onClick={() => { store.introducePeers(peer.id, other.id); setIntroducing(false) }}
+          onClick={() => { store.introducePeers(peer.id, other.id); setIntroducing(false); }}
         >
           {other.name ?? 'Unknown'}
         </button>
@@ -47,23 +47,23 @@ const PeerRow = ({peer, otherTrustingPeers}: {peer: Peer; otherTrustingPeers: Pe
       }
       <button onClick={() => store.disconnect(peer.id)}>Disconnect</button>
     </li>
-  )
-}
+  );
+};
 
 export const Connections = ({serviceOnline}: Props) => {
-  const store = useConnectionStore()
-  const flow = toFlowPhase(useConnectionState(s => s.flow))
-  const peers = useConnectionState(s => s.peers)
-  const pendingIntroductions = useConnectionState(s => s.pendingIntroductions)
+  const store = useConnectionStore();
+  const flow = toFlowPhase(useConnectionState(s => s.flow));
+  const peers = useConnectionState(s => s.peers);
+  const pendingIntroductions = useConnectionState(s => s.pendingIntroductions);
 
-  const [formMode, setFormMode] = useState<'none' | 'create' | 'join'>('none')
-  const [passphrase, setPassphrase] = useState('')
-  const [offerCode, setOfferCode] = useState('')
-  const [responseCode, setResponseCode] = useState('')
+  const [formMode, setFormMode] = useState<'none' | 'create' | 'join'>('none');
+  const [passphrase, setPassphrase] = useState('');
+  const [offerCode, setOfferCode] = useState('');
+  const [responseCode, setResponseCode] = useState('');
 
-  if (!serviceOnline) return null
+  if (!serviceOnline) return null;
 
-  const trustingPeers = peers.filter(p => p.trustsMe)
+  const trustingPeers = peers.filter(p => p.trustsMe);
 
   const renderFlow = () => {
     if (flow.phase === 'offer-ready') {
@@ -81,7 +81,7 @@ export const Connections = ({serviceOnline}: Props) => {
             <button onClick={() => store.acceptAnswer(responseCode)}>Connect</button>
           </div>
         </div>
-      )
+      );
     }
 
     if (flow.phase === 'answer-ready') {
@@ -90,16 +90,16 @@ export const Connections = ({serviceOnline}: Props) => {
           <p>Share this response code with the other person:</p>
           <code>{flow.code}</code>
         </div>
-      )
+      );
     }
 
     if (flow.phase === 'creating' || flow.phase === 'joining') {
-      return <p>Generating...</p>
+      return <p>Generating...</p>;
     }
 
     if (formMode === 'create') {
       return (
-        <form onSubmit={e => { e.preventDefault(); store.createOffer(passphrase) }}>
+        <form onSubmit={e => { e.preventDefault(); store.createOffer(passphrase); }}>
           <label htmlFor="create-passphrase">Passphrase</label>
           <input
             id="create-passphrase"
@@ -108,12 +108,12 @@ export const Connections = ({serviceOnline}: Props) => {
           />
           <button type="submit">Generate code</button>
         </form>
-      )
+      );
     }
 
     if (formMode === 'join') {
       return (
-        <form onSubmit={e => { e.preventDefault(); store.joinOffer(offerCode, passphrase) }}>
+        <form onSubmit={e => { e.preventDefault(); store.joinOffer(offerCode, passphrase); }}>
           <label htmlFor="join-passphrase">Passphrase</label>
           <input
             id="join-passphrase"
@@ -128,7 +128,7 @@ export const Connections = ({serviceOnline}: Props) => {
           />
           <button type="submit">Join</button>
         </form>
-      )
+      );
     }
 
     return (
@@ -136,8 +136,8 @@ export const Connections = ({serviceOnline}: Props) => {
         <button onClick={() => setFormMode('create')}>Create</button>
         <button onClick={() => setFormMode('join')}>Join</button>
       </div>
-    )
-  }
+    );
+  };
 
   return (
     <section>
@@ -165,5 +165,5 @@ export const Connections = ({serviceOnline}: Props) => {
         </ul>
       )}
     </section>
-  )
-}
+  );
+};

@@ -38,56 +38,56 @@ export const initialState: ConnectionsState = {
   flow: {phase: 'idle'},
   peers: [],
   pendingIntroductions: [],
-}
+};
 
 export const connectionsReducer = (state: ConnectionsState, action: ConnectionsAction): ConnectionsState => {
   switch (action.type) {
     case 'CREATE_OFFER':
-      return {...state, flow: {phase: 'creating', passphrase: action.passphrase}}
+      return {...state, flow: {phase: 'creating', passphrase: action.passphrase}};
 
     case 'OFFER_SDP_READY':
-      if (state.flow.phase !== 'creating') return state
-      return {...state, flow: {phase: 'encoding-offer', peerId: action.peerId, sdp: action.sdp, passphrase: state.flow.passphrase}}
+      if (state.flow.phase !== 'creating') return state;
+      return {...state, flow: {phase: 'encoding-offer', peerId: action.peerId, sdp: action.sdp, passphrase: state.flow.passphrase}};
 
     case 'OFFER_ENCODED':
-      if (state.flow.phase !== 'encoding-offer') return state
-      return {...state, flow: {phase: 'offer-ready', peerId: action.peerId, code: action.code, passphrase: state.flow.passphrase}}
+      if (state.flow.phase !== 'encoding-offer') return state;
+      return {...state, flow: {phase: 'offer-ready', peerId: action.peerId, code: action.code, passphrase: state.flow.passphrase}};
 
     case 'JOIN_OFFER':
-      return {...state, flow: {phase: 'joining', passphrase: action.passphrase}}
+      return {...state, flow: {phase: 'joining', passphrase: action.passphrase}};
 
     case 'ANSWER_SDP_READY':
-      if (state.flow.phase !== 'joining') return state
-      return {...state, flow: {phase: 'encoding-answer', sdp: action.sdp, passphrase: state.flow.passphrase}}
+      if (state.flow.phase !== 'joining') return state;
+      return {...state, flow: {phase: 'encoding-answer', sdp: action.sdp, passphrase: state.flow.passphrase}};
 
     case 'ANSWER_ENCODED':
-      return {...state, flow: {phase: 'answer-ready', code: action.code}}
+      return {...state, flow: {phase: 'answer-ready', code: action.code}};
 
     case 'DECODE_FAILED':
-      return {...state, flow: {phase: 'idle'}}
+      return {...state, flow: {phase: 'idle'}};
 
     case 'PEER_CONNECTED':
-      return {...state, peers: [...state.peers, {id: action.peerId}]}
+      return {...state, peers: [...state.peers, {id: action.peerId}]};
 
     case 'PEER_DISCONNECTED':
-      return {...state, peers: state.peers.filter(p => p.id !== action.peerId)}
+      return {...state, peers: state.peers.filter(p => p.id !== action.peerId)};
 
     case 'PEER_NAMED':
-      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, name: action.name} : p)}
+      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, name: action.name} : p)};
 
     case 'TRUST_PEER':
-      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trusted: true} : p)}
+      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trusted: true} : p)};
 
     case 'REVOKE_PEER_TRUST':
-      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trusted: false} : p)}
+      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trusted: false} : p)};
 
     case 'PEER_TRUST_UPDATED':
-      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trustsMe: action.trusts} : p)}
+      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trustsMe: action.trusts} : p)};
 
     case 'INTRODUCTION_RECEIVED':
-      return {...state, pendingIntroductions: [...state.pendingIntroductions, {introId: action.introId, from: action.from, peer: action.peer}]}
+      return {...state, pendingIntroductions: [...state.pendingIntroductions, {introId: action.introId, from: action.from, peer: action.peer}]};
 
     case 'INTRODUCTION_RESOLVED':
-      return {...state, pendingIntroductions: state.pendingIntroductions.filter(i => i.introId !== action.introId)}
+      return {...state, pendingIntroductions: state.pendingIntroductions.filter(i => i.introId !== action.introId)};
   }
-}
+};

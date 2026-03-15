@@ -1,4 +1,4 @@
-import * as Decoder from 'schemawax'
+import * as Decoder from 'schemawax';
 
 export type Config = {
   version: string
@@ -10,15 +10,15 @@ const configDecoder = Decoder.object({
     version: Decoder.string,
     serviceUrl: Decoder.string,
   },
-})
+});
 
 const DEFAULT_CONFIG: Config = {
   version: 'dev',
   serviceUrl: 'http://localhost:8080',
-}
+};
 
 export const loadConfig = (url = `${import.meta.env.BASE_URL}config.json`): Promise<Config> =>
   fetch(url)
     .then(response => response.ok ? response.json() : Promise.reject())
     .then(json => configDecoder.decode(json) ?? DEFAULT_CONFIG)
-    .catch(() => DEFAULT_CONFIG)
+    .catch(() => DEFAULT_CONFIG);

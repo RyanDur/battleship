@@ -1,9 +1,9 @@
-import {connectionsReducer, initialState} from './connections'
-import type {ConnectionsState, ConnectionsAction} from './connections'
-import type {PeerCommand, PeerEvent} from '../types/worker-messages'
-import type {CodecError} from '../protocol/connection-code'
-import type {Result} from '../lib/result'
-import {ofPromise, asyncSuccess, type AsyncResult} from '../lib/asyncResult'
+import {connectionsReducer, initialState} from './connections';
+import type {ConnectionsState, ConnectionsAction} from './connections';
+import type {PeerCommand, PeerEvent} from '../types/worker-messages';
+import type {CodecError} from '../protocol/connection-code';
+import type {Result} from '../lib/result';
+import {ofPromise, asyncSuccess, type AsyncResult} from '../lib/asyncResult';
 
 type Handler = {handleCommand: (cmd: PeerCommand) => void}
 
@@ -28,96 +28,96 @@ export type ConnectionStore = {
 }
 
 export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
-  let state = initialState
-  const listeners = new Set<() => void>()
+  let state = initialState;
+  const listeners = new Set<() => void>();
 
   const dispatch = (action: ConnectionsAction) => {
-    state = connectionsReducer(state, action)
-    listeners.forEach(fn => fn())
+    state = connectionsReducer(state, action);
+    listeners.forEach(fn => fn());
 
     if (state.flow.phase === 'encoding-offer') {
-      const {peerId, sdp, passphrase} = state.flow
-      deps.encodeCode(sdp, passphrase).then(code => dispatch({type: 'OFFER_ENCODED', peerId, code}))
+      const {peerId, sdp, passphrase} = state.flow;
+      deps.encodeCode(sdp, passphrase).then(code => dispatch({type: 'OFFER_ENCODED', peerId, code}));
     } else if (state.flow.phase === 'encoding-answer') {
-      const {sdp, passphrase} = state.flow
-      deps.encodeCode(sdp, passphrase).then(code => dispatch({type: 'ANSWER_ENCODED', code}))
+      const {sdp, passphrase} = state.flow;
+      deps.encodeCode(sdp, passphrase).then(code => dispatch({type: 'ANSWER_ENCODED', code}));
     }
-  }
+  };
 
   const emit = (event: PeerEvent) => {
-    if (event.type === 'PEER_CONNECTED') dispatch({type: 'PEER_CONNECTED', peerId: event.peerId})
-    else if (event.type === 'PEER_NAMED') dispatch({type: 'PEER_NAMED', peerId: event.peerId, name: event.name})
-    else if (event.type === 'PEER_DISCONNECTED') dispatch({type: 'PEER_DISCONNECTED', peerId: event.peerId})
-    else if (event.type === 'PEER_TRUST_UPDATED') dispatch({type: 'PEER_TRUST_UPDATED', peerId: event.peerId, trusts: event.trusts})
-    else if (event.type === 'OFFER_CREATED') dispatch({type: 'OFFER_SDP_READY', peerId: event.peerId, sdp: event.sdp})
-    else if (event.type === 'ANSWER_CREATED') dispatch({type: 'ANSWER_SDP_READY', sdp: event.sdp})
-    else if (event.type === 'INTRODUCTION_RECEIVED') dispatch({type: 'INTRODUCTION_RECEIVED', introId: event.introId, from: event.from, peer: event.peer})
-    else if (event.type === 'INTRODUCTION_DECLINED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId})
-    else if (event.type === 'INTRODUCTION_EXPIRED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId})
-  }
+    if (event.type === 'PEER_CONNECTED') dispatch({type: 'PEER_CONNECTED', peerId: event.peerId});
+    else if (event.type === 'PEER_NAMED') dispatch({type: 'PEER_NAMED', peerId: event.peerId, name: event.name});
+    else if (event.type === 'PEER_DISCONNECTED') dispatch({type: 'PEER_DISCONNECTED', peerId: event.peerId});
+    else if (event.type === 'PEER_TRUST_UPDATED') dispatch({type: 'PEER_TRUST_UPDATED', peerId: event.peerId, trusts: event.trusts});
+    else if (event.type === 'OFFER_CREATED') dispatch({type: 'OFFER_SDP_READY', peerId: event.peerId, sdp: event.sdp});
+    else if (event.type === 'ANSWER_CREATED') dispatch({type: 'ANSWER_SDP_READY', sdp: event.sdp});
+    else if (event.type === 'INTRODUCTION_RECEIVED') dispatch({type: 'INTRODUCTION_RECEIVED', introId: event.introId, from: event.from, peer: event.peer});
+    else if (event.type === 'INTRODUCTION_DECLINED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
+    else if (event.type === 'INTRODUCTION_EXPIRED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
+  };
 
-  const handler = deps.createHandler(emit)
+  const handler = deps.createHandler(emit);
 
   return {
     getState: () => state,
 
     subscribe: (listener) => {
-      listeners.add(listener)
-      return () => listeners.delete(listener)
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
 
     createOffer: (passphrase) => {
-      dispatch({type: 'CREATE_OFFER', passphrase})
-      handler.handleCommand({type: 'CREATE_OFFER'})
+      dispatch({type: 'CREATE_OFFER', passphrase});
+      handler.handleCommand({type: 'CREATE_OFFER'});
     },
 
     joinOffer: (code, passphrase) => {
-      dispatch({type: 'JOIN_OFFER', passphrase})
+      dispatch({type: 'JOIN_OFFER', passphrase});
       return ofPromise(
         deps.decodeCode(code, passphrase).then(result =>
           result
             .map(sdp => handler.handleCommand({type: 'ACCEPT_OFFER', sdp}))
             .onFailure(() => dispatch({type: 'DECODE_FAILED'}))
         )
-      )
+      );
     },
 
     acceptAnswer: (responseCode) => {
-      const {flow} = state
-      if (flow.phase !== 'offer-ready') return asyncSuccess<void, CodecError>(undefined)
+      const {flow} = state;
+      if (flow.phase !== 'offer-ready') return asyncSuccess<void, CodecError>(undefined);
       return ofPromise(
         deps.decodeCode(responseCode, flow.passphrase).then(result =>
           result.map(sdp => handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: flow.peerId, sdp}))
         )
-      )
+      );
     },
 
     disconnect: (peerId) => {
-      handler.handleCommand({type: 'DISCONNECT', peerId})
+      handler.handleCommand({type: 'DISCONNECT', peerId});
     },
 
     grantTrust: (peerId) => {
-      dispatch({type: 'TRUST_PEER', peerId})
-      handler.handleCommand({type: 'GRANT_TRUST', peerId})
+      dispatch({type: 'TRUST_PEER', peerId});
+      handler.handleCommand({type: 'GRANT_TRUST', peerId});
     },
 
     revokeTrust: (peerId) => {
-      dispatch({type: 'REVOKE_PEER_TRUST', peerId})
-      handler.handleCommand({type: 'REVOKE_TRUST', peerId})
+      dispatch({type: 'REVOKE_PEER_TRUST', peerId});
+      handler.handleCommand({type: 'REVOKE_TRUST', peerId});
     },
 
     introducePeers: (peerId1, peerId2) => {
-      handler.handleCommand({type: 'INTRODUCE_PEERS', peerId1, peerId2})
+      handler.handleCommand({type: 'INTRODUCE_PEERS', peerId1, peerId2});
     },
 
     acceptIntroduction: (introId) => {
-      dispatch({type: 'INTRODUCTION_RESOLVED', introId})
-      handler.handleCommand({type: 'ACCEPT_INTRODUCTION', introId})
+      dispatch({type: 'INTRODUCTION_RESOLVED', introId});
+      handler.handleCommand({type: 'ACCEPT_INTRODUCTION', introId});
     },
 
     declineIntroduction: (introId) => {
-      dispatch({type: 'INTRODUCTION_RESOLVED', introId})
-      handler.handleCommand({type: 'DECLINE_INTRODUCTION', introId})
+      dispatch({type: 'INTRODUCTION_RESOLVED', introId});
+      handler.handleCommand({type: 'DECLINE_INTRODUCTION', introId});
     },
-  }
-}
+  };
+};

@@ -1,18 +1,18 @@
-import {render, screen, within, waitFor, act} from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import {Connections} from './Connections'
-import {ConnectionProvider} from '../state/ConnectionProvider'
-import {createConnectionStore} from '../state/connectionStore'
-import {createPeerHandler} from '../workers/connection.handler'
-import {createFakePeerConnectionFactory} from '../test/fakePeerConnection'
-import {success, failure} from '../lib/result'
-import type {ConnectionStore} from '../state/connectionStore'
-import type {ConnectionFlow} from '../state/connections'
+import {render, screen, within, waitFor, act} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import {Connections} from './Connections';
+import {ConnectionProvider} from '../state/ConnectionProvider';
+import {createConnectionStore} from '../state/connectionStore';
+import {createPeerHandler} from '../workers/connection.handler';
+import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
+import {success, failure} from '../lib/result';
+import type {ConnectionStore} from '../state/connectionStore';
+import type {ConnectionFlow} from '../state/connections';
 
 describe('Connections integration', () => {
   it('Bob and Carol connect directly after Alice introduces them', async () => {
-    const factory = createFakePeerConnectionFactory()
-    const user = userEvent.setup()
+    const factory = createFakePeerConnectionFactory();
+    const user = userEvent.setup();
 
     const makeStore = (name: string) =>
       createConnectionStore({
@@ -20,11 +20,11 @@ describe('Connections integration', () => {
         encodeCode: async sdp => `encoded:${sdp}`,
         decodeCode: async code =>
           code.startsWith('encoded:') ? success(code.slice(8)) : failure('DECRYPT_FAILED' as const),
-      })
+      });
 
-    const aliceStore = makeStore('Alice')
-    const bobStore = makeStore('Bob')
-    const carolStore = makeStore('Carol')
+    const aliceStore = makeStore('Alice');
+    const bobStore = makeStore('Bob');
+    const carolStore = makeStore('Carol');
 
     render(
       <div>
@@ -38,65 +38,65 @@ describe('Connections integration', () => {
           <ConnectionProvider store={carolStore}><Connections serviceOnline={true} /></ConnectionProvider>
         </div>
       </div>
-    )
+    );
 
-    const aliceUI = within(screen.getByTestId('alice'))
-    const bobUI = within(screen.getByTestId('bob'))
-    const carolUI = within(screen.getByTestId('carol'))
+    const aliceUI = within(screen.getByTestId('alice'));
+    const bobUI = within(screen.getByTestId('bob'));
+    const carolUI = within(screen.getByTestId('carol'));
 
     const connectStores = async (offerer: ConnectionStore, answerer: ConnectionStore) => {
-      const priorOffererPeers = offerer.getState().peers.length
-      const priorAnswererPeers = answerer.getState().peers.length
+      const priorOffererPeers = offerer.getState().peers.length;
+      const priorAnswererPeers = answerer.getState().peers.length;
 
-      await act(async () => { offerer.createOffer('pass') })
-      await waitFor(() => expect(offerer.getState().flow.phase).toBe('offer-ready'))
-      const offerFlow = offerer.getState().flow as Extract<ConnectionFlow, {phase: 'offer-ready'}>
+      await act(async () => { offerer.createOffer('pass'); });
+      await waitFor(() => expect(offerer.getState().flow.phase).toBe('offer-ready'));
+      const offerFlow = offerer.getState().flow as Extract<ConnectionFlow, {phase: 'offer-ready'}>;
 
-      await act(async () => { await answerer.joinOffer(offerFlow.code, 'pass').value })
-      await waitFor(() => expect(answerer.getState().flow.phase).toBe('answer-ready'))
-      const answerFlow = answerer.getState().flow as Extract<ConnectionFlow, {phase: 'answer-ready'}>
+      await act(async () => { await answerer.joinOffer(offerFlow.code, 'pass').value; });
+      await waitFor(() => expect(answerer.getState().flow.phase).toBe('answer-ready'));
+      const answerFlow = answerer.getState().flow as Extract<ConnectionFlow, {phase: 'answer-ready'}>;
 
-      await act(async () => { await offerer.acceptAnswer(answerFlow.code).value })
+      await act(async () => { await offerer.acceptAnswer(answerFlow.code).value; });
       await waitFor(() => {
-        expect(offerer.getState().peers.length).toBeGreaterThan(priorOffererPeers)
-        expect(answerer.getState().peers.length).toBeGreaterThan(priorAnswererPeers)
-      })
-    }
+        expect(offerer.getState().peers.length).toBeGreaterThan(priorOffererPeers);
+        expect(answerer.getState().peers.length).toBeGreaterThan(priorAnswererPeers);
+      });
+    };
 
     // Connect Alice↔Bob and Alice↔Carol via the store API
-    await connectStores(aliceStore, bobStore)
-    await connectStores(aliceStore, carolStore)
+    await connectStores(aliceStore, bobStore);
+    await connectStores(aliceStore, carolStore);
 
     // Wait for Alice to know both names before introducing
-    await waitFor(() => expect(aliceStore.getState().peers.filter(p => p.name)).toHaveLength(2))
+    await waitFor(() => expect(aliceStore.getState().peers.filter(p => p.name)).toHaveLength(2));
 
     // Bob and Carol each grant trust to Alice so she can introduce them
-    await user.click(bobUI.getByRole('button', {name: /^trust$/i}))
-    await user.click(carolUI.getByRole('button', {name: /^trust$/i}))
+    await user.click(bobUI.getByRole('button', {name: /^trust$/i}));
+    await user.click(carolUI.getByRole('button', {name: /^trust$/i}));
 
     // Wait for Alice's UI to show Introduce buttons (both peers now trust her)
     await waitFor(() =>
       expect(aliceUI.getAllByRole('button', {name: /introduce/i})).toHaveLength(2)
-    )
+    );
 
     // Alice clicks Introduce on Bob's row, then selects Carol from the peer list
-    await user.click(aliceUI.getAllByRole('button', {name: /introduce/i})[0])
-    await user.click(aliceUI.getByRole('button', {name: /carol/i}))
+    await user.click(aliceUI.getAllByRole('button', {name: /introduce/i})[0]);
+    await user.click(aliceUI.getByRole('button', {name: /carol/i}));
 
     // Bob and Carol receive the introduction
     await waitFor(() => {
-      expect(bobUI.getByText(/wants to introduce you to/i)).toBeInTheDocument()
-      expect(carolUI.getByText(/wants to introduce you to/i)).toBeInTheDocument()
-    })
+      expect(bobUI.getByText(/wants to introduce you to/i)).toBeInTheDocument();
+      expect(carolUI.getByText(/wants to introduce you to/i)).toBeInTheDocument();
+    });
 
     // Both accept
-    await user.click(bobUI.getByRole('button', {name: /accept/i}))
-    await user.click(carolUI.getByRole('button', {name: /accept/i}))
+    await user.click(bobUI.getByRole('button', {name: /accept/i}));
+    await user.click(carolUI.getByRole('button', {name: /accept/i}));
 
     // Bob and Carol should now each see two peers: Alice and the newly connected peer
     await waitFor(() => {
-      expect(bobStore.getState().peers).toHaveLength(2)
-      expect(carolStore.getState().peers).toHaveLength(2)
-    })
-  })
-})
+      expect(bobStore.getState().peers).toHaveLength(2);
+      expect(carolStore.getState().peers).toHaveLength(2);
+    });
+  });
+});

@@ -25,7 +25,7 @@ export const some = <T>(value: T): Some<T> => Object.freeze({
   or: () => some(value),
   orElse: () => value,
   orNull: () => value,
-})
+});
 
 export const nothing = <T = never>(): Nothing<T> => Object.freeze({
   isNothing: true as const,
@@ -34,7 +34,7 @@ export const nothing = <T = never>(): Nothing<T> => Object.freeze({
   or: (fn) => fn(),
   orElse: (fallback) => fallback,
   orNull: () => null,
-})
+});
 
 export const maybe = <T>(value: T | null | undefined): Maybe<T> =>
-  value !== undefined && value !== null ? some(value) : nothing()
+  value !== undefined && value !== null ? some(value) : nothing();

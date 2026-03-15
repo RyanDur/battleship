@@ -1,4 +1,4 @@
-import { encodeConnectionCode, decodeConnectionCode } from './connection-code'
+import { encodeConnectionCode, decodeConnectionCode } from './connection-code';
 
 // Story #39: Secure, compact connection codes
 
@@ -20,29 +20,29 @@ a=sctp-port:5000
 a=max-message-size:262144
 a=candidate:1 1 UDP 2130706431 192.168.1.1 50000 typ host
 a=candidate:2 1 TCP 1518280447 192.168.1.1 9 typ host tcptype active
-a=end-of-candidates`
+a=end-of-candidates`;
 
 describe('connection codes (Story #39)', () => {
   it('decodes what was encoded with the same passphrase', async () => {
-    const passphrase = 'hello world'
+    const passphrase = 'hello world';
 
-    const code = await encodeConnectionCode(SAMPLE_SDP, passphrase)
-    const result = await decodeConnectionCode(code, passphrase)
+    const code = await encodeConnectionCode(SAMPLE_SDP, passphrase);
+    const result = await decodeConnectionCode(code, passphrase);
 
-    expect(result.kind).toBe('success')
-    expect(result.kind === 'success' && result.value).toBe(SAMPLE_SDP)
-  })
+    expect(result.kind).toBe('success');
+    expect(result.kind === 'success' && result.value).toBe(SAMPLE_SDP);
+  });
 
   it('produces a code significantly shorter than the raw SDP', async () => {
-    const code = await encodeConnectionCode(SAMPLE_SDP, 'passphrase')
+    const code = await encodeConnectionCode(SAMPLE_SDP, 'passphrase');
 
-    expect(code.length).toBeLessThan(SAMPLE_SDP.length)
-  })
+    expect(code.length).toBeLessThan(SAMPLE_SDP.length);
+  });
 
   it('fails with a clear error when the passphrase is wrong', async () => {
-    const code = await encodeConnectionCode(SAMPLE_SDP, 'correct-passphrase')
-    const result = await decodeConnectionCode(code, 'wrong-passphrase')
+    const code = await encodeConnectionCode(SAMPLE_SDP, 'correct-passphrase');
+    const result = await decodeConnectionCode(code, 'wrong-passphrase');
 
-    expect(result.kind).toBe('failure')
-  })
-})
+    expect(result.kind).toBe('failure');
+  });
+});

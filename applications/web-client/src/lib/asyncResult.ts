@@ -1,4 +1,4 @@
-import {success, failure, type Result} from './result'
+import {success, failure, type Result} from './result';
 
 export type AsyncResult<S, F> = {
     readonly value: Promise<Result<S, F>>
@@ -19,13 +19,13 @@ export const ofPromise = <S, F>(promise: Promise<Result<S, F>>): AsyncResult<S, 
         ofPromise(promise.then(result => result.map(fn))),
     andThen: <T>(fn: (value: S) => AsyncResult<T, F>): AsyncResult<T, F> =>
         ofPromise<T, F>(promise.then((result): Promise<Result<T, F>> => {
-            if (result.kind === 'success') return fn(result.value).value
-            return Promise.resolve(failure<F, T>(result.reason))
+            if (result.kind === 'success') return fn(result.value).value;
+            return Promise.resolve(failure<F, T>(result.reason));
         })),
     or: <F2>(fn: (reason: F) => AsyncResult<S, F2>): AsyncResult<S, F2> =>
         ofPromise<S, F2>(promise.then((result): Promise<Result<S, F2>> => {
-            if (result.kind === 'failure') return fn(result.reason).value
-            return Promise.resolve(success<S, F2>(result.value))
+            if (result.kind === 'failure') return fn(result.reason).value;
+            return Promise.resolve(success<S, F2>(result.value));
         })),
     either: <S2, F2>(
         onSuccess: (value: S) => AsyncResult<S2, F2>,
@@ -41,25 +41,25 @@ export const ofPromise = <S, F>(promise: Promise<Result<S, F>>): AsyncResult<S, 
         ofPromise(promise.then(result => result.onFailure(fn))),
     onComplete: (fn) =>
         ofPromise(promise.then(result => {
-            fn(result)
-            return result
+            fn(result);
+            return result;
         })),
     onPending: (fn) => {
-        fn(true)
+        fn(true);
         return ofPromise(promise.then(result => {
-            fn(false)
-            return result
-        }))
+            fn(false);
+            return result;
+        }));
     },
     mapEither: (onSuccess, onFailure) =>
         promise.then(result => result.mapEither(onSuccess, onFailure)),
-})
+});
 
 export const asyncSuccess = <S, F = never>(value: S): AsyncResult<S, F> =>
-    ofPromise(Promise.resolve(success(value)))
+    ofPromise(Promise.resolve(success(value)));
 
 export const asyncFailure = <F, S = never>(reason: F): AsyncResult<S, F> =>
-    ofPromise(Promise.resolve(failure(reason)))
+    ofPromise(Promise.resolve(failure(reason)));
 
 export const asyncResult = <S, F>(promise: Promise<S>): AsyncResult<S, F> =>
-    ofPromise(promise.then(value => success<S, F>(value)).catch(error => failure<F, S>(error as F)))
+    ofPromise(promise.then(value => success<S, F>(value)).catch(error => failure<F, S>(error as F)));
