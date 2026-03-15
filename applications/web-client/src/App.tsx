@@ -43,6 +43,7 @@ const App = () => {
     const signalingUrl = `${config.serviceUrl.replace(/^http/, 'ws')}/ws/signaling`;
     const signaling = startSignaling({
       createWebSocket: (url) => new WebSocket(url),
+      sessionUrl: `${config.serviceUrl}/session`,
       url: signalingUrl,
       name: 'Player',
     }, (event) => store.handleSignalingEvent(event));
