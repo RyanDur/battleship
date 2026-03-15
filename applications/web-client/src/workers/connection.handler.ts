@@ -184,6 +184,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
       maybe(relaySdpAnswerDecoder.decode(parsed)).map(msg => {
         const intro = pendingIntros.get(msg.introId)
         if (!intro) return
+        clearTimeout(intro.timer)
         dataChannels.get(intro.peerId1)?.send(JSON.stringify({ type: 'INTRODUCTION_SDP_ANSWER', introId: msg.introId, peerId: intro.relaySdpPeerId, sdp: msg.sdp }))
         pendingIntros.delete(msg.introId)
       })
