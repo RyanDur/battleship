@@ -3,6 +3,7 @@ import type {ConnectionsState, ConnectionsAction} from './connections'
 import type {PeerCommand, PeerEvent} from '../types/worker-messages'
 import type {CodecError} from '../protocol/connection-code'
 import type {Result} from '../lib/result'
+import {fromResultPromise, asyncSuccess, type AsyncResult} from '../lib/asyncResult'
 
 type Handler = {handleCommand: (cmd: PeerCommand) => void}
 
@@ -16,8 +17,8 @@ export type ConnectionStore = {
   getState: () => ConnectionsState
   subscribe: (listener: () => void) => () => void
   createOffer: (passphrase: string) => void
-  joinOffer: (code: string, passphrase: string) => Promise<void>
-  acceptAnswer: (responseCode: string) => Promise<void>
+  joinOffer: (code: string, passphrase: string) => AsyncResult<void, CodecError>
+  acceptAnswer: (responseCode: string) => AsyncResult<void, CodecError>
   disconnect: (peerId: string) => void
 }
 
@@ -61,24 +62,25 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
       handler.handleCommand({type: 'CREATE_OFFER'})
     },
 
-    joinOffer: async (code, passphrase) => {
+    joinOffer: (code, passphrase) => {
       dispatch({type: 'JOIN_OFFER', passphrase})
-      const result = await deps.decodeCode(code, passphrase)
-      result
-        .onSuccess(sdp => handler.handleCommand({type: 'ACCEPT_OFFER', sdp}))
-        .onFailure(() => {
-          console.warn('Failed to decode offer code — wrong passphrase?')
-          dispatch({type: 'DECODE_FAILED'})
-        })
+      return fromResultPromise(
+        deps.decodeCode(code, passphrase).then(result =>
+          result
+            .map(sdp => handler.handleCommand({type: 'ACCEPT_OFFER', sdp}))
+            .onFailure(() => dispatch({type: 'DECODE_FAILED'}))
+        )
+      )
     },
 
-    acceptAnswer: async (responseCode) => {
+    acceptAnswer: (responseCode) => {
       const {flow} = state
-      if (flow.phase !== 'offer-ready') return
-      const result = await deps.decodeCode(responseCode, flow.passphrase)
-      result
-        .onSuccess(sdp => handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: flow.peerId, sdp}))
-        .onFailure(() => console.warn('Failed to decode response code — wrong passphrase?'))
+      if (flow.phase !== 'offer-ready') return asyncSuccess<void, CodecError>(undefined)
+      return fromResultPromise(
+        deps.decodeCode(responseCode, flow.passphrase).then(result =>
+          result.map(sdp => handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: flow.peerId, sdp}))
+        )
+      )
     },
 
     disconnect: (peerId) => {

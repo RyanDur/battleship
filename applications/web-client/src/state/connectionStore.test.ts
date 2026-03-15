@@ -58,7 +58,7 @@ describe('connectionStore', () => {
     it('transitions state to joining', async () => {
       const {store} = makeStore()
 
-      await store.joinOffer('encoded:v=0', 'secret')
+      await store.joinOffer('encoded:v=0', 'secret').value
 
       expect(store.getState().flow.phase).toBe('joining')
     })
@@ -66,7 +66,7 @@ describe('connectionStore', () => {
     it('sends ACCEPT_OFFER command with decoded SDP', async () => {
       const {store, commands} = makeStore()
 
-      await store.joinOffer('encoded:v=0', 'secret')
+      await store.joinOffer('encoded:v=0', 'secret').value
 
       expect(commands).toContain('ACCEPT_OFFER')
     })
@@ -74,9 +74,25 @@ describe('connectionStore', () => {
     it('resets to idle when code cannot be decoded', async () => {
       const {store} = makeStore()
 
-      await store.joinOffer('invalid-code', 'wrong')
+      await store.joinOffer('invalid-code', 'wrong').value
 
       expect(store.getState().flow).toEqual({phase: 'idle'})
+    })
+
+    it('returns success when code decodes', async () => {
+      const {store} = makeStore()
+
+      const result = await store.joinOffer('encoded:v=0', 'secret').value
+
+      expect(result.kind).toBe('success')
+    })
+
+    it('returns failure when code cannot be decoded', async () => {
+      const {store} = makeStore()
+
+      const result = await store.joinOffer('invalid-code', 'wrong').value
+
+      expect(result.kind).toBe('failure')
     })
   })
 
@@ -88,7 +104,7 @@ describe('connectionStore', () => {
       emit({type: 'OFFER_CREATED', peerId: 'p1', sdp: 'v=0'})
       await vi.waitFor(() => expect(store.getState().flow.phase).toBe('offer-ready'))
 
-      await store.acceptAnswer('encoded:v=answer')
+      await store.acceptAnswer('encoded:v=answer').value
 
       expect(commands).toContain('ACCEPT_ANSWER')
     })
@@ -97,9 +113,33 @@ describe('connectionStore', () => {
       const {store, commands} = makeStore()
       const commandsBeforeLength = commands.length
 
-      await store.acceptAnswer('encoded:v=answer')
+      await store.acceptAnswer('encoded:v=answer').value
 
       expect(commands.length).toBe(commandsBeforeLength)
+    })
+
+    it('returns success when response code decodes', async () => {
+      const {store, emit} = makeStore()
+
+      store.createOffer('secret')
+      emit({type: 'OFFER_CREATED', peerId: 'p1', sdp: 'v=0'})
+      await vi.waitFor(() => expect(store.getState().flow.phase).toBe('offer-ready'))
+
+      const result = await store.acceptAnswer('encoded:v=answer').value
+
+      expect(result.kind).toBe('success')
+    })
+
+    it('returns failure when response code cannot be decoded', async () => {
+      const {store, emit} = makeStore()
+
+      store.createOffer('secret')
+      emit({type: 'OFFER_CREATED', peerId: 'p1', sdp: 'v=0'})
+      await vi.waitFor(() => expect(store.getState().flow.phase).toBe('offer-ready'))
+
+      const result = await store.acceptAnswer('invalid-code').value
+
+      expect(result.kind).toBe('failure')
     })
 
     it('reads current passphrase from state, not from when store was created', async () => {
