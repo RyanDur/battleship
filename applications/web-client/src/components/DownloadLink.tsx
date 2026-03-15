@@ -1,6 +1,7 @@
 import {useEffect, useState} from 'react';
 import {RELEASES_PAGE} from '../protocol/download';
 import type {Platform} from '../protocol/platform';
+import type {AsyncResult} from '../lib/asyncResult';
 
 type Action = 'download' | 'upgrade' | 'none'
 
@@ -23,7 +24,7 @@ const LABEL: Record<Action, Record<Platform, string>> = {
 interface DownloadLinkProps {
   platform: Platform
   action: Action
-  fetchDownloadUrl: (platform: Platform) => Promise<string>
+  fetchDownloadUrl: (platform: Platform) => AsyncResult<string, null>
 }
 
 export const DownloadLink = ({platform, action, fetchDownloadUrl}: DownloadLinkProps) => {
@@ -31,8 +32,8 @@ export const DownloadLink = ({platform, action, fetchDownloadUrl}: DownloadLinkP
 
   useEffect(() => {
     fetchDownloadUrl(platform)
-      .then(setHref)
-      .catch(() => setHref(RELEASES_PAGE));
+      .onSuccess(setHref)
+      .onFailure(() => setHref(RELEASES_PAGE));
   }, [platform, fetchDownloadUrl]);
 
   if (action === 'none') return null;

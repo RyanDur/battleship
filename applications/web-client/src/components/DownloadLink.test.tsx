@@ -1,10 +1,11 @@
 import {render, screen, waitFor} from '@testing-library/react';
 import {DownloadLink} from './DownloadLink';
+import {asyncSuccess, asyncFailure} from '../lib/asyncResult';
 
 const RELEASES_PAGE = 'https://github.com/RyanDur/battleship/releases/latest';
 const DIRECT_DMG = 'https://github.com/RyanDur/battleship/releases/download/v0.2.0/Battleship-1.2.0.dmg';
 
-const resolves = (url: string) => () => Promise.resolve(url);
+const resolves = (url: string) => () => asyncSuccess<string, null>(url);
 
 describe('DownloadLink', () => {
   describe('download action', () => {
@@ -99,7 +100,7 @@ describe('DownloadLink', () => {
     });
 
     it('falls back to releases page when fetch fails', async () => {
-      const failing = () => Promise.reject(new Error('network error'));
+      const failing = () => asyncFailure<null, string>(null);
       render(<DownloadLink platform="macos" action="download" fetchDownloadUrl={failing}/>);
       await waitFor(() => {
         expect(screen.getByRole('link')).toHaveAttribute('href', RELEASES_PAGE);
