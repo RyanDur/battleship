@@ -24,7 +24,7 @@ const LABEL: Record<Action, Record<Platform, string>> = {
 interface DownloadLinkProps {
   platform: Platform
   action: Action
-  fetchDownloadUrl: (platform: Platform) => AsyncResult<string, null>
+  fetchDownloadUrl: (platform: Platform) => AsyncResult<string, Error>
 }
 
 export const DownloadLink = ({platform, action, fetchDownloadUrl}: DownloadLinkProps) => {

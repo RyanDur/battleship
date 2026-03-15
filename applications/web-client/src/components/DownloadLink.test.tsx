@@ -5,7 +5,7 @@ import {asyncSuccess, asyncFailure} from '../lib/asyncResult';
 const RELEASES_PAGE = 'https://github.com/RyanDur/battleship/releases/latest';
 const DIRECT_DMG = 'https://github.com/RyanDur/battleship/releases/download/v0.2.0/Battleship-1.2.0.dmg';
 
-const resolves = (url: string) => () => asyncSuccess<string, null>(url);
+const resolves = (url: string) => () => asyncSuccess<string, Error>(url);
 
 describe('DownloadLink', () => {
   describe('download action', () => {
@@ -100,7 +100,7 @@ describe('DownloadLink', () => {
     });
 
     it('falls back to releases page when fetch fails', async () => {
-      const failing = () => asyncFailure<null, string>(null);
+      const failing = () => asyncFailure<Error, string>(new Error('network error'));
       render(<DownloadLink platform="macos" action="download" fetchDownloadUrl={failing}/>);
       await waitFor(() => {
         expect(screen.getByRole('link')).toHaveAttribute('href', RELEASES_PAGE);

@@ -4,6 +4,15 @@ import {asyncResult, asyncSuccess, asyncFailure, type AsyncResult} from '../lib/
 import type {Platform} from './platform';
 
 export const RELEASES_PAGE = 'https://github.com/RyanDur/battleship/releases/latest';
+
+export class HttpError extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super(`HTTP ${status}`);
+    this.name = 'HttpError';
+    this.status = status;
+  }
+}
 const API_URL = 'https://api.github.com/repos/RyanDur/battleship/releases/latest';
 
 const PLATFORM_EXTENSION: Partial<Record<Platform, string>> = {
@@ -25,22 +34,21 @@ const releaseDecoder = Decoder.object({
 
 type Asset = Decoder.Output<typeof assetDecoder>
 
-const findAssetUrl = (json: unknown, extension: string): AsyncResult<string, null> => {
+const findAssetUrl = (json: unknown, extension: string): AsyncResult<string, Error> => {
   const url = maybe(releaseDecoder.decode(json))
     .mBind(release => maybe(release.assets.find((asset: Asset) => asset.name.endsWith(extension))))
     .map(asset => asset.browser_download_url)
     .orNull();
-  return url ? asyncSuccess(url) : asyncFailure(null);
+  return url ? asyncSuccess(url) : asyncFailure(new Error(`No ${extension} asset found in release`));
 };
 
-export const fetchDownloadUrl = (platform: Platform, apiUrl = API_URL): AsyncResult<string, null> => {
+export const fetchDownloadUrl = (platform: Platform, apiUrl = API_URL): AsyncResult<string, Error> => {
   const extension = PLATFORM_EXTENSION[platform];
-  if (!extension) return asyncFailure(null);
+  if (!extension) return asyncFailure(new Error(`No installer available for platform: ${platform}`));
 
-  return asyncResult<Response, null>(fetch(apiUrl))
+  return asyncResult<Response, Error>(fetch(apiUrl))
     .andThen(response => response.ok
-      ? asyncResult<unknown, null>(response.json())
-      : asyncFailure(null))
-    .andThen(json => findAssetUrl(json, extension))
-    .or(() => asyncFailure(null));
+      ? asyncResult<unknown, Error>(response.json())
+      : asyncFailure(new HttpError(response.status)))
+    .andThen(json => findAssetUrl(json, extension));
 };
