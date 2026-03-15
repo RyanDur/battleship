@@ -1,5 +1,6 @@
 import * as Decoder from 'schemawax'
 import {maybe} from '../lib/maybe'
+import {tryCatch} from '../lib/result'
 
 export type HeartbeatState =
   | {status: 'connecting'}
@@ -71,20 +72,19 @@ export const startHeartbeat = (
 
     currentWs.onmessage = (event: MessageEvent) => {
       if (gen !== generation) return
-      try {
-        const parsed = JSON.parse(event.data as string)
-        const data = maybe(heartbeatDecoder.decode(parsed)).orNull()
-        if (!data) return
-        resetTimer(gen)
-        attempt = 0
-        if (expectedVersion !== 'dev' && data.version !== expectedVersion) {
-          onStateChange({status: 'update-available'})
-        } else {
-          onStateChange({status: 'online'})
-        }
-      } catch {
-        // ignore invalid messages
-      }
+      tryCatch(() => JSON.parse(event.data as string), () => 'invalid json')
+        .onFailure(() => console.warn('Received malformed message from server'))
+        .onSuccess(parsed => {
+          const data = maybe(heartbeatDecoder.decode(parsed)).orNull()
+          if (!data) return
+          resetTimer(gen)
+          attempt = 0
+          if (expectedVersion !== 'dev' && data.version !== expectedVersion) {
+            onStateChange({status: 'update-available'})
+          } else {
+            onStateChange({status: 'online'})
+          }
+        })
     }
 
     currentWs.onclose = () => {

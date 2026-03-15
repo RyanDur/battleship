@@ -170,6 +170,16 @@ describe('startHeartbeat', () => {
     expect(FakeWebSocket.instances.length).toBe(2)
   })
 
+  it('logs a warning when server sends malformed JSON', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    startHeartbeat(makeConfig(), () => undefined)
+
+    latest().open()
+    latest().onmessage?.(new MessageEvent('message', {data: 'not-valid-json'}))
+
+    expect(warn).toHaveBeenCalled()
+  })
+
   it('retry does not trigger reconnect from old connection close', () => {
     const states: HeartbeatState[] = []
     const handle = startHeartbeat(makeConfig({maxRetries: 5}), s => states.push(s))
