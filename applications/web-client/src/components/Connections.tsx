@@ -115,6 +115,11 @@ export const Connections = ({serviceOnline}: Props) => {
           {peers.map(peer => (
             <li key={peer.id}>
               {peer.name ?? 'Unknown'}
+              {peer.trustsMe && <span>Trusts you to introduce them</span>}
+              {peer.trusted
+                ? <button onClick={() => store.revokeTrust(peer.id)}>Revoke trust</button>
+                : <button onClick={() => store.grantTrust(peer.id)}>Trust</button>
+              }
               <button onClick={() => store.disconnect(peer.id)}>Disconnect</button>
             </li>
           ))}
