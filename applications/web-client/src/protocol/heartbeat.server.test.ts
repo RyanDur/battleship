@@ -116,9 +116,12 @@ describe('startHeartbeat', () => {
 
   it('resets attempt counter to zero after a successful heartbeat', async () => {
     let connectionCount = 0;
-    let latestConn: WsConnection | undefined;
+    const heartbeat = JSON.stringify({type: 'heartbeat', version: '1.0.0'});
     const server = await createStubServer({
-      ws: {'/ws/health': conn => { connectionCount++; latestConn = conn; }},
+      ws: {'/ws/health': conn => {
+        connectionCount++;
+        conn.send(heartbeat);
+      }},
     });
     const states: HeartbeatState[] = [];
     const handle = startHeartbeat({
@@ -129,14 +132,11 @@ describe('startHeartbeat', () => {
       maxRetries: 3,
     }, s => states.push(s));
 
-    // First connection — receive heartbeat
-    await vi.waitFor(() => expect(connectionCount).toBe(1));
-    latestConn!.send(JSON.stringify({type: 'heartbeat', version: '1.0.0'}));
+    // First connection — server sends heartbeat on connect
     await vi.waitFor(() => expect(states).toContainEqual({status: 'online'}));
 
-    // Timeout fires, reconnect
+    // Timeout fires, reconnect — server sends heartbeat again on second connect
     await vi.waitFor(() => expect(connectionCount).toBe(2), {timeout: RECONNECT_DELAY + 500});
-    latestConn!.send(JSON.stringify({type: 'heartbeat', version: '1.0.0'}));
 
     await vi.waitFor(() => {
       const lastState = states[states.length - 1];
