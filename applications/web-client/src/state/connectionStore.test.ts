@@ -1,6 +1,7 @@
 import {createConnectionStore} from './connectionStore';
 import {success, failure} from '../lib/result';
 import type {PeerEvent} from '../types/worker-messages';
+import type {SignalingEvent} from '../protocol/signaling';
 
 const makeStore = () => {
   let emitFn: (event: PeerEvent) => void = () => {};
@@ -18,7 +19,7 @@ const makeStore = () => {
         : failure('DECRYPT_FAILED' as const),
   });
 
-  return {store, commands, emit: (e: PeerEvent) => emitFn(e)};
+  return {store, commands, emit: (e: PeerEvent) => emitFn(e), emitSignaling: (e: SignalingEvent) => store.handleSignalingEvent(e)};
 };
 
 describe('connectionStore', () => {
@@ -335,6 +336,33 @@ describe('connectionStore', () => {
       emit({type: 'INTRODUCTION_EXPIRED', introId: 'i1'});
 
       expect(store.getState().pendingIntroductions).toEqual([]);
+    });
+  });
+
+  describe('signaling', () => {
+    it('PEERS event updates onlinePeers', () => {
+      const {store, emitSignaling} = makeStore();
+
+      emitSignaling({type: 'PEERS', peers: [{peerId: 'p1', name: 'Alice'}]});
+
+      expect(store.getState().onlinePeers).toEqual([{peerId: 'p1', name: 'Alice'}]);
+    });
+
+    it('PEER_JOINED event adds to onlinePeers', () => {
+      const {store, emitSignaling} = makeStore();
+
+      emitSignaling({type: 'PEER_JOINED', peerId: 'p1', name: 'Alice'});
+
+      expect(store.getState().onlinePeers).toEqual([{peerId: 'p1', name: 'Alice'}]);
+    });
+
+    it('PEER_LEFT event removes from onlinePeers', () => {
+      const {store, emitSignaling} = makeStore();
+
+      emitSignaling({type: 'PEERS', peers: [{peerId: 'p1', name: 'Alice'}]});
+      emitSignaling({type: 'PEER_LEFT', peerId: 'p1'});
+
+      expect(store.getState().onlinePeers).toEqual([]);
     });
   });
 

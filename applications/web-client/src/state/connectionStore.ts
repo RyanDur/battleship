@@ -4,6 +4,7 @@ import type {PeerCommand, PeerEvent} from '../types/worker-messages';
 import type {CodecError} from '../protocol/connection-code';
 import type {Result} from '../lib/result';
 import {ofPromise, asyncSuccess, type AsyncResult} from '../lib/asyncResult';
+import type {SignalingEvent} from '../protocol/signaling';
 
 type Handler = {handleCommand: (cmd: PeerCommand) => void}
 
@@ -16,6 +17,7 @@ type StoreDeps = {
 export type ConnectionStore = {
   getState: () => ConnectionsState
   subscribe: (listener: () => void) => () => void
+  handleSignalingEvent: (event: SignalingEvent) => void
   createOffer: (passphrase: string) => void
   joinOffer: (code: string, passphrase: string) => AsyncResult<void, CodecError>
   acceptAnswer: (responseCode: string) => AsyncResult<void, CodecError>
@@ -64,6 +66,12 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+
+    handleSignalingEvent: (event: SignalingEvent) => {
+      if (event.type === 'PEERS') dispatch({type: 'ONLINE_PEERS_UPDATED', peers: event.peers});
+      else if (event.type === 'PEER_JOINED') dispatch({type: 'ONLINE_PEER_JOINED', peerId: event.peerId, name: event.name});
+      else if (event.type === 'PEER_LEFT') dispatch({type: 'ONLINE_PEER_LEFT', peerId: event.peerId});
     },
 
     createOffer: (passphrase) => {
