@@ -1,4 +1,4 @@
-import {asyncFailure, asyncResult, asyncSuccess, fromResultPromise, type AsyncResult} from './asyncResult'
+import {asyncFailure, asyncResult, asyncSuccess, ofPromise, type AsyncResult} from './asyncResult'
 import {success, failure, type Result} from './result'
 
 describe('AsyncResult', () => {
@@ -187,15 +187,15 @@ describe('AsyncResult', () => {
     })
   })
 
-  describe('fromResultPromise', () => {
+  describe('ofPromise', () => {
     it('wraps a resolved success Result as success', async () => {
-      const result = await fromResultPromise(Promise.resolve(success(42))).mapEither(v => v, () => 0)
+      const result = await ofPromise(Promise.resolve(success(42))).mapEither(v => v, () => 0)
 
       expect(result).toBe(42)
     })
 
     it('wraps a resolved failure Result as failure', async () => {
-      const result = await fromResultPromise(Promise.resolve(failure<string, number>('oops'))).mapEither(() => 0, r => r.length)
+      const result = await ofPromise(Promise.resolve(failure<string, number>('oops'))).mapEither(() => 0, r => r.length)
 
       expect(result).toBe(4)
     })

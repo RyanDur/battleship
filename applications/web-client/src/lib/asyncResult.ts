@@ -13,7 +13,7 @@ export type AsyncResult<S, F> = {
     mapEither<T>(onSuccess: (value: S) => T, onFailure: (reason: F) => T): Promise<T>
 }
 
-const ofPromise = <S, F>(promise: Promise<Result<S, F>>): AsyncResult<S, F> => ({
+export const ofPromise = <S, F>(promise: Promise<Result<S, F>>): AsyncResult<S, F> => ({
     value: promise,
     map: <T>(fn: (value: S) => T): AsyncResult<T, F> =>
         ofPromise(promise.then(result => result.map(fn))),
@@ -54,9 +54,6 @@ const ofPromise = <S, F>(promise: Promise<Result<S, F>>): AsyncResult<S, F> => (
     mapEither: (onSuccess, onFailure) =>
         promise.then(result => result.mapEither(onSuccess, onFailure)),
 })
-
-export const fromResultPromise = <S, F>(promise: Promise<Result<S, F>>): AsyncResult<S, F> =>
-    ofPromise(promise)
 
 export const asyncSuccess = <S, F = never>(value: S): AsyncResult<S, F> =>
     ofPromise(Promise.resolve(success(value)))

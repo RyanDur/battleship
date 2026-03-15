@@ -3,7 +3,7 @@ import type {ConnectionsState, ConnectionsAction} from './connections'
 import type {PeerCommand, PeerEvent} from '../types/worker-messages'
 import type {CodecError} from '../protocol/connection-code'
 import type {Result} from '../lib/result'
-import {fromResultPromise, asyncSuccess, type AsyncResult} from '../lib/asyncResult'
+import {ofPromise, asyncSuccess, type AsyncResult} from '../lib/asyncResult'
 
 type Handler = {handleCommand: (cmd: PeerCommand) => void}
 
@@ -64,7 +64,7 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
 
     joinOffer: (code, passphrase) => {
       dispatch({type: 'JOIN_OFFER', passphrase})
-      return fromResultPromise(
+      return ofPromise(
         deps.decodeCode(code, passphrase).then(result =>
           result
             .map(sdp => handler.handleCommand({type: 'ACCEPT_OFFER', sdp}))
@@ -76,7 +76,7 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
     acceptAnswer: (responseCode) => {
       const {flow} = state
       if (flow.phase !== 'offer-ready') return asyncSuccess<void, CodecError>(undefined)
-      return fromResultPromise(
+      return ofPromise(
         deps.decodeCode(responseCode, flow.passphrase).then(result =>
           result.map(sdp => handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: flow.peerId, sdp}))
         )
