@@ -1,4 +1,4 @@
-import {asyncFailure, asyncResult, asyncSuccess, ofPromise, type AsyncResult} from './asyncResult';
+import {asyncFailure, asyncResult, asyncSuccess, asyncTryCatch, ofPromise, type AsyncResult} from './asyncResult';
 import {success, failure, type Result} from './result';
 
 describe('AsyncResult', () => {
@@ -198,6 +198,26 @@ describe('AsyncResult', () => {
       const result = await ofPromise(Promise.resolve(failure<string, number>('oops'))).mapEither(() => 0, r => r.length);
 
       expect(result).toBe(4);
+    });
+  });
+
+  describe('asyncTryCatch', () => {
+    it('wraps a resolved promise as success', async () => {
+      const result = await asyncTryCatch(() => Promise.resolve(42)).mapEither(value => value, () => 0);
+
+      expect(result).toBe(42);
+    });
+
+    it('wraps a rejected promise as failure', async () => {
+      const result = await asyncTryCatch(() => Promise.reject(new Error('boom'))).mapEither(() => '', e => e.message);
+
+      expect(result).toBe('boom');
+    });
+
+    it('catches a synchronous throw as failure', async () => {
+      const result = await asyncTryCatch(() => { throw new Error('sync'); }).mapEither(() => '', e => e.message);
+
+      expect(result).toBe('sync');
     });
   });
 

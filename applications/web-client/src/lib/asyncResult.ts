@@ -1,4 +1,4 @@
-import {success, failure, type Result} from './result';
+import {success, failure, tryCatch, toError, type Result} from './result';
 
 export type AsyncResult<S, F> = {
     readonly value: Promise<Result<S, F>>
@@ -63,3 +63,6 @@ export const asyncFailure = <F, S = never>(reason: F): AsyncResult<S, F> =>
 
 export const asyncResult = <S, F>(promise: Promise<S>): AsyncResult<S, F> =>
     ofPromise(promise.then(value => success<S, F>(value)).catch(error => failure<F, S>(error as F)));
+
+export const asyncTryCatch = <S>(fn: () => Promise<S>): AsyncResult<S, Error> =>
+    tryCatch<Promise<S>, Error>(fn, toError).mapEither<AsyncResult<S, Error>>(asyncResult, asyncFailure);
