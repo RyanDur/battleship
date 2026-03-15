@@ -124,8 +124,8 @@ export const createFakePeerConnectionFactory = () => {
     return pc as unknown as RTCPeerConnection
   }
 
-  // Allows tests to inject a raw message as if sent from the answerer side
-  // (i.e. the message arrives at the offerer's onmessage handler)
+  // Returns the answerer-side channel for a given offer SDP, allowing tests
+  // to call onmessage directly (simulate inbound data) or send (route to offerer)
   const getAnswererChannel = (offerSdp: string): FakeDataChannel | undefined =>
     channelPairs.get(offerSdp)?.[0]?.answererChannel
 
