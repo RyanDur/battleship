@@ -1,6 +1,6 @@
 import {useState} from 'react'
 import {useConnectionState, useConnectionStore} from '../state/useConnection'
-import type {ConnectionFlow} from '../state/connections'
+import type {ConnectionFlow, Peer} from '../state/connections'
 
 type FlowPhase =
   | {phase: 'idle'}
@@ -21,10 +21,40 @@ type Props = {
   serviceOnline: boolean
 }
 
+const PeerRow = ({peer, otherTrustingPeers}: {peer: Peer; otherTrustingPeers: Peer[]}) => {
+  const store = useConnectionStore()
+  const [introducing, setIntroducing] = useState(false)
+  const showIntroduceButton = peer.trustsMe && otherTrustingPeers.length > 0
+
+  return (
+    <li>
+      {peer.name ?? 'Unknown'}
+      {peer.trustsMe && <span>Trusts you to introduce them</span>}
+      {showIntroduceButton && !introducing && (
+        <button onClick={() => setIntroducing(true)}>Introduce</button>
+      )}
+      {introducing && otherTrustingPeers.map(other => (
+        <button
+          key={other.id}
+          onClick={() => { store.introducePeers(peer.id, other.id); setIntroducing(false) }}
+        >
+          {other.name ?? 'Unknown'}
+        </button>
+      ))}
+      {peer.trusted
+        ? <button onClick={() => store.revokeTrust(peer.id)}>Revoke trust</button>
+        : <button onClick={() => store.grantTrust(peer.id)}>Trust</button>
+      }
+      <button onClick={() => store.disconnect(peer.id)}>Disconnect</button>
+    </li>
+  )
+}
+
 export const Connections = ({serviceOnline}: Props) => {
   const store = useConnectionStore()
   const flow = toFlowPhase(useConnectionState(s => s.flow))
   const peers = useConnectionState(s => s.peers)
+  const pendingIntroductions = useConnectionState(s => s.pendingIntroductions)
 
   const [formMode, setFormMode] = useState<'none' | 'create' | 'join'>('none')
   const [passphrase, setPassphrase] = useState('')
@@ -32,6 +62,8 @@ export const Connections = ({serviceOnline}: Props) => {
   const [responseCode, setResponseCode] = useState('')
 
   if (!serviceOnline) return null
+
+  const trustingPeers = peers.filter(p => p.trustsMe)
 
   const renderFlow = () => {
     if (flow.phase === 'offer-ready') {
@@ -113,14 +145,21 @@ export const Connections = ({serviceOnline}: Props) => {
       {peers.length > 0 && (
         <ul>
           {peers.map(peer => (
-            <li key={peer.id}>
-              {peer.name ?? 'Unknown'}
-              {peer.trustsMe && <span>Trusts you to introduce them</span>}
-              {peer.trusted
-                ? <button onClick={() => store.revokeTrust(peer.id)}>Revoke trust</button>
-                : <button onClick={() => store.grantTrust(peer.id)}>Trust</button>
-              }
-              <button onClick={() => store.disconnect(peer.id)}>Disconnect</button>
+            <PeerRow
+              key={peer.id}
+              peer={peer}
+              otherTrustingPeers={trustingPeers.filter(p => p.id !== peer.id)}
+            />
+          ))}
+        </ul>
+      )}
+      {pendingIntroductions.length > 0 && (
+        <ul>
+          {pendingIntroductions.map(intro => (
+            <li key={intro.introId}>
+              {intro.from} wants to introduce you to {intro.peer}
+              <button onClick={() => store.acceptIntroduction(intro.introId)}>Accept</button>
+              <button onClick={() => store.declineIntroduction(intro.introId)}>Decline</button>
             </li>
           ))}
         </ul>

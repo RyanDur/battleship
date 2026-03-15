@@ -197,6 +197,94 @@ describe('Connections', () => {
     expect(screen.getByText(/trusts you/i)).toBeInTheDocument()
   })
 
+  it('shows an introduce button for each peer that trusts you when multiple trusting peers exist', async () => {
+    const {emit} = renderConnections()
+
+    await act(async () => emit({type: 'PEER_CONNECTED', peerId: 'p1'}))
+    await act(async () => emit({type: 'PEER_NAMED', peerId: 'p1', name: 'Bob'}))
+    await act(async () => emit({type: 'PEER_TRUST_UPDATED', peerId: 'p1', trusts: true}))
+    await act(async () => emit({type: 'PEER_CONNECTED', peerId: 'p2'}))
+    await act(async () => emit({type: 'PEER_NAMED', peerId: 'p2', name: 'Carol'}))
+    await act(async () => emit({type: 'PEER_TRUST_UPDATED', peerId: 'p2', trusts: true}))
+
+    expect(screen.getAllByRole('button', {name: /^introduce$/i})).toHaveLength(2)
+  })
+
+  it('clicking introduce for a peer shows other trusting peers to select', async () => {
+    const user = userEvent.setup()
+    const {emit} = renderConnections()
+
+    await act(async () => emit({type: 'PEER_CONNECTED', peerId: 'p1'}))
+    await act(async () => emit({type: 'PEER_NAMED', peerId: 'p1', name: 'Bob'}))
+    await act(async () => emit({type: 'PEER_TRUST_UPDATED', peerId: 'p1', trusts: true}))
+    await act(async () => emit({type: 'PEER_CONNECTED', peerId: 'p2'}))
+    await act(async () => emit({type: 'PEER_NAMED', peerId: 'p2', name: 'Carol'}))
+    await act(async () => emit({type: 'PEER_TRUST_UPDATED', peerId: 'p2', trusts: true}))
+
+    await user.click(screen.getAllByRole('button', {name: /^introduce$/i})[0])
+
+    expect(screen.getByRole('button', {name: 'Carol'})).toBeInTheDocument()
+  })
+
+  it('selecting a second peer calls store.introducePeers with both peer IDs', async () => {
+    const user = userEvent.setup()
+    const {store, emit} = renderConnections()
+    const spy = vi.spyOn(store, 'introducePeers')
+
+    await act(async () => emit({type: 'PEER_CONNECTED', peerId: 'p1'}))
+    await act(async () => emit({type: 'PEER_NAMED', peerId: 'p1', name: 'Bob'}))
+    await act(async () => emit({type: 'PEER_TRUST_UPDATED', peerId: 'p1', trusts: true}))
+    await act(async () => emit({type: 'PEER_CONNECTED', peerId: 'p2'}))
+    await act(async () => emit({type: 'PEER_NAMED', peerId: 'p2', name: 'Carol'}))
+    await act(async () => emit({type: 'PEER_TRUST_UPDATED', peerId: 'p2', trusts: true}))
+
+    await user.click(screen.getAllByRole('button', {name: /^introduce$/i})[0])
+    await user.click(screen.getByRole('button', {name: 'Carol'}))
+
+    expect(spy).toHaveBeenCalledWith('p1', 'p2')
+  })
+
+  it('shows a pending introduction with from and peer name', async () => {
+    const {emit} = renderConnections()
+
+    await act(async () => emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'}))
+
+    expect(screen.getByText(/alice wants to introduce you to carol/i)).toBeInTheDocument()
+  })
+
+  it('shows accept and decline buttons for a pending introduction', async () => {
+    const {emit} = renderConnections()
+
+    await act(async () => emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'}))
+
+    expect(screen.getByRole('button', {name: /accept/i})).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: /decline/i})).toBeInTheDocument()
+  })
+
+  it('clicking accept calls store.acceptIntroduction with the introId', async () => {
+    const user = userEvent.setup()
+    const {store, emit} = renderConnections()
+    const spy = vi.spyOn(store, 'acceptIntroduction')
+
+    await act(async () => emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'}))
+
+    await user.click(screen.getByRole('button', {name: /accept/i}))
+
+    expect(spy).toHaveBeenCalledWith('i1')
+  })
+
+  it('clicking decline calls store.declineIntroduction with the introId', async () => {
+    const user = userEvent.setup()
+    const {store, emit} = renderConnections()
+    const spy = vi.spyOn(store, 'declineIntroduction')
+
+    await act(async () => emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'}))
+
+    await user.click(screen.getByRole('button', {name: /decline/i}))
+
+    expect(spy).toHaveBeenCalledWith('i1')
+  })
+
   it('clicking disconnect removes the peer', async () => {
     const user = userEvent.setup()
     const {store, emit} = renderConnections()
