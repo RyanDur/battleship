@@ -18,6 +18,7 @@ export type ConnectionStore = {
   createOffer: (passphrase: string) => void
   joinOffer: (code: string, passphrase: string) => Promise<void>
   acceptAnswer: (responseCode: string) => Promise<void>
+  disconnect: (peerId: string) => void
 }
 
 export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
@@ -78,6 +79,10 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
       result
         .onSuccess(sdp => handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: flow.peerId, sdp}))
         .onFailure(() => console.warn('Failed to decode response code — wrong passphrase?'))
+    },
+
+    disconnect: (peerId) => {
+      handler.handleCommand({type: 'DISCONNECT', peerId})
     },
   }
 }

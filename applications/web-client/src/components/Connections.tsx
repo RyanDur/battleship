@@ -113,7 +113,10 @@ export const Connections = ({serviceOnline}: Props) => {
       {peers.length > 0 && (
         <ul>
           {peers.map(peer => (
-            <li key={peer.id}>{peer.name ?? 'Unknown'}</li>
+            <li key={peer.id}>
+              {peer.name ?? 'Unknown'}
+              <button onClick={() => store.disconnect(peer.id)}>Disconnect</button>
+            </li>
           ))}
         </ul>
       )}

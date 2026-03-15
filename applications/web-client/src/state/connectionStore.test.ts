@@ -158,6 +158,26 @@ describe('connectionStore', () => {
     })
   })
 
+  describe('disconnect', () => {
+    it('sends DISCONNECT command with the peerId', () => {
+      const {store, emit, commands} = makeStore()
+
+      emit({type: 'PEER_CONNECTED', peerId: 'p1'})
+      store.disconnect('p1')
+
+      expect(commands).toContain('DISCONNECT')
+    })
+
+    it('removes the peer when PEER_DISCONNECTED event arrives', () => {
+      const {store, emit} = makeStore()
+
+      emit({type: 'PEER_CONNECTED', peerId: 'p1'})
+      emit({type: 'PEER_DISCONNECTED', peerId: 'p1'})
+
+      expect(store.getState().peers).toEqual([])
+    })
+  })
+
   describe('subscribe', () => {
     it('notifies listener on state change', () => {
       const {store} = makeStore()

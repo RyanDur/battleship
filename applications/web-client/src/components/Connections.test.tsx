@@ -142,4 +142,19 @@ describe('Connections', () => {
 
     expect(screen.getByText('Unknown')).toBeInTheDocument()
   })
+
+  it('clicking disconnect removes the peer', async () => {
+    const user = userEvent.setup()
+    const {store, emit} = renderConnections()
+
+    await act(async () => emit({type: 'PEER_CONNECTED', peerId: 'p1'}))
+    await act(async () => emit({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}))
+    expect(screen.getByText('Alice')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', {name: /disconnect/i}))
+    await act(async () => emit({type: 'PEER_DISCONNECTED', peerId: 'p1'}))
+
+    expect(store.getState().peers).toEqual([])
+    expect(screen.queryByText('Alice')).not.toBeInTheDocument()
+  })
 })
