@@ -33,14 +33,14 @@ const findAssetUrl = (json: unknown, extension: string): AsyncResult<string, nul
   return url ? asyncSuccess(url) : asyncFailure(null);
 };
 
-export const fetchDownloadUrl = (platform: Platform, apiUrl = API_URL): Promise<string> => {
+export const fetchDownloadUrl = (platform: Platform, apiUrl = API_URL): AsyncResult<string, null> => {
   const extension = PLATFORM_EXTENSION[platform];
-  if (!extension) return Promise.resolve(RELEASES_PAGE);
+  if (!extension) return asyncFailure(null);
 
   return asyncResult<Response, null>(fetch(apiUrl))
     .andThen(response => response.ok
       ? asyncResult<unknown, null>(response.json())
       : asyncFailure(null))
     .andThen(json => findAssetUrl(json, extension))
-    .mapEither(url => url, () => RELEASES_PAGE);
+    .or(() => asyncFailure(null));
 };
