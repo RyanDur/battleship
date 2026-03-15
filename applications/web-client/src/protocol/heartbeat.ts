@@ -65,6 +65,7 @@ export const startHeartbeat = (
     const currentWs = createWebSocket(url)
     ws = currentWs
 
+    currentWs.onerror = () => undefined
     currentWs.onopen = () => {
       if (gen !== generation) return
       resetTimer(gen)

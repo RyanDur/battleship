@@ -3,9 +3,11 @@ import {loadConfig} from './config'
 import {createStubServer} from '../test/stubServer'
 
 const configStub = (config: unknown) => ({
-  'GET /config.json': (_req: IncomingMessage, res: ServerResponse) => {
-    res.writeHead(200, {'Content-Type': 'application/json'})
-    res.end(JSON.stringify(config))
+  routes: {
+    'GET /config.json': (_req: IncomingMessage, res: ServerResponse) => {
+      res.writeHead(200, {'Content-Type': 'application/json'})
+      res.end(JSON.stringify(config))
+    },
   },
 })
 
@@ -31,7 +33,9 @@ describe('loadConfig', () => {
 
   it('falls back to defaults when response is not ok', async () => {
     const server = await createStubServer({
-      'GET /config.json': (_req, res) => { res.writeHead(404); res.end() },
+      routes: {
+        'GET /config.json': (_req, res) => { res.writeHead(404); res.end() },
+      },
     })
     try {
       const config = await loadConfig(`${server.url}/config.json`)

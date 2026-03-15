@@ -7,9 +7,11 @@ const RELEASES_PAGE = 'https://github.com/RyanDur/battleship/releases/latest'
 const makeAsset = (name: string, url: string) => ({name, browser_download_url: url})
 
 const releasesStub = (assets: {name: string; browser_download_url: string}[]) => ({
-  'GET /': (_req: IncomingMessage, res: ServerResponse) => {
-    res.writeHead(200, {'Content-Type': 'application/json'})
-    res.end(JSON.stringify({assets}))
+  routes: {
+    'GET /': (_req: IncomingMessage, res: ServerResponse) => {
+      res.writeHead(200, {'Content-Type': 'application/json'})
+      res.end(JSON.stringify({assets}))
+    },
   },
 })
 
@@ -77,9 +79,11 @@ describe('fetchDownloadUrl', () => {
 
   it('falls back to releases page when API returns non-ok response', async () => {
     const server = await createStubServer({
-      'GET /': (_req, res) => {
-        res.writeHead(500)
-        res.end()
+      routes: {
+        'GET /': (_req, res) => {
+          res.writeHead(500)
+          res.end()
+        },
       },
     })
     try {
