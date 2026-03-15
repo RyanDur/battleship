@@ -22,6 +22,9 @@ export type ConnectionStore = {
   disconnect: (peerId: string) => void
   grantTrust: (peerId: string) => void
   revokeTrust: (peerId: string) => void
+  introducePeers: (peerId1: string, peerId2: string) => void
+  acceptIntroduction: (introId: string) => void
+  declineIntroduction: (introId: string) => void
 }
 
 export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
@@ -48,6 +51,9 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
     else if (event.type === 'PEER_TRUST_UPDATED') dispatch({type: 'PEER_TRUST_UPDATED', peerId: event.peerId, trusts: event.trusts})
     else if (event.type === 'OFFER_CREATED') dispatch({type: 'OFFER_SDP_READY', peerId: event.peerId, sdp: event.sdp})
     else if (event.type === 'ANSWER_CREATED') dispatch({type: 'ANSWER_SDP_READY', sdp: event.sdp})
+    else if (event.type === 'INTRODUCTION_RECEIVED') dispatch({type: 'INTRODUCTION_RECEIVED', introId: event.introId, from: event.from, peer: event.peer})
+    else if (event.type === 'INTRODUCTION_DECLINED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId})
+    else if (event.type === 'INTRODUCTION_EXPIRED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId})
   }
 
   const handler = deps.createHandler(emit)
@@ -98,6 +104,20 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
     revokeTrust: (peerId) => {
       dispatch({type: 'REVOKE_PEER_TRUST', peerId})
       handler.handleCommand({type: 'REVOKE_TRUST', peerId})
+    },
+
+    introducePeers: (peerId1, peerId2) => {
+      handler.handleCommand({type: 'INTRODUCE_PEERS', peerId1, peerId2})
+    },
+
+    acceptIntroduction: (introId) => {
+      dispatch({type: 'INTRODUCTION_RESOLVED', introId})
+      handler.handleCommand({type: 'ACCEPT_INTRODUCTION', introId})
+    },
+
+    declineIntroduction: (introId) => {
+      dispatch({type: 'INTRODUCTION_RESOLVED', introId})
+      handler.handleCommand({type: 'DECLINE_INTRODUCTION', introId})
     },
   }
 }

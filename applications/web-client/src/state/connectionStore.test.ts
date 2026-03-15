@@ -266,6 +266,78 @@ describe('connectionStore', () => {
     })
   })
 
+  describe('introductions', () => {
+    it('introducePeers sends INTRODUCE_PEERS command', () => {
+      const {store, commands} = makeStore()
+
+      store.introducePeers('p1', 'p2')
+
+      expect(commands).toContain('INTRODUCE_PEERS')
+    })
+
+    it('acceptIntroduction sends ACCEPT_INTRODUCTION command', () => {
+      const {store, emit, commands} = makeStore()
+
+      emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'})
+      store.acceptIntroduction('i1')
+
+      expect(commands).toContain('ACCEPT_INTRODUCTION')
+    })
+
+    it('acceptIntroduction removes from pendingIntroductions', () => {
+      const {store, emit} = makeStore()
+
+      emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'})
+      store.acceptIntroduction('i1')
+
+      expect(store.getState().pendingIntroductions).toEqual([])
+    })
+
+    it('declineIntroduction sends DECLINE_INTRODUCTION command', () => {
+      const {store, emit, commands} = makeStore()
+
+      emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'})
+      store.declineIntroduction('i1')
+
+      expect(commands).toContain('DECLINE_INTRODUCTION')
+    })
+
+    it('declineIntroduction removes from pendingIntroductions', () => {
+      const {store, emit} = makeStore()
+
+      emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'})
+      store.declineIntroduction('i1')
+
+      expect(store.getState().pendingIntroductions).toEqual([])
+    })
+
+    it('INTRODUCTION_RECEIVED event adds to pendingIntroductions', () => {
+      const {store, emit} = makeStore()
+
+      emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'})
+
+      expect(store.getState().pendingIntroductions).toEqual([{introId: 'i1', from: 'Alice', peer: 'Carol'}])
+    })
+
+    it('INTRODUCTION_DECLINED event removes from pendingIntroductions', () => {
+      const {store, emit} = makeStore()
+
+      emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'})
+      emit({type: 'INTRODUCTION_DECLINED', introId: 'i1'})
+
+      expect(store.getState().pendingIntroductions).toEqual([])
+    })
+
+    it('INTRODUCTION_EXPIRED event removes from pendingIntroductions', () => {
+      const {store, emit} = makeStore()
+
+      emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'})
+      emit({type: 'INTRODUCTION_EXPIRED', introId: 'i1'})
+
+      expect(store.getState().pendingIntroductions).toEqual([])
+    })
+  })
+
   describe('subscribe', () => {
     it('notifies listener on state change', () => {
       const {store} = makeStore()

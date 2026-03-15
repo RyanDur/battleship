@@ -22,6 +22,9 @@ const makeFakeStore = (initial: ConnectionsState = initialState): ConnectionStor
     disconnect: vi.fn(),
     grantTrust: vi.fn(),
     revokeTrust: vi.fn(),
+    introducePeers: vi.fn(),
+    acceptIntroduction: vi.fn(),
+    declineIntroduction: vi.fn(),
     _emit: () => {
       state = {...state, peers: [{id: 'p1', name: 'Alice'}]}
       notify()
