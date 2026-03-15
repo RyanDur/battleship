@@ -145,9 +145,8 @@ export const createPeerHandler = (deps: Deps): Handler => {
   const cbs: ChannelCallbacks = {
     onOpen: (peerId, channel) => {
       dataChannels.set(peerId, channel)
-      for (const [introId, pid] of introConnections) {
-        if (pid === peerId) { introConnections.delete(introId); break }
-      }
+      const entry = [...introConnections].find(([, pid]) => pid === peerId)
+      if (entry) introConnections.delete(entry[0])
     },
     onClose: (peerId) => {
       const wasConnected = dataChannels.has(peerId)
