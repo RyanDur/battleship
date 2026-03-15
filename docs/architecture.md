@@ -118,40 +118,41 @@ sequenceDiagram
     Note over A, B: 1. Person A creates a connection
 
     A->>A: CREATE_OFFER
-    A->>A: RTCPeerConnection + createDataChannel('game')
-    A->>A: createOffer() → gather ICE → full SDP
+    A->>A: RTCPeerConnection + createDataChannel
+    A->>A: createOffer, gather ICE, full SDP
     A->>A: compress + encrypt SDP with passphrase
-    A-->>A: OFFER_CREATED { peerId, sdp }
+    A-->>A: OFFER_CREATED
     A->>A: Display connection code
 
-    Note over A, B: 2. Person A shares code with Person B (out-of-band)
+    Note over A, B: 2. Person A shares code with Person B out-of-band
 
     A-->>B: Copy/paste connection code
 
-    Note over A, B: 3. Person B joins (accepts offer, generates answer)
+    Note over A, B: 3. Person B joins
 
-    B->>B: ACCEPT_OFFER { sdp }
+    B->>B: ACCEPT_OFFER
     B->>B: decrypt + decompress code with passphrase
-    B->>B: RTCPeerConnection + setRemoteDescription(offer)
-    B->>B: createAnswer() → gather ICE → full SDP
+    B->>B: RTCPeerConnection + setRemoteDescription
+    B->>B: createAnswer, gather ICE, full SDP
     B->>B: compress + encrypt SDP with passphrase
-    B-->>B: ANSWER_CREATED { peerId, sdp }
+    B-->>B: ANSWER_CREATED
     B->>B: Display response code
 
-    Note over A, B: 4. Person B shares response code with Person A (out-of-band)
+    Note over A, B: 4. Person B shares response code out-of-band
 
     B-->>A: Copy/paste response code
 
     Note over A, B: 5. Person A accepts answer, data channel connects
 
-    A->>A: ACCEPT_ANSWER { peerId, sdp }
+    A->>A: ACCEPT_ANSWER
     A->>A: decrypt + decompress code with passphrase
-    A->>A: setRemoteDescription(answer)
+    A->>A: setRemoteDescription
 
-    A<-->B: WebRTC Data Channel ('game') established
+    A->>B: WebRTC Data Channel established
+    B->>A: WebRTC Data Channel established
 
-    A-->>A: PEER_CONNECTED { peerId }
-    B-->>B: PEER_CONNECTED { peerId }
+    A-->>A: PEER_CONNECTED
+    B-->>B: PEER_CONNECTED
 ```
 
 > **Key design decisions:**
@@ -171,28 +172,29 @@ When Alice is connected to both Bob and Carol, and both trust her, she can intro
 ```mermaid
 sequenceDiagram
     participant B as Bob
-    participant A as Alice (introducer)
+    participant A as Alice the introducer
     participant C as Carol
 
     Note over A: Alice clicks Introduce on Bob's row, selects Carol
 
-    A->>B: INTRODUCTION { introId, from: Alice, peer: Carol }
-    A->>C: INTRODUCTION { introId, from: Alice, peer: Bob }
+    A->>B: INTRODUCTION
+    A->>C: INTRODUCTION
 
-    B->>A: INTRODUCTION_RESPONSE { accepted: true }
-    C->>A: INTRODUCTION_RESPONSE { accepted: true }
+    B->>A: INTRODUCTION_RESPONSE accepted
+    C->>A: INTRODUCTION_RESPONSE accepted
 
-    Note over A: Both accepted — Alice tells Bob to create an offer
+    Note over A: Both accepted. Alice tells Bob to create an offer.
 
-    A->>B: CREATE_OFFER_FOR { introId }
+    A->>B: CREATE_OFFER_FOR
     B->>B: Create RTCPeerConnection + data channel
-    B->>A: RELAY_SDP { introId, peerId, sdp (offer) }
-    A->>C: INTRODUCTION_SDP { introId, sdp (offer) }
+    B->>A: RELAY_SDP with offer
+    A->>C: INTRODUCTION_SDP with offer
     C->>C: Create RTCPeerConnection + set remote description
-    C->>A: RELAY_SDP_ANSWER { introId, sdp (answer) }
-    A->>B: INTRODUCTION_SDP_ANSWER { introId, peerId, sdp (answer) }
+    C->>A: RELAY_SDP_ANSWER with answer
+    A->>B: INTRODUCTION_SDP_ANSWER with answer
 
-    B<-->C: WebRTC Data Channel established directly
+    B->>C: WebRTC Data Channel established
+    C->>B: WebRTC Data Channel established
 ```
 
 > **Key design decisions:**
