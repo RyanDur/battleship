@@ -1,4 +1,10 @@
+import * as Decoder from 'schemawax'
+import { maybe } from '../lib/maybe'
 import type { PeerCommand, PeerEvent } from '../types/worker-messages'
+
+const introduceDecoder = Decoder.object({
+  required: { type: Decoder.literal('INTRODUCE'), name: Decoder.string },
+})
 
 type Deps = {
   name: string
@@ -26,8 +32,7 @@ const wireChannel = (channel: RTCDataChannel, peerId: string, name: string, emit
   }
   channel.onclose = () => emit({ type: 'PEER_DISCONNECTED', peerId })
   channel.onmessage = ({ data }: MessageEvent<string>) => {
-    const msg = JSON.parse(data) as { type: string; name: string }
-    if (msg.type === 'INTRODUCE') emit({ type: 'PEER_NAMED', peerId, name: msg.name })
+    maybe(introduceDecoder.decode(JSON.parse(data))).map(msg => emit({ type: 'PEER_NAMED', peerId, name: msg.name }))
   }
 }
 

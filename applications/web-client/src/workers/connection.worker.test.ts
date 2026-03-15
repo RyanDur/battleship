@@ -280,5 +280,42 @@ describe('Peer Handler', () => {
 
       expect(events).toContainEqual({ type: 'PEER_NAMED', peerId, name: 'Bob' })
     })
+
+    it('answerer sends local name when inbound data channel opens', async () => {
+      const { handleCommand } = await createHandler('Alice')
+      handleCommand({ type: 'ACCEPT_OFFER', sdp: 'remote-offer-sdp' })
+
+      completeIceGathering(pcs[0], 'answer-sdp')
+
+      await vi.waitFor(() => {
+        expect(events).toContainEqual(expect.objectContaining({ type: 'ANSWER_CREATED' }))
+      })
+
+      const inboundChannel = makeMockChannel()
+      pcs[0].ondatachannel?.({ channel: inboundChannel })
+      inboundChannel.onopen?.()
+
+      expect(inboundChannel.send).toHaveBeenCalledWith(JSON.stringify({ type: 'INTRODUCE', name: 'Alice' }))
+    })
+
+    it('answerer emits PEER_NAMED when remote peer introduces themselves', async () => {
+      const { handleCommand } = await createHandler('Alice')
+      handleCommand({ type: 'ACCEPT_OFFER', sdp: 'remote-offer-sdp' })
+
+      completeIceGathering(pcs[0], 'answer-sdp')
+
+      await vi.waitFor(() => {
+        expect(events).toContainEqual(expect.objectContaining({ type: 'ANSWER_CREATED' }))
+      })
+
+      const peerId = (events.find(e => e.type === 'ANSWER_CREATED') as { peerId: string }).peerId
+      const inboundChannel = makeMockChannel()
+
+      pcs[0].ondatachannel?.({ channel: inboundChannel })
+      inboundChannel.onopen?.()
+      inboundChannel.onmessage?.({ data: JSON.stringify({ type: 'INTRODUCE', name: 'Bob' }) })
+
+      expect(events).toContainEqual({ type: 'PEER_NAMED', peerId, name: 'Bob' })
+    })
   })
 })
