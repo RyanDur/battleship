@@ -22,7 +22,4 @@ class PeerRegistry {
 
     fun getPeersExcluding(peerId: String): List<PeerInfo> =
         getPeers().filter { it.peerId != peerId }
-
-    fun getName(peerId: String): String? =
-        peers[peerId]
 }

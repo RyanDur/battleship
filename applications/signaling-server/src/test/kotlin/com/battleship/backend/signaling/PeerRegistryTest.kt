@@ -39,10 +39,4 @@ class PeerRegistryTest {
         assertEquals("peer-2", peers[0].peerId)
     }
 
-    @Test
-    fun `getName returns the registered name`() {
-        registry.register("peer-1", "Alice")
-
-        assertEquals("Alice", registry.getName("peer-1"))
-    }
 }

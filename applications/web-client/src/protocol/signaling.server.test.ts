@@ -8,11 +8,13 @@ import type {SignalingEvent} from './signaling';
 const connect = async (serverSetup: (conn: WsConnection) => void = () => undefined) => {
   let wsConn: WsConnection | undefined;
   const server = await createStubServer({
+    routes: {'GET /session': (_req, res) => { res.writeHead(200); res.end(); }},
     ws: {'/ws/signaling': conn => { wsConn = conn; serverSetup(conn); }},
   });
   const events: SignalingEvent[] = [];
   const handle = startSignaling({
     createWebSocket: makeWebSocket,
+    sessionUrl: server.url + '/session',
     url: server.url.replace('http://', 'ws://') + '/ws/signaling',
     name: 'Alice',
   }, e => events.push(e));
@@ -23,6 +25,28 @@ const connect = async (serverSetup: (conn: WsConnection) => void = () => undefin
 };
 
 describe('startSignaling', () => {
+  it('fetches session before connecting', async () => {
+    let sessionFetched = false;
+    const received: string[] = [];
+    let wsConn: WsConnection | undefined;
+    const server = await createStubServer({
+      routes: {'GET /session': (_req, res) => { sessionFetched = true; res.writeHead(200); res.end(); }},
+      ws: {'/ws/signaling': conn => { wsConn = conn; conn.onMessage(msg => received.push(msg)); }},
+    });
+    startSignaling({
+      createWebSocket: makeWebSocket,
+      sessionUrl: server.url + '/session',
+      url: server.url.replace('http://', 'ws://') + '/ws/signaling',
+      name: 'Alice',
+    }, () => undefined);
+
+    await vi.waitFor(() => expect(wsConn).toBeDefined());
+    const registerMsg = received.map(m => JSON.parse(m) as {type: string}).find(m => m.type === 'REGISTER');
+    expect(sessionFetched).toBe(true);
+    expect(registerMsg).toMatchObject({type: 'REGISTER'});
+    await server.close();
+  });
+
   it('sends REGISTER with name on connect', async () => {
     const received: string[] = [];
     const {cleanup} = await connect(conn => conn.onMessage(msg => received.push(msg)));
@@ -31,15 +55,6 @@ describe('startSignaling', () => {
       const msg = received.map(m => JSON.parse(m)).find((m: {type: string}) => m.type === 'REGISTER');
       expect(msg).toMatchObject({type: 'REGISTER', name: 'Alice'});
     });
-    await cleanup();
-  });
-
-  it('emits REGISTERED event when server sends REGISTERED', async () => {
-    const {events, getConn, cleanup} = await connect();
-
-    getConn().send(JSON.stringify({type: 'REGISTERED', peerId: 'p1', name: 'Alice'}));
-
-    await vi.waitFor(() => expect(events).toContainEqual({type: 'REGISTERED', peerId: 'p1', name: 'Alice'}));
     await cleanup();
   });
 

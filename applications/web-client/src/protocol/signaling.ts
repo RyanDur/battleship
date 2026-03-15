@@ -5,7 +5,6 @@ import {tryCatch} from '../lib/result';
 export type OnlinePeer = {peerId: string; name: string}
 
 export type SignalingEvent =
-  | {type: 'REGISTERED'; peerId: string; name: string}
   | {type: 'PEERS'; peers: OnlinePeer[]}
   | {type: 'PEER_JOINED'; peerId: string; name: string}
   | {type: 'PEER_LEFT'; peerId: string}
@@ -17,15 +16,12 @@ export type SignalingHandle = {
 
 export type SignalingConfig = {
   createWebSocket: (url: string) => WebSocket
+  sessionUrl: string
   url: string
   name: string
 }
 
 const peerDecoder = Decoder.object({required: {peerId: Decoder.string, name: Decoder.string}});
-
-const registeredDecoder = Decoder.object({
-  required: {type: Decoder.literal('REGISTERED'), peerId: Decoder.string, name: Decoder.string},
-});
 
 const peersDecoder = Decoder.object({
   required: {type: Decoder.literal('PEERS'), peers: Decoder.array(peerDecoder)},
@@ -63,9 +59,6 @@ export const startSignaling = (
       tryCatch(() => JSON.parse(event.data as string), () => 'invalid json')
         .onFailure(() => console.warn('Received malformed signaling message'))
         .onSuccess(parsed => {
-          maybe(registeredDecoder.decode(parsed)).map(msg =>
-            onEvent({type: 'REGISTERED', peerId: msg.peerId, name: msg.name})
-          );
           maybe(peersDecoder.decode(parsed)).map(msg =>
             onEvent({type: 'PEERS', peers: msg.peers})
           );
@@ -81,7 +74,9 @@ export const startSignaling = (
     currentWs.onclose = () => undefined;
   };
 
-  connect();
+  fetch(config.sessionUrl, {credentials: 'include'})
+    .catch(() => undefined)
+    .then(() => connect());
 
   return {
     stop: () => {
