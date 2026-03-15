@@ -2,6 +2,7 @@ import {render, screen, act} from '@testing-library/react'
 import {ConnectionProvider} from './ConnectionProvider'
 import {useConnectionState, useConnectionStore} from './useConnection'
 import {initialState} from './connections'
+import {asyncSuccess} from '../lib/asyncResult'
 import type {ConnectionStore} from './connectionStore'
 import type {ConnectionsState} from './connections'
 
@@ -16,8 +17,9 @@ const makeFakeStore = (initial: ConnectionsState = initialState): ConnectionStor
       return () => listeners.delete(listener)
     },
     createOffer: vi.fn(),
-    joinOffer: vi.fn(),
-    acceptAnswer: vi.fn(),
+    joinOffer: vi.fn(() => asyncSuccess(undefined)),
+    acceptAnswer: vi.fn(() => asyncSuccess(undefined)),
+    disconnect: vi.fn(),
     _emit: () => {
       state = {...state, peers: [{id: 'p1', name: 'Alice'}]}
       notify()
