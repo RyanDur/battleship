@@ -1,24 +1,31 @@
 import {useState} from 'react'
+import {useConnectionState, useConnectionStore} from '../state/useConnection'
+import type {ConnectionFlow} from '../state/connections'
 
-export type FlowPhase =
+type FlowPhase =
   | {phase: 'idle'}
   | {phase: 'creating'}
   | {phase: 'offer-ready'; code: string}
   | {phase: 'joining'}
   | {phase: 'answer-ready'; code: string}
 
-type Peer = {id: string; name?: string}
+const toFlowPhase = (flow: ConnectionFlow): FlowPhase => {
+  if (flow.phase === 'offer-ready') return {phase: 'offer-ready', code: flow.code}
+  if (flow.phase === 'answer-ready') return {phase: 'answer-ready', code: flow.code}
+  if (flow.phase === 'encoding-offer') return {phase: 'creating'}
+  if (flow.phase === 'encoding-answer') return {phase: 'joining'}
+  return {phase: flow.phase}
+}
 
 type Props = {
-  flow: FlowPhase
-  peers: Peer[]
-  onCreateOffer: (passphrase: string) => void
-  onJoinOffer: (code: string, passphrase: string) => void
-  onAcceptAnswer: (responseCode: string) => void
   serviceOnline: boolean
 }
 
-export const Connections = ({flow, peers, onCreateOffer, onJoinOffer, onAcceptAnswer, serviceOnline}: Props) => {
+export const Connections = ({serviceOnline}: Props) => {
+  const store = useConnectionStore()
+  const flow = toFlowPhase(useConnectionState(s => s.flow))
+  const peers = useConnectionState(s => s.peers)
+
   const [formMode, setFormMode] = useState<'none' | 'create' | 'join'>('none')
   const [passphrase, setPassphrase] = useState('')
   const [offerCode, setOfferCode] = useState('')
@@ -39,7 +46,7 @@ export const Connections = ({flow, peers, onCreateOffer, onJoinOffer, onAcceptAn
               value={responseCode}
               onChange={e => setResponseCode(e.target.value)}
             />
-            <button onClick={() => onAcceptAnswer(responseCode)}>Connect</button>
+            <button onClick={() => store.acceptAnswer(responseCode)}>Connect</button>
           </div>
         </div>
       )
@@ -60,7 +67,7 @@ export const Connections = ({flow, peers, onCreateOffer, onJoinOffer, onAcceptAn
 
     if (formMode === 'create') {
       return (
-        <form onSubmit={e => { e.preventDefault(); onCreateOffer(passphrase) }}>
+        <form onSubmit={e => { e.preventDefault(); store.createOffer(passphrase) }}>
           <label htmlFor="create-passphrase">Passphrase</label>
           <input
             id="create-passphrase"
@@ -74,7 +81,7 @@ export const Connections = ({flow, peers, onCreateOffer, onJoinOffer, onAcceptAn
 
     if (formMode === 'join') {
       return (
-        <form onSubmit={e => { e.preventDefault(); onJoinOffer(offerCode, passphrase) }}>
+        <form onSubmit={e => { e.preventDefault(); store.joinOffer(offerCode, passphrase) }}>
           <label htmlFor="join-passphrase">Passphrase</label>
           <input
             id="join-passphrase"
