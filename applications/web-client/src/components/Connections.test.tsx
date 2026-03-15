@@ -299,4 +299,37 @@ describe('Connections', () => {
     expect(store.getState().peers).toEqual([]);
     expect(screen.queryByText('Alice')).not.toBeInTheDocument();
   });
+
+  describe('online peers', () => {
+    it('shows online peer names from signaling', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.handleSignalingEvent({type: 'PEERS', peers: [{peerId: 'p1', name: 'Alice'}]}));
+
+      expect(screen.getByText('Alice')).toBeInTheDocument();
+    });
+
+    it('does not show online peers section when list is empty', () => {
+      renderConnections();
+
+      expect(screen.queryByRole('list', {name: /online/i})).not.toBeInTheDocument();
+    });
+
+    it('PEER_JOINED adds to online peers', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.handleSignalingEvent({type: 'PEER_JOINED', peerId: 'p2', name: 'Bob'}));
+
+      expect(screen.getByText('Bob')).toBeInTheDocument();
+    });
+
+    it('PEER_LEFT removes from online peers', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.handleSignalingEvent({type: 'PEERS', peers: [{peerId: 'p1', name: 'Alice'}]}));
+      await act(async () => store.handleSignalingEvent({type: 'PEER_LEFT', peerId: 'p1'}));
+
+      expect(screen.queryByText('Alice')).not.toBeInTheDocument();
+    });
+  });
 });

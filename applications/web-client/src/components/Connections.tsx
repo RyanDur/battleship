@@ -55,6 +55,7 @@ export const Connections = ({serviceOnline}: Props) => {
   const flow = toFlowPhase(useConnectionState(s => s.flow));
   const peers = useConnectionState(s => s.peers);
   const pendingIntroductions = useConnectionState(s => s.pendingIntroductions);
+  const onlinePeers = useConnectionState(s => s.onlinePeers);
 
   const [formMode, setFormMode] = useState<'none' | 'create' | 'join'>('none');
   const [passphrase, setPassphrase] = useState('');
@@ -141,6 +142,13 @@ export const Connections = ({serviceOnline}: Props) => {
 
   return (
     <section>
+      {onlinePeers.length > 0 && (
+        <ul aria-label="Online peers">
+          {onlinePeers.map(peer => (
+            <li key={peer.peerId}>{peer.name}</li>
+          ))}
+        </ul>
+      )}
       {renderFlow()}
       {peers.length > 0 && (
         <ul>
