@@ -404,4 +404,291 @@ describe('Peer Handler', () => {
       expect(events).toContainEqual({ type: 'PEER_TRUST_UPDATED', peerId, trusts: false })
     })
   })
+
+  describe('introductions — introducer side', () => {
+    const setupTwoPeers = async (handler: Awaited<ReturnType<typeof createHandler>>) => {
+      const { handleCommand } = handler
+
+      handleCommand({ type: 'CREATE_OFFER' })
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCE', name: 'Bob' }) })
+
+      handleCommand({ type: 'CREATE_OFFER' })
+      channels[1].onopen?.()
+      channels[1].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCE', name: 'Carol' }) })
+
+      completeIceGathering(pcs[0], 'bob-sdp')
+      completeIceGathering(pcs[1], 'carol-sdp')
+      await vi.waitFor(() => expect(events.filter(e => e.type === 'OFFER_CREATED')).toHaveLength(2))
+
+      const bobPeerId = (events.find(e => e.type === 'PEER_CONNECTED' && channels.indexOf(channels[0]) === 0) as { peerId: string }).peerId
+      const carolPeerId = (events.filter(e => e.type === 'PEER_CONNECTED')[1] as { peerId: string }).peerId
+      return { bobPeerId, carolPeerId }
+    }
+
+    it('INTRODUCE_PEERS sends INTRODUCTION to both peer channels', async () => {
+      const handler = await createHandler('Alice')
+      const { handleCommand } = handler
+      const { bobPeerId, carolPeerId } = await setupTwoPeers(handler)
+
+      handleCommand({ type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId })
+
+      expect(channels[0].send).toHaveBeenCalledWith(
+        expect.stringContaining('"type":"INTRODUCTION"')
+      )
+      expect(channels[1].send).toHaveBeenCalledWith(
+        expect.stringContaining('"type":"INTRODUCTION"')
+      )
+    })
+
+    it('INTRODUCTION to Bob includes Carol as the peer and vice versa', async () => {
+      const handler = await createHandler('Alice')
+      const { handleCommand } = handler
+      const { bobPeerId, carolPeerId } = await setupTwoPeers(handler)
+
+      handleCommand({ type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId })
+
+      const bobMsg = JSON.parse(channels[0].send.mock.calls.find((c: string[]) => JSON.parse(c[0]).type === 'INTRODUCTION')![0])
+      const carolMsg = JSON.parse(channels[1].send.mock.calls.find((c: string[]) => JSON.parse(c[0]).type === 'INTRODUCTION')![0])
+
+      expect(bobMsg.peer).toBe('Carol')
+      expect(carolMsg.peer).toBe('Bob')
+      expect(bobMsg.from).toBe('Alice')
+      expect(carolMsg.from).toBe('Alice')
+    })
+
+    it('when both accept, sends CREATE_OFFER_FOR to the first peer', async () => {
+      const handler = await createHandler('Alice')
+      const { handleCommand } = handler
+      const { bobPeerId, carolPeerId } = await setupTwoPeers(handler)
+
+      handleCommand({ type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId })
+
+      const introId = JSON.parse(channels[0].send.mock.calls.find((c: string[]) => JSON.parse(c[0]).type === 'INTRODUCTION')![0]).introId
+
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId, accepted: true }) })
+      channels[1].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId, accepted: true }) })
+
+      expect(channels[0].send).toHaveBeenCalledWith(JSON.stringify({ type: 'CREATE_OFFER_FOR', introId }))
+    })
+
+    it('when only one accepts and timer fires, sends INTRODUCTION_EXPIRED to both', async () => {
+      vi.useFakeTimers()
+      const handler = await createHandler('Alice')
+      const { handleCommand } = handler
+      const { bobPeerId, carolPeerId } = await setupTwoPeers(handler)
+
+      handleCommand({ type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId })
+
+      const introId = JSON.parse(channels[0].send.mock.calls.find((c: string[]) => JSON.parse(c[0]).type === 'INTRODUCTION')![0]).introId
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId, accepted: true }) })
+
+      vi.advanceTimersByTime(60000)
+
+      expect(channels[0].send).toHaveBeenCalledWith(JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId }))
+      expect(channels[1].send).toHaveBeenCalledWith(JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId }))
+      vi.useRealTimers()
+    })
+
+    it('when one declines, sends INTRODUCTION_DECLINED to the other', async () => {
+      const handler = await createHandler('Alice')
+      const { handleCommand } = handler
+      const { bobPeerId, carolPeerId } = await setupTwoPeers(handler)
+
+      handleCommand({ type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId })
+
+      const introId = JSON.parse(channels[0].send.mock.calls.find((c: string[]) => JSON.parse(c[0]).type === 'INTRODUCTION')![0]).introId
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId, accepted: false }) })
+
+      expect(channels[1].send).toHaveBeenCalledWith(JSON.stringify({ type: 'INTRODUCTION_DECLINED', introId }))
+    })
+
+    it('relays RELAY_SDP from peerId1 to peerId2 as INTRODUCTION_SDP', async () => {
+      const handler = await createHandler('Alice')
+      const { handleCommand } = handler
+      const { bobPeerId, carolPeerId } = await setupTwoPeers(handler)
+
+      handleCommand({ type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId })
+
+      const introId = JSON.parse(channels[0].send.mock.calls.find((c: string[]) => JSON.parse(c[0]).type === 'INTRODUCTION')![0]).introId
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId, accepted: true }) })
+      channels[1].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId, accepted: true }) })
+
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'RELAY_SDP', introId, peerId: 'bob-local-id', sdp: 'bob-offer-sdp' }) })
+
+      expect(channels[1].send).toHaveBeenCalledWith(JSON.stringify({ type: 'INTRODUCTION_SDP', introId, sdp: 'bob-offer-sdp' }))
+    })
+
+    it('relays RELAY_SDP_ANSWER from peerId2 back to peerId1 as INTRODUCTION_SDP_ANSWER', async () => {
+      const handler = await createHandler('Alice')
+      const { handleCommand } = handler
+      const { bobPeerId, carolPeerId } = await setupTwoPeers(handler)
+
+      handleCommand({ type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId })
+
+      const introId = JSON.parse(channels[0].send.mock.calls.find((c: string[]) => JSON.parse(c[0]).type === 'INTRODUCTION')![0]).introId
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId, accepted: true }) })
+      channels[1].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId, accepted: true }) })
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'RELAY_SDP', introId, peerId: 'bob-local-id', sdp: 'bob-offer-sdp' }) })
+
+      channels[1].onmessage?.({ data: JSON.stringify({ type: 'RELAY_SDP_ANSWER', introId, sdp: 'carol-answer-sdp' }) })
+
+      expect(channels[0].send).toHaveBeenCalledWith(JSON.stringify({ type: 'INTRODUCTION_SDP_ANSWER', introId, peerId: 'bob-local-id', sdp: 'carol-answer-sdp' }))
+    })
+  })
+
+  describe('introductions — introduced party side', () => {
+    it('emits INTRODUCTION_RECEIVED when peer sends INTRODUCTION message', async () => {
+      const { handleCommand } = await createHandler('Bob')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+      const peerId = (events.find(e => e.type === 'OFFER_CREATED') as { peerId: string }).peerId
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION', introId: 'i1', from: 'Alice', peer: 'Carol' }) })
+
+      expect(events).toContainEqual({ type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol' })
+      void peerId
+    })
+
+    it('ACCEPT_INTRODUCTION sends INTRODUCTION_RESPONSE accepted: true to the introducing peer', async () => {
+      const { handleCommand } = await createHandler('Bob')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION', introId: 'i1', from: 'Alice', peer: 'Carol' }) })
+
+      handleCommand({ type: 'ACCEPT_INTRODUCTION', introId: 'i1' })
+
+      expect(channels[0].send).toHaveBeenCalledWith(JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: 'i1', accepted: true }))
+    })
+
+    it('DECLINE_INTRODUCTION sends INTRODUCTION_RESPONSE accepted: false to the introducing peer', async () => {
+      const { handleCommand } = await createHandler('Bob')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION', introId: 'i1', from: 'Alice', peer: 'Carol' }) })
+
+      handleCommand({ type: 'DECLINE_INTRODUCTION', introId: 'i1' })
+
+      expect(channels[0].send).toHaveBeenCalledWith(JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: 'i1', accepted: false }))
+    })
+
+    it('creates and relays SDP offer when receiving CREATE_OFFER_FOR', async () => {
+      const { handleCommand } = await createHandler('Bob')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'alice-offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION', introId: 'i1', from: 'Alice', peer: 'Carol' }) })
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'CREATE_OFFER_FOR', introId: 'i1' }) })
+
+      // Complete ICE gathering for the new connection to Carol
+      completeIceGathering(pcs[1], 'bob-carol-offer-sdp')
+
+      await vi.waitFor(() => {
+        const relayCalls = channels[0].send.mock.calls.filter((c: string[]) => {
+          try { return JSON.parse(c[0]).type === 'RELAY_SDP' } catch { return false }
+        })
+        expect(relayCalls.length).toBeGreaterThan(0)
+      })
+
+      const relayCall = channels[0].send.mock.calls.find((c: string[]) => JSON.parse(c[0]).type === 'RELAY_SDP')!
+      const msg = JSON.parse(relayCall[0])
+      expect(msg.type).toBe('RELAY_SDP')
+      expect(msg.introId).toBe('i1')
+      expect(msg.sdp).toBe('bob-carol-offer-sdp')
+      expect(msg.peerId).toBeDefined()
+    })
+
+    it('sets remote description when receiving INTRODUCTION_SDP_ANSWER', async () => {
+      const { handleCommand } = await createHandler('Bob')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'alice-offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION', introId: 'i1', from: 'Alice', peer: 'Carol' }) })
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'CREATE_OFFER_FOR', introId: 'i1' }) })
+
+      completeIceGathering(pcs[1], 'bob-carol-offer-sdp')
+
+      await vi.waitFor(() => {
+        expect(channels[0].send.mock.calls.some((c: string[]) => {
+          try { return JSON.parse(c[0]).type === 'RELAY_SDP' } catch { return false }
+        })).toBe(true)
+      })
+
+      const relayMsg = JSON.parse(channels[0].send.mock.calls.find((c: string[]) => JSON.parse(c[0]).type === 'RELAY_SDP')![0])
+
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION_SDP_ANSWER', introId: 'i1', peerId: relayMsg.peerId, sdp: 'carol-answer-sdp' }) })
+
+      expect(pcs[1].setRemoteDescription).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'answer', sdp: 'carol-answer-sdp' })
+      )
+    })
+
+    it('emits INTRODUCTION_DECLINED when peer sends INTRODUCTION_DECLINED', async () => {
+      const { handleCommand } = await createHandler('Bob')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION', introId: 'i1', from: 'Alice', peer: 'Carol' }) })
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION_DECLINED', introId: 'i1' }) })
+
+      expect(events).toContainEqual({ type: 'INTRODUCTION_DECLINED', introId: 'i1' })
+    })
+
+    it('emits INTRODUCTION_EXPIRED when peer sends INTRODUCTION_EXPIRED', async () => {
+      const { handleCommand } = await createHandler('Bob')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION', introId: 'i1', from: 'Alice', peer: 'Carol' }) })
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId: 'i1' }) })
+
+      expect(events).toContainEqual({ type: 'INTRODUCTION_EXPIRED', introId: 'i1' })
+    })
+
+    it('answerer creates connection and relays answer SDP when receiving INTRODUCTION_SDP', async () => {
+      const { handleCommand } = await createHandler('Carol')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'alice-offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'INTRODUCTION_SDP', introId: 'i1', sdp: 'bob-offer-sdp' }) })
+
+      completeIceGathering(pcs[1], 'carol-bob-answer-sdp')
+
+      await vi.waitFor(() => {
+        expect(channels[0].send.mock.calls.some((c: string[]) => {
+          try { return JSON.parse(c[0]).type === 'RELAY_SDP_ANSWER' } catch { return false }
+        })).toBe(true)
+      })
+
+      const answerMsg = JSON.parse(channels[0].send.mock.calls.find((c: string[]) => JSON.parse(c[0]).type === 'RELAY_SDP_ANSWER')![0])
+      expect(answerMsg.introId).toBe('i1')
+      expect(answerMsg.sdp).toBe('carol-bob-answer-sdp')
+    })
+  })
 })

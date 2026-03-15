@@ -5,6 +5,9 @@ export type PeerCommand =
   | { type: 'DISCONNECT'; peerId: string }
   | { type: 'GRANT_TRUST'; peerId: string }
   | { type: 'REVOKE_TRUST'; peerId: string }
+  | { type: 'INTRODUCE_PEERS'; peerId1: string; peerId2: string }
+  | { type: 'ACCEPT_INTRODUCTION'; introId: string }
+  | { type: 'DECLINE_INTRODUCTION'; introId: string }
 
 export type PeerEvent =
   | { type: 'OFFER_CREATED'; peerId: string; sdp: string }
@@ -13,4 +16,7 @@ export type PeerEvent =
   | { type: 'PEER_DISCONNECTED'; peerId: string }
   | { type: 'PEER_NAMED'; peerId: string; name: string }
   | { type: 'PEER_TRUST_UPDATED'; peerId: string; trusts: boolean }
+  | { type: 'INTRODUCTION_RECEIVED'; introId: string; from: string; peer: string }
+  | { type: 'INTRODUCTION_DECLINED'; introId: string }
+  | { type: 'INTRODUCTION_EXPIRED'; introId: string }
   | { type: 'ERROR'; message: string }
