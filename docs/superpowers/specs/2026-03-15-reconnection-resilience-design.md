@@ -110,7 +110,7 @@ All messages are JSON over WebSocket at `/ws/signaling`.
 - `Map<(peerId, peerId), String?>` — per-relationship email (manually saved or shared)
 - `Set<(peerId, peerId)>` — forgotten peer pairs
 
-No database. Server restart clears all state — same as today. If the server restarts, cookies outlive the server's memory. A returning peer with a valid cookie but no server-side record is treated as a new registration — their peerId is preserved but relationships and names are gone. Everyone effectively starts fresh after a server restart.
+State is persisted to a database so it survives server restarts. Peer names, relationships, emails, and forgotten-peer pairs are durable. When the server restarts, a returning peer with a valid cookie is recognized — their identity, relationships, and peers are restored.
 
 ### Cookie
 
