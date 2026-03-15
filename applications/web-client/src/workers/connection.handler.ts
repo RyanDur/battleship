@@ -7,10 +7,6 @@ const introduceDecoder = Decoder.object({
   required: { type: Decoder.literal('INTRODUCE'), name: Decoder.string },
 })
 
-const connectionsDecoder = Decoder.object({
-  required: { type: Decoder.literal('CONNECTIONS'), names: Decoder.array(Decoder.string) },
-})
-
 type Deps = {
   name: string
   emit: (event: PeerEvent) => void
@@ -31,15 +27,11 @@ const gatherIceCandidates = (pc: RTCPeerConnection): Promise<string | undefined>
   })
 
 type ChannelCallbacks = {
-  onOpen: (peerId: string, channel: RTCDataChannel) => void
-  onNameLearned: (peerId: string, name: string) => void
-  onConnectionsReceived: (peerId: string, names: string[]) => void
   onClose: (peerId: string) => void
 }
 
 const wireChannel = (channel: RTCDataChannel, peerId: string, name: string, emit: (event: PeerEvent) => void, cbs: ChannelCallbacks) => {
   channel.onopen = () => {
-    cbs.onOpen(peerId, channel)
     emit({ type: 'PEER_CONNECTED', peerId })
     channel.send(JSON.stringify({ type: 'INTRODUCE', name }))
   }
@@ -50,9 +42,7 @@ const wireChannel = (channel: RTCDataChannel, peerId: string, name: string, emit
       .onSuccess(parsed => {
         maybe(introduceDecoder.decode(parsed)).map(msg => {
           emit({ type: 'PEER_NAMED', peerId, name: msg.name })
-          cbs.onNameLearned(peerId, msg.name)
         })
-        maybe(connectionsDecoder.decode(parsed)).map(msg => cbs.onConnectionsReceived(peerId, msg.names))
       })
   }
 }
@@ -79,29 +69,11 @@ const negotiateAnswer = async (pc: RTCPeerConnection, peerId: string, name: stri
 
 export const createPeerHandler = (deps: Deps): Handler => {
   const connections = new Map<string, RTCPeerConnection>()
-  const peerNames = new Map<string, string>()
-  const dataChannels = new Map<string, RTCDataChannel>()
-
-  const broadcastConnections = () => {
-    for (const [pid, ch] of dataChannels) {
-      const names = [...peerNames.entries()].filter(([id]) => id !== pid).map(([, n]) => n)
-      ch.send(JSON.stringify({ type: 'CONNECTIONS', names }))
-    }
-  }
 
   const cbs: ChannelCallbacks = {
-    onOpen: (peerId, channel) => dataChannels.set(peerId, channel),
-    onNameLearned: (peerId, name) => {
-      peerNames.set(peerId, name)
-      broadcastConnections()
-    },
-    onConnectionsReceived: (peerId, names) => deps.emit({ type: 'PEER_CONNECTIONS_UPDATED', peerId, connections: names }),
     onClose: (peerId) => {
-      peerNames.delete(peerId)
-      dataChannels.delete(peerId)
       const pc = connections.get(peerId)
       if (pc) { pc.close(); connections.delete(peerId) }
-      broadcastConnections()
       deps.emit({ type: 'PEER_DISCONNECTED', peerId })
     },
   }

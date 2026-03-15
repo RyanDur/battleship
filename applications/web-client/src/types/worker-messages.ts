@@ -10,5 +10,4 @@ export type PeerEvent =
   | { type: 'PEER_CONNECTED'; peerId: string }
   | { type: 'PEER_DISCONNECTED'; peerId: string }
   | { type: 'PEER_NAMED'; peerId: string; name: string }
-  | { type: 'PEER_CONNECTIONS_UPDATED'; peerId: string; connections: string[] }
   | { type: 'ERROR'; message: string }
