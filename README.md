@@ -9,19 +9,19 @@ The project follows the [App Continuum](https://www.appcontinuum.io/) style — 
 ```
 battleship/
 ├── applications/
-│   ├── signaling-server/      # Kotlin Spring Boot — local WebSocket relay
+│   ├── signaling-server/      # Kotlin Spring Boot — health endpoint only
 │   └── web-client/            # React + Vite + TypeScript — browser UI
 ├── components/
-│   └── signaling-protocol/    # Kotlin — SignalingMessage types, Result type
+│   └── signaling-protocol/    # Kotlin — Result type
 ├── databases/                 # (empty — no persistence yet)
 └── docs/                      # Architecture diagrams
 ```
 
-- **signaling-server** — runs locally on each player's machine, relays WebRTC signaling between browser and peer
-- **web-client** — hosted on GitHub Pages, connects to the local service via WebWorker
-- **signaling-protocol** — shared Kotlin types consumed by the signaling server
+- **signaling-server** — runs locally on each player's machine, provides health/heartbeat endpoint for service status
+- **web-client** — hosted on GitHub Pages, manages direct P2P connections via WebRTC
+- **signaling-protocol** — shared Kotlin Result type
 
-The web client maintains its own TypeScript types (Result, Maybe, SignalingMessage decoders). This is intentional — the browser is a separate bounded context with its own technology stack. No shared code across the Kotlin/TypeScript boundary.
+The web client maintains its own TypeScript types (Result, Maybe, AsyncResult). This is intentional — the browser is a separate bounded context with its own technology stack. No shared code across the Kotlin/TypeScript boundary. P2P connections are established without a signaling server — SDP is exchanged out-of-band via encrypted connection codes.
 
 See [docs/architecture.md](docs/architecture.md) for detailed diagrams and connection flow.
 
@@ -59,7 +59,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed diagrams and conne
 
 - **HTML5 standard elements** for content — no component libraries.
 - **Raw CSS in separate files** — structural CSS close to the component, shared styles in reusable folders.
-- **schemawax** for runtime decoding at untrusted boundaries (WebSocket messages). Types derived from decoders via `Decoder.Output`.
+- **schemawax** for runtime decoding at untrusted boundaries (config, API responses). Types derived from decoders via `Decoder.Output`.
 - **Dependency injection for testability** — factories and handlers accept their dependencies, no global state.
 - **Arrow functions only** — no `function` declarations or expressions. Enforced by ESLint.
 - **Named exports only** — no default exports. Enforced by ESLint.
@@ -67,10 +67,9 @@ See [docs/architecture.md](docs/architecture.md) for detailed diagrams and conne
 
 ### Backend (Kotlin)
 
-- **Sealed classes** for algebraic types — `Result<S, F>`, `SignalingMessage`, `RegistrationError`.
+- **Sealed classes** for algebraic types — `Result<S, F>`.
 - **`mapEither()` for terminal folds**, **`either()` for compositional branching** — both tracks handled explicitly, no `onSuccess`/`onFailure`. The bare Result is pure.
-- **kotlinx-serialization** with `@SerialName` for JSON discriminators.
-- **Feature-based packages** — everything for signaling lives in `signaling/`, not scattered across `config/`, `handlers/`, `services/`.
+- **Feature-based packages** — health lives in `health/`, WebSocket config in `signaling/`.
 
 ### Testing
 
@@ -152,8 +151,8 @@ Environment variables are managed via [direnv](https://direnv.net/). Copy `.envr
 | `ALLOWED_ORIGINS` | `http://localhost:5173,...` | Backend | CORS allowed origins (comma-separated) |
 | `HEARTBEAT_INTERVAL` | `5000` | Backend | Heartbeat send interval in milliseconds |
 | `LOG_LEVEL` | `INFO` | Backend | Logging level (DEBUG, INFO, WARN, ERROR) |
-| `VITE_SERVICE_URL` | `http://localhost:8080` | Frontend | Local service URL for health checks |
-| `VITE_APP_VERSION` | `dev` | Frontend | Expected backend version (set from git tag at release) |
+
+Frontend config is loaded at runtime via `config.json` (12-factor V — strict separation of build and config). No build-time env vars.
 
 ### Testing
 
@@ -181,7 +180,8 @@ npm run e2e
 |-------|-----------|
 | Frontend | React 19, Vite 7, TypeScript 5.9, Vitest 4, Playwright |
 | Backend | Kotlin 2.3.10, Spring Boot 3.4.1, JVM 21 |
-| Serialization | kotlinx-serialization (Kotlin), schemawax (TypeScript) |
-| Networking | WebSocket (signaling), WebRTC (P2P data channels) |
+| Decoding | schemawax (TypeScript) |
+| Networking | WebSocket (health), WebRTC (P2P data channels) |
+| Crypto | Web Crypto API (PBKDF2 → AES-GCM), CompressionStream |
 | CI/CD | GitHub Actions, GitHub Pages, GitHub Releases |
 | Build | Gradle 9.4 (Kotlin), npm (TypeScript) |
