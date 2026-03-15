@@ -7,6 +7,10 @@ const introduceDecoder = Decoder.object({
   required: { type: Decoder.literal('INTRODUCE'), name: Decoder.string },
 })
 
+const trustDecoder = Decoder.object({
+  required: { type: Decoder.literal('TRUST'), granted: Decoder.boolean },
+})
+
 type Deps = {
   name: string
   emit: (event: PeerEvent) => void
@@ -27,11 +31,13 @@ const gatherIceCandidates = (pc: RTCPeerConnection): Promise<string | undefined>
   })
 
 type ChannelCallbacks = {
+  onOpen: (peerId: string, channel: RTCDataChannel) => void
   onClose: (peerId: string) => void
 }
 
 const wireChannel = (channel: RTCDataChannel, peerId: string, name: string, emit: (event: PeerEvent) => void, cbs: ChannelCallbacks) => {
   channel.onopen = () => {
+    cbs.onOpen(peerId, channel)
     emit({ type: 'PEER_CONNECTED', peerId })
     channel.send(JSON.stringify({ type: 'INTRODUCE', name }))
   }
@@ -42,6 +48,9 @@ const wireChannel = (channel: RTCDataChannel, peerId: string, name: string, emit
       .onSuccess(parsed => {
         maybe(introduceDecoder.decode(parsed)).map(msg => {
           emit({ type: 'PEER_NAMED', peerId, name: msg.name })
+        })
+        maybe(trustDecoder.decode(parsed)).map(msg => {
+          emit({ type: 'PEER_TRUST_UPDATED', peerId, trusts: msg.granted })
         })
       })
   }
@@ -69,9 +78,12 @@ const negotiateAnswer = async (pc: RTCPeerConnection, peerId: string, name: stri
 
 export const createPeerHandler = (deps: Deps): Handler => {
   const connections = new Map<string, RTCPeerConnection>()
+  const dataChannels = new Map<string, RTCDataChannel>()
 
   const cbs: ChannelCallbacks = {
+    onOpen: (peerId, channel) => dataChannels.set(peerId, channel),
     onClose: (peerId) => {
+      dataChannels.delete(peerId)
       const pc = connections.get(peerId)
       if (pc) { pc.close(); connections.delete(peerId) }
       deps.emit({ type: 'PEER_DISCONNECTED', peerId })
@@ -102,6 +114,14 @@ export const createPeerHandler = (deps: Deps): Handler => {
       case 'DISCONNECT': {
         const pc = connections.get(command.peerId)
         if (pc) { pc.close(); connections.delete(command.peerId) }
+        break
+      }
+      case 'GRANT_TRUST': {
+        dataChannels.get(command.peerId)?.send(JSON.stringify({ type: 'TRUST', granted: true }))
+        break
+      }
+      case 'REVOKE_TRUST': {
+        dataChannels.get(command.peerId)?.send(JSON.stringify({ type: 'TRUST', granted: false }))
         break
       }
     }

@@ -347,4 +347,61 @@ describe('Peer Handler', () => {
     })
   })
 
+  describe('trust', () => {
+    it('GRANT_TRUST sends { type: TRUST, granted: true } to the matching peer channel', async () => {
+      const { handleCommand } = await createHandler('Alice')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+      const peerId = (events.find(e => e.type === 'OFFER_CREATED') as { peerId: string }).peerId
+
+      channels[0].onopen?.()
+      handleCommand({ type: 'GRANT_TRUST', peerId })
+
+      expect(channels[0].send).toHaveBeenCalledWith(JSON.stringify({ type: 'TRUST', granted: true }))
+    })
+
+    it('REVOKE_TRUST sends { type: TRUST, granted: false } to the matching peer channel', async () => {
+      const { handleCommand } = await createHandler('Alice')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+      const peerId = (events.find(e => e.type === 'OFFER_CREATED') as { peerId: string }).peerId
+
+      channels[0].onopen?.()
+      handleCommand({ type: 'REVOKE_TRUST', peerId })
+
+      expect(channels[0].send).toHaveBeenCalledWith(JSON.stringify({ type: 'TRUST', granted: false }))
+    })
+
+    it('emits PEER_TRUST_UPDATED with trusts: true when peer sends TRUST granted message', async () => {
+      const { handleCommand } = await createHandler('Alice')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+      const peerId = (events.find(e => e.type === 'OFFER_CREATED') as { peerId: string }).peerId
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'TRUST', granted: true }) })
+
+      expect(events).toContainEqual({ type: 'PEER_TRUST_UPDATED', peerId, trusts: true })
+    })
+
+    it('emits PEER_TRUST_UPDATED with trusts: false when peer sends TRUST revoked message', async () => {
+      const { handleCommand } = await createHandler('Alice')
+      handleCommand({ type: 'CREATE_OFFER' })
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' })))
+      const peerId = (events.find(e => e.type === 'OFFER_CREATED') as { peerId: string }).peerId
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: JSON.stringify({ type: 'TRUST', granted: false }) })
+
+      expect(events).toContainEqual({ type: 'PEER_TRUST_UPDATED', peerId, trusts: false })
+    })
+  })
 })
