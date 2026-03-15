@@ -140,14 +140,29 @@ export const createPeerHandler = (deps: Deps): Handler => {
   }
   const pendingIntros = new Map<string, PendingIntro>()
   const introChannels = new Map<string, string>()
+  const introConnections = new Map<string, string>() // introId → newPeerId for intro-created PCs
 
   const cbs: ChannelCallbacks = {
-    onOpen: (peerId, channel) => dataChannels.set(peerId, channel),
+    onOpen: (peerId, channel) => {
+      dataChannels.set(peerId, channel)
+      for (const [introId, pid] of introConnections) {
+        if (pid === peerId) { introConnections.delete(introId); break }
+      }
+    },
     onClose: (peerId) => {
+      const wasConnected = dataChannels.has(peerId)
       dataChannels.delete(peerId)
       const pc = connections.get(peerId)
       if (pc) { pc.close(); connections.delete(peerId) }
-      deps.emit({ type: 'PEER_DISCONNECTED', peerId })
+      if (wasConnected) deps.emit({ type: 'PEER_DISCONNECTED', peerId })
+      for (const [introId, intro] of [...pendingIntros]) {
+        if (intro.peerId1 === peerId || intro.peerId2 === peerId) {
+          clearTimeout(intro.timer)
+          pendingIntros.delete(introId)
+          const otherPeerId = peerId === intro.peerId1 ? intro.peerId2 : intro.peerId1
+          dataChannels.get(otherPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_DECLINED', introId }))
+        }
+      }
     },
     onMessage: (peerId, parsed) => {
       maybe(introduceDecoder.decode(parsed)).map(msg => {
@@ -170,7 +185,13 @@ export const createPeerHandler = (deps: Deps): Handler => {
         intro.accepted.add(peerId)
         if (intro.accepted.size === 2) {
           clearTimeout(intro.timer)
-          intro.timer = setTimeout(() => pendingIntros.delete(msg.introId), 60000)
+          intro.timer = setTimeout(() => {
+            const staleIntro = pendingIntros.get(msg.introId)
+            if (!staleIntro) return
+            pendingIntros.delete(msg.introId)
+            dataChannels.get(staleIntro.peerId1)?.send(JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId: msg.introId }))
+            dataChannels.get(staleIntro.peerId2)?.send(JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId: msg.introId }))
+          }, 60000)
           dataChannels.get(intro.peerId1)?.send(JSON.stringify({ type: 'CREATE_OFFER_FOR', introId: msg.introId }))
         }
       })
@@ -198,6 +219,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const newPeerId = generatePeerId()
         const pc = deps.createPeerConnection()
         connections.set(newPeerId, pc)
+        introConnections.set(msg.introId, newPeerId)
         negotiateIntroOffer(pc, newPeerId, deps.name, deps.emit, cbs, relayChannel, msg.introId)
       })
       maybe(introductionSdpAnswerDecoder.decode(parsed)).map(msg => {
@@ -210,14 +232,29 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const newPeerId = generatePeerId()
         const pc = deps.createPeerConnection()
         connections.set(newPeerId, pc)
+        introConnections.set(msg.introId, newPeerId)
         negotiateIntroAnswer(pc, newPeerId, deps.name, deps.emit, msg.sdp, cbs, relayChannel, msg.introId)
       })
       maybe(introductionDeclinedDecoder.decode(parsed)).map(msg => {
         introChannels.delete(msg.introId)
+        const introPeerId = introConnections.get(msg.introId)
+        if (introPeerId) {
+          introConnections.delete(msg.introId)
+          const pc = connections.get(introPeerId)
+          connections.delete(introPeerId)
+          pc?.close()
+        }
         deps.emit({ type: 'INTRODUCTION_DECLINED', introId: msg.introId })
       })
       maybe(introductionExpiredDecoder.decode(parsed)).map(msg => {
         introChannels.delete(msg.introId)
+        const introPeerId = introConnections.get(msg.introId)
+        if (introPeerId) {
+          introConnections.delete(msg.introId)
+          const pc = connections.get(introPeerId)
+          connections.delete(introPeerId)
+          pc?.close()
+        }
         deps.emit({ type: 'INTRODUCTION_EXPIRED', introId: msg.introId })
       })
     },

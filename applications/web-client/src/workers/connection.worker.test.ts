@@ -249,6 +249,22 @@ describe('Peer Handler', () => {
       vi.useRealTimers()
     })
 
+    it('when a peer disconnects during a pending introduction, the other party receives INTRODUCTION_DECLINED', async () => {
+      const {alice, bob, carol, aliceBobPeerId, aliceCarolPeerId} = await setupIntroduction()
+
+      alice.handleCommand({type: 'INTRODUCE_PEERS', peerId1: aliceBobPeerId, peerId2: aliceCarolPeerId})
+      await vi.waitFor(() =>
+        expect(bob.events).toContainEqual(expect.objectContaining({type: 'INTRODUCTION_RECEIVED'}))
+      )
+
+      const bobAlicePeerId = (bob.events.find(e => e.type === 'PEER_CONNECTED') as {peerId: string}).peerId
+      bob.handleCommand({type: 'DISCONNECT', peerId: bobAlicePeerId})
+
+      await vi.waitFor(() =>
+        expect(carol.events).toContainEqual(expect.objectContaining({type: 'INTRODUCTION_DECLINED'}))
+      )
+    })
+
     it('does nothing when a peer is unknown', async () => {
       const factory = createFakePeerConnectionFactory()
       const alice = makeHandler('Alice', factory.createPeerConnection)
