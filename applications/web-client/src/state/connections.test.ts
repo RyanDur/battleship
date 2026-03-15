@@ -149,4 +149,26 @@ describe('connectionsReducer', () => {
 
     expect(() => connectionsReducer(frozen, {type: 'PEER_CONNECTED', peerId: 'p2'})).not.toThrow();
   });
+
+  it('ONLINE_PEERS_UPDATED replaces onlinePeers list', () => {
+    const peers = [{peerId: 'p1', name: 'Alice'}, {peerId: 'p2', name: 'Bob'}];
+
+    const next = connectionsReducer(initialState, {type: 'ONLINE_PEERS_UPDATED', peers});
+
+    expect(next.onlinePeers).toEqual(peers);
+  });
+
+  it('ONLINE_PEER_JOINED adds peer to onlinePeers', () => {
+    const next = connectionsReducer(initialState, {type: 'ONLINE_PEER_JOINED', peerId: 'p1', name: 'Alice'});
+
+    expect(next.onlinePeers).toEqual([{peerId: 'p1', name: 'Alice'}]);
+  });
+
+  it('ONLINE_PEER_LEFT removes peer from onlinePeers', () => {
+    const state = {...initialState, onlinePeers: [{peerId: 'p1', name: 'Alice'}, {peerId: 'p2', name: 'Bob'}]};
+
+    const next = connectionsReducer(state, {type: 'ONLINE_PEER_LEFT', peerId: 'p1'});
+
+    expect(next.onlinePeers).toEqual([{peerId: 'p2', name: 'Bob'}]);
+  });
 });
