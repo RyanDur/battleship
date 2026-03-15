@@ -1,14 +1,11 @@
 import {useEffect, useRef, useState} from 'react'
 import {DownloadLink} from './components/DownloadLink'
 import {ServiceHealth} from './components/ServiceHealth'
+import {loadConfig, type Config} from './protocol/config'
 import {fetchDownloadUrl} from './protocol/download'
 import {startHeartbeat} from './protocol/heartbeat'
 import type {HeartbeatHandle, HeartbeatState} from './protocol/heartbeat'
 import {detectPlatform} from './protocol/platform'
-
-const EXPECTED_VERSION = import.meta.env.VITE_APP_VERSION ?? 'dev'
-const SERVICE_URL = import.meta.env.VITE_SERVICE_URL ?? 'http://localhost:8080'
-const WS_HEALTH_URL = SERVICE_URL.replace(/^http/, 'ws') + '/ws/health'
 
 const platform = detectPlatform(navigator.userAgent)
 
@@ -19,25 +16,36 @@ const actionFor = (state: HeartbeatState) => {
 }
 
 const App = () => {
+  const [config, setConfig] = useState<Config | null>(null)
   const [state, setState] = useState<HeartbeatState>({status: 'connecting'})
   const handleRef = useRef<HeartbeatHandle | null>(null)
 
   useEffect(() => {
+    loadConfig().then(setConfig)
+  }, [])
+
+  useEffect(() => {
+    if (!config) return
+    const wsUrl = config.serviceUrl.replace(/^http/, 'ws') + '/ws/health'
     const handle = startHeartbeat(
-      {createWebSocket: (url) => new WebSocket(url), url: WS_HEALTH_URL, expectedVersion: EXPECTED_VERSION},
+      {createWebSocket: (url) => new WebSocket(url), url: wsUrl, expectedVersion: config.version},
       setState
     )
     handleRef.current = handle
     return () => handle.stop()
-  }, [])
+  }, [config])
 
   const retry = () => handleRef.current?.retry()
 
   return (
     <main>
       <h1>Battleship</h1>
-      <ServiceHealth state={state} onRetry={retry}/>
-      <DownloadLink platform={platform} action={actionFor(state)} fetchDownloadUrl={fetchDownloadUrl}/>
+      {config && (
+        <>
+          <ServiceHealth state={state} onRetry={retry}/>
+          <DownloadLink platform={platform} action={actionFor(state)} fetchDownloadUrl={fetchDownloadUrl}/>
+        </>
+      )}
     </main>
   )
 }

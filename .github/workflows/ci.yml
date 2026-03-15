@@ -37,13 +37,6 @@ jobs:
             ./gradlew :applications:signaling-server:bootJar
           fi
 
-      - name: Upload boot jar
-        uses: actions/upload-artifact@v7
-        with:
-          name: boot-jar
-          path: applications/signaling-server/build/libs/
-          if-no-files-found: error
-
       - name: Install frontend dependencies
         working-directory: applications/web-client
         run: npm ci
@@ -55,6 +48,24 @@ jobs:
       - name: Frontend tests
         working-directory: applications/web-client
         run: npm test
+
+      - name: Build frontend dist
+        working-directory: applications/web-client
+        run: npm run build
+
+      - name: Upload boot jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: boot-jar
+          path: applications/signaling-server/build/libs/
+          if-no-files-found: error
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: applications/web-client/dist/
+          if-no-files-found: error
 
   e2e:
     needs: test
@@ -79,6 +90,14 @@ jobs:
           name: boot-jar
           path: applications/signaling-server/build/libs
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: applications/web-client/dist
+
+      - name: Write e2e config
+        run: echo '{"version":"dev","serviceUrl":"http://localhost:8081"}' > applications/web-client/dist/config.json
+
       - name: Install frontend dependencies
         working-directory: applications/web-client
         run: npm ci
@@ -89,7 +108,7 @@ jobs:
 
       - name: Run e2e tests
         working-directory: applications/web-client
-        run: npm run e2e
+        run: npm run e2e:run
 
       - name: Upload Playwright report
         if: failure()
