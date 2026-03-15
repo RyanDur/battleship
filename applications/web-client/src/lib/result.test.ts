@@ -1,4 +1,4 @@
-import { success, failure, tryCatch, type Result } from './result';
+import { success, failure, tryCatch, toError, type Result } from './result';
 
 describe('Result', () => {
   describe('success', () => {
@@ -200,6 +200,21 @@ describe('Result', () => {
 
       expect(toMessage(success('21').andThen(parse)).mapEither(v => v, () => '')).toBe('value: 21');
       expect(toMessage(success('abc').andThen(parse)).mapEither(v => v, () => '')).toBe('error: not a number');
+    });
+  });
+
+  describe('toError', () => {
+    it('returns an Error unchanged when given an Error', () => {
+      const error = new Error('original');
+      expect(toError(error)).toBe(error);
+    });
+
+    it('wraps a non-Error value in a new Error', () => {
+      expect(toError('something went wrong').message).toBe('something went wrong');
+    });
+
+    it('wraps an object in a new Error using String()', () => {
+      expect(toError({code: 42}).message).toBe('[object Object]');
     });
   });
 

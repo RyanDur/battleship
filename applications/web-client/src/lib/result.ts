@@ -48,6 +48,8 @@ export const failure = <F, S = never>(reason: F): Failure<S, F> => Object.freeze
     mapEither: (_onSuccess, onFailure) => onFailure(reason),
 });
 
+export const toError = (e: unknown): Error => e instanceof Error ? e : new Error(String(e));
+
 export const tryCatch = <S, F>(fn: () => S, onError: (error: unknown) => F): Result<S, F> => {
     try { return success(fn()); }
     catch (e) { return failure(onError(e)); }
