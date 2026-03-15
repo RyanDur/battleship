@@ -55,6 +55,9 @@ const ofPromise = <S, F>(promise: Promise<Result<S, F>>): AsyncResult<S, F> => (
         promise.then(result => result.mapEither(onSuccess, onFailure)),
 })
 
+export const fromResultPromise = <S, F>(promise: Promise<Result<S, F>>): AsyncResult<S, F> =>
+    ofPromise(promise)
+
 export const asyncSuccess = <S, F = never>(value: S): AsyncResult<S, F> =>
     ofPromise(Promise.resolve(success(value)))
 
