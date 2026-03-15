@@ -170,6 +170,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         intro.accepted.add(peerId)
         if (intro.accepted.size === 2) {
           clearTimeout(intro.timer)
+          intro.timer = setTimeout(() => pendingIntros.delete(msg.introId), 60000)
           dataChannels.get(intro.peerId1)?.send(JSON.stringify({ type: 'CREATE_OFFER_FOR', introId: msg.introId }))
         }
       })
@@ -211,9 +212,11 @@ export const createPeerHandler = (deps: Deps): Handler => {
         negotiateIntroAnswer(pc, newPeerId, deps.name, deps.emit, msg.sdp, cbs, relayChannel, msg.introId)
       })
       maybe(introductionDeclinedDecoder.decode(parsed)).map(msg => {
+        introChannels.delete(msg.introId)
         deps.emit({ type: 'INTRODUCTION_DECLINED', introId: msg.introId })
       })
       maybe(introductionExpiredDecoder.decode(parsed)).map(msg => {
+        introChannels.delete(msg.introId)
         deps.emit({ type: 'INTRODUCTION_EXPIRED', introId: msg.introId })
       })
     },
@@ -254,9 +257,12 @@ export const createPeerHandler = (deps: Deps): Handler => {
         break
       }
       case 'INTRODUCE_PEERS': {
-        const introId = generatePeerId()
+        const ch1 = dataChannels.get(command.peerId1)
+        const ch2 = dataChannels.get(command.peerId2)
         const name1 = peerNames.get(command.peerId1)
         const name2 = peerNames.get(command.peerId2)
+        if (!ch1 || !ch2 || !name1 || !name2) break
+        const introId = generatePeerId()
         const timer = setTimeout(() => {
           const intro = pendingIntros.get(introId)
           if (!intro) return
@@ -265,13 +271,14 @@ export const createPeerHandler = (deps: Deps): Handler => {
           dataChannels.get(intro.peerId2)?.send(JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId }))
         }, 60000)
         pendingIntros.set(introId, { peerId1: command.peerId1, peerId2: command.peerId2, accepted: new Set(), timer })
-        dataChannels.get(command.peerId1)?.send(JSON.stringify({ type: 'INTRODUCTION', introId, from: deps.name, peer: name2 }))
-        dataChannels.get(command.peerId2)?.send(JSON.stringify({ type: 'INTRODUCTION', introId, from: deps.name, peer: name1 }))
+        ch1.send(JSON.stringify({ type: 'INTRODUCTION', introId, from: deps.name, peer: name2 }))
+        ch2.send(JSON.stringify({ type: 'INTRODUCTION', introId, from: deps.name, peer: name1 }))
         break
       }
       case 'ACCEPT_INTRODUCTION': {
         const introducerPeerId = introChannels.get(command.introId)
         if (introducerPeerId) {
+          introChannels.delete(command.introId)
           dataChannels.get(introducerPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: command.introId, accepted: true }))
         }
         break
@@ -279,6 +286,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
       case 'DECLINE_INTRODUCTION': {
         const introducerPeerId = introChannels.get(command.introId)
         if (introducerPeerId) {
+          introChannels.delete(command.introId)
           dataChannels.get(introducerPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: command.introId, accepted: false }))
         }
         break

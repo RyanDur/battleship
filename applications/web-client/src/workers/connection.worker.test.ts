@@ -249,6 +249,20 @@ describe('Peer Handler', () => {
       vi.useRealTimers()
     })
 
+    it('does nothing when a peer is unknown', async () => {
+      const factory = createFakePeerConnectionFactory()
+      const alice = makeHandler('Alice', factory.createPeerConnection)
+      const bob = makeHandler('Bob', factory.createPeerConnection)
+
+      const {offererPeerId: aliceBobPeerId} = await connectPeers(alice, bob)
+      await vi.waitFor(() => expect(alice.events).toContainEqual(expect.objectContaining({type: 'PEER_NAMED'})))
+
+      alice.handleCommand({type: 'INTRODUCE_PEERS', peerId1: aliceBobPeerId, peerId2: 'nonexistent-peer-id'})
+      await Promise.resolve()
+
+      expect(bob.events).not.toContainEqual(expect.objectContaining({type: 'INTRODUCTION_RECEIVED'}))
+    })
+
     it('when both accept, Bob and Carol end up directly connected to each other', async () => {
       const {alice, bob, carol, aliceBobPeerId, aliceCarolPeerId} = await setupIntroduction()
 
