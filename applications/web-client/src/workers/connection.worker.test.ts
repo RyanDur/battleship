@@ -317,5 +317,23 @@ describe('Peer Handler', () => {
 
       expect(events).toContainEqual({ type: 'PEER_NAMED', peerId, name: 'Bob' })
     })
+
+    it('logs a warning when peer sends malformed JSON', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const { handleCommand } = await createHandler('Alice')
+      handleCommand({ type: 'CREATE_OFFER' })
+
+      completeIceGathering(pcs[0], 'offer-sdp')
+
+      await vi.waitFor(() => {
+        expect(events).toContainEqual(expect.objectContaining({ type: 'OFFER_CREATED' }))
+      })
+
+      channels[0].onopen?.()
+      channels[0].onmessage?.({ data: 'not-valid-json' })
+
+      expect(warn).toHaveBeenCalled()
+      warn.mockRestore()
+    })
   })
 })
