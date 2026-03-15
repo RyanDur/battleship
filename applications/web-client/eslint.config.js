@@ -23,6 +23,9 @@ export default defineConfig([
       'no-restricted-exports': ['error', {restrictDefaultExports: {direct: true}}],
       'func-style': ['error', 'expression'],
       'prefer-arrow-callback': 'error',
+      'semi': ['error', 'always'],
+      'prefer-const': 'error',
+      'no-param-reassign': 'error',
     },
   },
   {
