@@ -11,6 +11,7 @@ import {detectPlatform} from './protocol/platform';
 import {createConnectionStore} from './state/connectionStore';
 import {ConnectionProvider} from './state/ConnectionProvider';
 import {createPeerHandler} from './workers/connection.handler';
+import {startSignaling} from './protocol/signaling';
 
 const platform = detectPlatform(navigator.userAgent);
 
@@ -23,7 +24,6 @@ const actionFor = (state: HeartbeatState) => {
 const App = () => {
   const [config, setConfig] = useState<Awaited<ReturnType<typeof loadConfig>> | null>(null);
   const {state: heartbeat, retry} = useHeartbeat(config);
-
   const [store] = useState(() => createConnectionStore({
     createHandler: (emit) => createPeerHandler({
       name: 'Player',
@@ -38,16 +38,25 @@ const App = () => {
     loadConfig().then(setConfig);
   }, []);
 
+  useEffect(() => {
+    if (!config) return;
+    const signalingUrl = `${config.serviceUrl.replace(/^http/, 'ws')}/ws/signaling`;
+    const signaling = startSignaling({
+      createWebSocket: (url) => new WebSocket(url),
+      url: signalingUrl,
+      name: 'Player',
+    }, (event) => store.handleSignalingEvent(event));
+    return () => signaling.stop();
+  }, [config, store]);
+
   return (
     <main>
       <h1>Battleship</h1>
-      {config && (
-        <ConnectionProvider store={store}>
-          <ServiceHealth state={heartbeat} onRetry={retry}/>
-          <DownloadLink platform={platform} action={actionFor(heartbeat)} fetchDownloadUrl={fetchDownloadUrl}/>
-          <Connections serviceOnline={heartbeat.status === 'online'}/>
-        </ConnectionProvider>
-      )}
+      <ConnectionProvider store={store}>
+        <ServiceHealth state={heartbeat} onRetry={retry}/>
+        <DownloadLink platform={platform} action={actionFor(heartbeat)} fetchDownloadUrl={fetchDownloadUrl}/>
+        <Connections serviceOnline={heartbeat.status === 'online'}/>
+      </ConnectionProvider>
     </main>
   );
 };
