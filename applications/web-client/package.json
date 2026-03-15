@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "eslint . && vitest run",
     "test:watch": "vitest",
     "e2e:run": "playwright test",
     "e2e": "npm run build && node -e \"require('fs').writeFileSync('dist/config.json', JSON.stringify({version:'dev',serviceUrl:'http://localhost:8081'}))\" && npm run e2e:run",

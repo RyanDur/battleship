@@ -41,10 +41,6 @@ jobs:
         working-directory: applications/web-client
         run: npm ci
 
-      - name: Frontend lint
-        working-directory: applications/web-client
-        run: npm run lint
-
       - name: Frontend tests
         working-directory: applications/web-client
         run: npm test
