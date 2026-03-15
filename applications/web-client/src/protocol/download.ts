@@ -1,6 +1,7 @@
 import * as Decoder from 'schemawax';
 import {maybe} from '../lib/maybe';
 import {asyncResult, asyncSuccess, asyncFailure, type AsyncResult} from '../lib/asyncResult';
+import {tryCatch, toError} from '../lib/result';
 import type {Platform} from './platform';
 
 export const RELEASES_PAGE = 'https://github.com/RyanDur/battleship/releases/latest';
@@ -48,7 +49,7 @@ export const fetchDownloadUrl = (platform: Platform, apiUrl = API_URL): AsyncRes
 
   return asyncResult<Response, Error>(fetch(apiUrl))
     .andThen(response => response.ok
-      ? asyncResult<unknown, Error>(response.json())
+      ? tryCatch<Promise<unknown>, Error>(() => response.json(), toError).mapEither<AsyncResult<unknown, Error>>(asyncResult, asyncFailure)
       : asyncFailure(new HttpError(response.status)))
     .andThen(json => findAssetUrl(json, extension));
 };
