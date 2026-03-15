@@ -97,6 +97,38 @@ describe('connectionsReducer', () => {
     expect(next.peers).toEqual([{id: 'p1', name: 'Alice'}, {id: 'p2'}])
   })
 
+  it('TRUST_PEER sets trusted on matching peer', () => {
+    const state = withPeers([{id: 'p1'}, {id: 'p2'}])
+
+    const next = connectionsReducer(state, {type: 'TRUST_PEER', peerId: 'p1'})
+
+    expect(next.peers).toEqual([{id: 'p1', trusted: true}, {id: 'p2'}])
+  })
+
+  it('REVOKE_PEER_TRUST clears trusted on matching peer', () => {
+    const state = withPeers([{id: 'p1', trusted: true}, {id: 'p2'}])
+
+    const next = connectionsReducer(state, {type: 'REVOKE_PEER_TRUST', peerId: 'p1'})
+
+    expect(next.peers).toEqual([{id: 'p1', trusted: false}, {id: 'p2'}])
+  })
+
+  it('PEER_TRUST_UPDATED with trusts: true sets trustsMe on matching peer', () => {
+    const state = withPeers([{id: 'p1'}, {id: 'p2'}])
+
+    const next = connectionsReducer(state, {type: 'PEER_TRUST_UPDATED', peerId: 'p1', trusts: true})
+
+    expect(next.peers).toEqual([{id: 'p1', trustsMe: true}, {id: 'p2'}])
+  })
+
+  it('PEER_TRUST_UPDATED with trusts: false clears trustsMe on matching peer', () => {
+    const state = withPeers([{id: 'p1', trustsMe: true}, {id: 'p2'}])
+
+    const next = connectionsReducer(state, {type: 'PEER_TRUST_UPDATED', peerId: 'p1', trusts: false})
+
+    expect(next.peers).toEqual([{id: 'p1', trustsMe: false}, {id: 'p2'}])
+  })
+
   it('does not mutate existing state', () => {
     const state = withPeers([{id: 'p1'}])
     const frozen = Object.freeze(state)

@@ -1,4 +1,4 @@
-export type Peer = {id: string; name?: string}
+export type Peer = {id: string; name?: string; trusted?: boolean; trustsMe?: boolean}
 
 export type ConnectionFlow =
   | {phase: 'idle'}
@@ -25,6 +25,9 @@ export type ConnectionsAction =
   | {type: 'PEER_CONNECTED'; peerId: string}
   | {type: 'PEER_DISCONNECTED'; peerId: string}
   | {type: 'PEER_NAMED'; peerId: string; name: string}
+  | {type: 'TRUST_PEER'; peerId: string}
+  | {type: 'REVOKE_PEER_TRUST'; peerId: string}
+  | {type: 'PEER_TRUST_UPDATED'; peerId: string; trusts: boolean}
 
 export const initialState: ConnectionsState = {
   flow: {phase: 'idle'},
@@ -65,5 +68,14 @@ export const connectionsReducer = (state: ConnectionsState, action: ConnectionsA
 
     case 'PEER_NAMED':
       return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, name: action.name} : p)}
+
+    case 'TRUST_PEER':
+      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trusted: true} : p)}
+
+    case 'REVOKE_PEER_TRUST':
+      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trusted: false} : p)}
+
+    case 'PEER_TRUST_UPDATED':
+      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trustsMe: action.trusts} : p)}
   }
 }
