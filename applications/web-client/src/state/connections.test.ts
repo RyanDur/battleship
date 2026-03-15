@@ -129,6 +129,20 @@ describe('connectionsReducer', () => {
     expect(next.peers).toEqual([{id: 'p1', trustsMe: false}, {id: 'p2'}])
   })
 
+  it('INTRODUCTION_RECEIVED adds to pendingIntroductions', () => {
+    const next = connectionsReducer(initialState, {type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'})
+
+    expect(next.pendingIntroductions).toEqual([{introId: 'i1', from: 'Alice', peer: 'Carol'}])
+  })
+
+  it('INTRODUCTION_RESOLVED removes matching pendingIntroduction', () => {
+    const state = {...initialState, pendingIntroductions: [{introId: 'i1', from: 'Alice', peer: 'Carol'}]}
+
+    const next = connectionsReducer(state, {type: 'INTRODUCTION_RESOLVED', introId: 'i1'})
+
+    expect(next.pendingIntroductions).toEqual([])
+  })
+
   it('does not mutate existing state', () => {
     const state = withPeers([{id: 'p1'}])
     const frozen = Object.freeze(state)
