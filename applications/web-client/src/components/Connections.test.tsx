@@ -1,13 +1,7 @@
 import {render, screen} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {Connections} from './Connections'
-
-type FlowPhase =
-  | {phase: 'idle'}
-  | {phase: 'creating'}
-  | {phase: 'offer-ready'; code: string}
-  | {phase: 'joining'}
-  | {phase: 'answer-ready'; code: string}
+import type {FlowPhase} from './Connections'
 
 const noop = () => {}
 
