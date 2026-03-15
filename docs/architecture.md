@@ -20,7 +20,14 @@ graph TB
         subgraph "UI"
             APP[App] --> SHC[ServiceHealth]
             APP --> DL[DownloadLink]
+            APP --> CONN[Connections]
             CS[ConnectionStatus]
+        end
+        subgraph "State"
+            CP[ConnectionProvider]
+            CST[connectionStore]
+            RED[connections reducer]
+            UCH[useConnection hooks]
         end
         subgraph "Protocol"
             HB[startHeartbeat]
@@ -40,6 +47,11 @@ graph TB
     HB -.->|connects to| HH
     DL -.->|uses| DLProto
     HB -.->|uses| RS
+    CONN -.->|uses| UCH
+    UCH -.->|reads| CP
+    CP -.->|wraps| CST
+    CST -.->|dispatches to| RED
+    CST -.->|delegates to| PH
     PH -.->|uses| WT
     PH -.->|encrypts via| CC
 
@@ -51,6 +63,11 @@ graph TB
     style APP fill:#2e7d32,stroke:#1b5e20,color:#fff
     style SHC fill:#2e7d32,stroke:#1b5e20,color:#fff
     style DL fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style CONN fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style CP fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style CST fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style RED fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style UCH fill:#2e7d32,stroke:#1b5e20,color:#fff
     style HB fill:#2e7d32,stroke:#1b5e20,color:#fff
     style RS fill:#2e7d32,stroke:#1b5e20,color:#fff
     style PH fill:#2e7d32,stroke:#1b5e20,color:#fff
@@ -71,8 +88,13 @@ graph TB
 | App | Loads runtime config, lifts heartbeat state, derives download action |
 | ServiceHealth | Display component — online / reconnecting / offline |
 | DownloadLink | Download / Upgrade / hidden — GitHub API asset lookup |
+| Connections | Create/join offers, peer list with trust/introduce/disconnect, pending introductions |
+| ConnectionProvider | React context provider wrapping connectionStore |
+| connectionStore | Zustand-style store — delegates commands to PeerHandler, exposes state |
+| connections reducer | Pure reducer — peers, flow, pending introductions |
+| useConnection hooks | `useConnectionStore()` and `useConnectionState(selector)` for components |
 | startHeartbeat | WebSocket state machine with reconnect + retry |
-| PeerHandler | Multi-peer WebRTC connection manager (`Map<peerId, RTCPeerConnection>`) |
+| PeerHandler | Multi-peer WebRTC manager — connections, data channels, trust, introductions with SDP relay |
 | ConnectionCode | Compress (deflate-raw) + encrypt (PBKDF2 → AES-GCM) SDP to base64url codes |
 | Config Loader | Fetches `config.json` at runtime (12-factor V) |
 | ConnectionStatus | UI component (not yet wired) |
@@ -81,7 +103,7 @@ graph TB
 | Result / Maybe / AsyncResult | Frozen immutable types (TypeScript) |
 | Platform Detection | macOS / Windows / Linux |
 
-> **Status (post Iteration 4):** Backend serves health endpoints only — signaling relay removed. Frontend has multi-peer WebRTC handler (identified connections via `crypto.randomUUID()`), encrypted connection codes (Web Crypto), heartbeat, download link, platform detection, runtime config loading. No UI for creating/joining connections yet.
+> **Status (post Iteration 4):** Backend serves health endpoints only — signaling relay removed. Frontend has full P2P connection management: multi-peer WebRTC handler, encrypted connection codes (Web Crypto), trust model (grant/revoke per peer), peer introductions with SDP relay through a mutual trusted peer, resource cleanup on cancel/decline/expire/disconnect. UI includes create/join flow, peer list with trust/introduce/disconnect controls, and pending introduction notifications. State managed via context provider, store, and pure reducer with React hooks.
 > Green = implemented and tested.
 
 ---
@@ -139,6 +161,47 @@ sequenceDiagram
 > - Wrong passphrase produces a clear `DECRYPT_FAILED` error
 > - Data channel `onopen`/`onclose` drives `PEER_CONNECTED`/`PEER_DISCONNECTED` (not ICE state)
 > - Handler supports 0-to-many simultaneous connections, each identified by `peerId`
+
+---
+
+## Introduction Flow
+
+When Alice is connected to both Bob and Carol, and both trust her, she can introduce them so they connect directly without exchanging codes.
+
+```mermaid
+sequenceDiagram
+    participant B as Bob
+    participant A as Alice (introducer)
+    participant C as Carol
+
+    Note over A: Alice clicks Introduce on Bob's row, selects Carol
+
+    A->>B: INTRODUCTION { introId, from: Alice, peer: Carol }
+    A->>C: INTRODUCTION { introId, from: Alice, peer: Bob }
+
+    B->>A: INTRODUCTION_RESPONSE { accepted: true }
+    C->>A: INTRODUCTION_RESPONSE { accepted: true }
+
+    Note over A: Both accepted — Alice tells Bob to create an offer
+
+    A->>B: CREATE_OFFER_FOR { introId }
+    B->>B: Create RTCPeerConnection + data channel
+    B->>A: RELAY_SDP { introId, peerId, sdp (offer) }
+    A->>C: INTRODUCTION_SDP { introId, sdp (offer) }
+    C->>C: Create RTCPeerConnection + set remote description
+    C->>A: RELAY_SDP_ANSWER { introId, sdp (answer) }
+    A->>B: INTRODUCTION_SDP_ANSWER { introId, peerId, sdp (answer) }
+
+    B<-->C: WebRTC Data Channel established directly
+```
+
+> **Key design decisions:**
+> - Alice relays SDP between Bob and Carol through existing data channels (no server)
+> - Both parties must explicitly accept before SDP exchange begins
+> - Decline by either party notifies the other via `INTRODUCTION_DECLINED`
+> - 60-second timeout sends `INTRODUCTION_EXPIRED` to both parties
+> - Disconnecting during a pending introduction auto-declines
+> - Introduction-created PeerConnections are cleaned up on cancel/decline/expire
 
 ---
 
