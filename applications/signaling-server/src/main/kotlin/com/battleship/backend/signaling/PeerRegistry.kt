@@ -1,9 +1,11 @@
 package com.battleship.backend.signaling
 
+import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
 
 data class PeerInfo(val peerId: String, val name: String)
 
+@Component
 class PeerRegistry {
     private val peers = ConcurrentHashMap<String, String>()
 
