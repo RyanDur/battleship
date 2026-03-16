@@ -80,7 +80,7 @@ export const startSignaling = (
     currentWs.onclose = () => undefined;
   };
 
-  fetch(config.sessionUrl, {credentials: 'include'})
+  void fetch(config.sessionUrl, {credentials: 'include'})
     .catch(() => undefined)
     .then(() => connect());
 

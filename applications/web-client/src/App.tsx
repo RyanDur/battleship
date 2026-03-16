@@ -23,7 +23,7 @@ const App = () => {
   const {state: heartbeat, retry} = useHeartbeat(config);
 
   useEffect(() => {
-    loadConfig().then(setConfig);
+    void loadConfig().then(setConfig);
   }, []);
 
   const store = useMemo(() => {
