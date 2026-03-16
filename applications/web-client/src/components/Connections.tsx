@@ -36,16 +36,16 @@ const PeerRow = ({peer, otherTrustingPeers}: {peer: Peer; otherTrustingPeers: Pe
       {introducing && otherTrustingPeers.map(other => (
         <button
           key={other.id}
-          onClick={() => { store.introducePeers(peer.id, other.id); setIntroducing(false); }}
+          onClick={() => { store.dispatch({type: 'INTRODUCE_PEERS', peerId1: peer.id, peerId2: other.id}); setIntroducing(false); }}
         >
           {other.name ?? 'Unknown'}
         </button>
       ))}
       {peer.trusted
-        ? <button onClick={() => store.revokeTrust(peer.id)}>Revoke trust</button>
-        : <button onClick={() => store.grantTrust(peer.id)}>Trust</button>
+        ? <button onClick={() => store.dispatch({type: 'REVOKE_TRUST', peerId: peer.id})}>Revoke trust</button>
+        : <button onClick={() => store.dispatch({type: 'GRANT_TRUST', peerId: peer.id})}>Trust</button>
       }
-      <button onClick={() => store.disconnect(peer.id)}>Disconnect</button>
+      <button onClick={() => store.dispatch({type: 'DISCONNECT', peerId: peer.id})}>Disconnect</button>
     </li>
   );
 };
@@ -79,7 +79,7 @@ export const Connections = ({serviceOnline}: Props) => {
               value={responseCode}
               onChange={e => setResponseCode(e.target.value)}
             />
-            <button onClick={() => store.acceptAnswer(responseCode)}>Connect</button>
+            <button onClick={() => store.dispatch({type: 'ACCEPT_ANSWER_CODE', responseCode})}>Connect</button>
           </div>
         </div>
       );
@@ -100,7 +100,7 @@ export const Connections = ({serviceOnline}: Props) => {
 
     if (formMode === 'create') {
       return (
-        <form onSubmit={e => { e.preventDefault(); store.createOffer(passphrase); }}>
+        <form onSubmit={e => { e.preventDefault(); store.dispatch({type: 'CREATE_OFFER', passphrase}); }}>
           <label htmlFor="create-passphrase">Passphrase</label>
           <input
             id="create-passphrase"
@@ -114,7 +114,7 @@ export const Connections = ({serviceOnline}: Props) => {
 
     if (formMode === 'join') {
       return (
-        <form onSubmit={e => { e.preventDefault(); store.joinOffer(offerCode, passphrase); }}>
+        <form onSubmit={e => { e.preventDefault(); store.dispatch({type: 'JOIN_OFFER', code: offerCode, passphrase}); }}>
           <label htmlFor="join-passphrase">Passphrase</label>
           <input
             id="join-passphrase"
@@ -166,8 +166,8 @@ export const Connections = ({serviceOnline}: Props) => {
           {pendingIntroductions.map(intro => (
             <li key={intro.introId}>
               {intro.from} wants to introduce you to {intro.peer}
-              <button onClick={() => store.acceptIntroduction(intro.introId)}>Accept</button>
-              <button onClick={() => store.declineIntroduction(intro.introId)}>Decline</button>
+              <button onClick={() => store.dispatch({type: 'ACCEPT_INTRODUCTION', introId: intro.introId})}>Accept</button>
+              <button onClick={() => store.dispatch({type: 'DECLINE_INTRODUCTION', introId: intro.introId})}>Decline</button>
             </li>
           ))}
         </ul>
