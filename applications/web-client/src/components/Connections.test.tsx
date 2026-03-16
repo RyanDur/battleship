@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import {Connections} from './Connections';
 import {ConnectionProvider} from '../state/ConnectionProvider';
 import {createConnectionStore, createHandlerMiddleware, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
+import type {ConnectionsAction} from '../state/connections';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 
 const makeStore = () => {
@@ -312,6 +313,41 @@ describe('Connections', () => {
       await act(async () => store.dispatch({type: 'ONLINE_PEER_LEFT', peerId: 'p1'}));
 
       expect(screen.getByText(/offline/i)).toBeInTheDocument();
+    });
+
+    it('shows Reconnect button for online previous peer', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true}]}));
+
+      expect(screen.getByRole('button', {name: /reconnect/i})).toBeInTheDocument();
+    });
+
+    it('does not show Reconnect button for offline previous peer', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+
+      expect(screen.queryByRole('button', {name: /reconnect/i})).not.toBeInTheDocument();
+    });
+
+    it('clicking Reconnect dispatches RECONNECT_VIA_SERVER with correct peer', async () => {
+      const user = userEvent.setup();
+      const factory = createFakePeerConnectionFactory();
+      const dispatched: ConnectionsAction[] = [];
+      const store = createConnectionStore(applyMiddleware([
+        createHandlerMiddleware({name: 'Player', createPeerConnection: factory.createPeerConnection}),
+        encodingMiddleware,
+        codecMiddleware,
+        () => (action) => dispatched.push(action),
+      ]));
+      render(<ConnectionProvider store={store}><Connections serviceOnline={true}/></ConnectionProvider>);
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true}]}));
+
+      await user.click(screen.getByRole('button', {name: /reconnect/i}));
+
+      expect(dispatched).toContainEqual({type: 'RECONNECT_VIA_SERVER', signalingPeerId: 'p1', name: 'Bob'});
     });
   });
 

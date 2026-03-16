@@ -50,12 +50,18 @@ const PeerRow = ({peer, otherTrustingPeers}: {peer: Peer; otherTrustingPeers: Pe
   );
 };
 
-const PreviousPeerRow = ({peer}: {peer: PreviousPeer}) => (
-  <li>
-    {peer.name}
-    <span>{peer.online ? 'Online' : 'Offline'}</span>
-  </li>
-);
+const PreviousPeerRow = ({peer}: {peer: PreviousPeer}) => {
+  const store = useConnectionStore();
+  return (
+    <li>
+      {peer.name}
+      <span>{peer.online ? 'Online' : 'Offline'}</span>
+      {peer.online && (
+        <button onClick={() => store.dispatch({type: 'RECONNECT_VIA_SERVER', signalingPeerId: peer.peerId, name: peer.name})}>Reconnect</button>
+      )}
+    </li>
+  );
+};
 
 export const Connections = ({serviceOnline}: Props) => {
   const store = useConnectionStore();
