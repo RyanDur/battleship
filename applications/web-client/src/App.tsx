@@ -6,7 +6,6 @@ import {loadConfig} from './protocol/config';
 import {fetchDownloadUrl} from './protocol/download';
 import type {HeartbeatState} from './protocol/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
-import {asyncResult} from './lib/asyncResult';
 import {detectPlatform} from './protocol/platform';
 import {createConnectionStore, createHandlerMiddleware, encodingMiddleware, codecMiddleware, createSignalingMiddleware, applyMiddleware} from './state/connectionStore';
 import {ConnectionProvider} from './state/ConnectionProvider';
@@ -20,11 +19,11 @@ const actionFor = (state: HeartbeatState) => {
 };
 
 const App = () => {
-  const [config, setConfig] = useState<Awaited<ReturnType<typeof loadConfig>> | null>(null);
+  const [config, setConfig] = useState<import('./protocol/config').Config | null>(null);
   const {state: heartbeat, retry} = useHeartbeat(config);
 
   useEffect(() => {
-    asyncResult(loadConfig()).onSuccess(setConfig);
+    loadConfig().onSuccess(setConfig);
   }, []);
 
   const store = useMemo(() => {

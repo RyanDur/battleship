@@ -14,21 +14,24 @@ const configStub = (config: unknown) => ({
 describe('loadConfig', () => {
   it('returns version and serviceUrl from config.json', async () => {
     const server = await createStubServer(configStub({version: '1.2.3', serviceUrl: 'http://localhost:9090'}));
-    try {
-      const config = await loadConfig(`${server.url}/config.json`);
+    const result = await loadConfig(`${server.url}/config.json`).value;
+    await server.close();
 
-      expect(config.version).toBe('1.2.3');
-      expect(config.serviceUrl).toBe('http://localhost:9090');
-    } finally {
-      await server.close();
+    expect(result.kind).toBe('success');
+    if (result.kind === 'success') {
+      expect(result.value.version).toBe('1.2.3');
+      expect(result.value.serviceUrl).toBe('http://localhost:9090');
     }
   });
 
   it('falls back to defaults when server is unreachable', async () => {
-    const config = await loadConfig('http://127.0.0.1:1/config.json');
+    const result = await loadConfig('http://127.0.0.1:1/config.json').value;
 
-    expect(config.version).toBe('dev');
-    expect(config.serviceUrl).toBe('http://localhost:8080');
+    expect(result.kind).toBe('success');
+    if (result.kind === 'success') {
+      expect(result.value.version).toBe('dev');
+      expect(result.value.serviceUrl).toBe('http://localhost:8080');
+    }
   });
 
   it('falls back to defaults when response is not ok', async () => {
@@ -37,25 +40,25 @@ describe('loadConfig', () => {
         'GET /config.json': (_req, res) => { res.writeHead(404); res.end(); },
       },
     });
-    try {
-      const config = await loadConfig(`${server.url}/config.json`);
+    const result = await loadConfig(`${server.url}/config.json`).value;
+    await server.close();
 
-      expect(config.version).toBe('dev');
-      expect(config.serviceUrl).toBe('http://localhost:8080');
-    } finally {
-      await server.close();
+    expect(result.kind).toBe('success');
+    if (result.kind === 'success') {
+      expect(result.value.version).toBe('dev');
+      expect(result.value.serviceUrl).toBe('http://localhost:8080');
     }
   });
 
   it('falls back to defaults when config.json has invalid shape', async () => {
     const server = await createStubServer(configStub({unexpected: 'fields'}));
-    try {
-      const config = await loadConfig(`${server.url}/config.json`);
+    const result = await loadConfig(`${server.url}/config.json`).value;
+    await server.close();
 
-      expect(config.version).toBe('dev');
-      expect(config.serviceUrl).toBe('http://localhost:8080');
-    } finally {
-      await server.close();
+    expect(result.kind).toBe('success');
+    if (result.kind === 'success') {
+      expect(result.value.version).toBe('dev');
+      expect(result.value.serviceUrl).toBe('http://localhost:8080');
     }
   });
 });

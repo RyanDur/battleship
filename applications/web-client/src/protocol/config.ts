@@ -1,4 +1,5 @@
 import * as Decoder from 'schemawax';
+import {asyncSuccess, asyncTryCatch, type AsyncResult} from '../lib/asyncResult';
 
 export type Config = {
   version: string
@@ -17,8 +18,9 @@ const DEFAULT_CONFIG: Config = {
   serviceUrl: 'http://localhost:8080',
 };
 
-export const loadConfig = (url = `${import.meta.env.BASE_URL}config.json`): Promise<Config> =>
-  fetch(url)
-    .then(response => response.ok ? response.json() : Promise.reject())
-    .then(json => configDecoder.decode(json) ?? DEFAULT_CONFIG)
-    .catch(() => DEFAULT_CONFIG);
+export const loadConfig = (url = `${import.meta.env.BASE_URL}config.json`): AsyncResult<Config, never> =>
+  asyncTryCatch(() => fetch(url))
+    .andThen(response => response.ok
+      ? asyncTryCatch(() => response.json() as Promise<unknown>).map(json => configDecoder.decode(json) ?? DEFAULT_CONFIG)
+      : asyncSuccess<Config, Error>(DEFAULT_CONFIG))
+    .or(() => asyncSuccess(DEFAULT_CONFIG));
