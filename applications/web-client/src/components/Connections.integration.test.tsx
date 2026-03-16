@@ -4,10 +4,66 @@ import {Connections} from './Connections';
 import {ConnectionProvider} from '../state/ConnectionProvider';
 import {createConnectionStore, createHandlerMiddleware, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import type {ConnectionStore} from '../state/connectionStore';
+import type {ConnectionStore, MiddlewareFactory} from '../state/connectionStore';
 import type {ConnectionFlow} from '../state/connections';
 
 describe('Connections integration', () => {
+  it('Alice connects to Bob via signaling relay', async () => {
+    const factory = createFakePeerConnectionFactory();
+    const user = userEvent.setup();
+
+    const alice: {store?: ConnectionStore} = {};
+    const bob: {store?: ConnectionStore} = {};
+
+    const makeRelayMiddleware = (myName: string, mySignalingPeerId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
+      (_deps) => (action) => {
+        if (action.type === 'RELAY_OFFER') {
+          getOther().dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: mySignalingPeerId, name: myName, sdp: action.sdp});
+        } else if (action.type === 'RELAY_ANSWER') {
+          getOther().dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: mySignalingPeerId, sdp: action.sdp});
+        }
+      };
+
+    alice.store = createConnectionStore(applyMiddleware([
+      createHandlerMiddleware({name: 'Alice', createPeerConnection: factory.createPeerConnection}),
+      encodingMiddleware,
+      codecMiddleware,
+      makeRelayMiddleware('Alice', 'alice-sig', () => bob.store!),
+    ]));
+
+    bob.store = createConnectionStore(applyMiddleware([
+      createHandlerMiddleware({name: 'Bob', createPeerConnection: factory.createPeerConnection}),
+      encodingMiddleware,
+      codecMiddleware,
+      makeRelayMiddleware('Bob', 'bob-sig', () => alice.store!),
+    ]));
+
+    const aliceStore = alice.store;
+    const bobStore = bob.store;
+
+    render(
+      <div>
+        <div data-testid="alice">
+          <ConnectionProvider store={aliceStore}><Connections serviceOnline={true} /></ConnectionProvider>
+        </div>
+        <div data-testid="bob">
+          <ConnectionProvider store={bobStore}><Connections serviceOnline={true} /></ConnectionProvider>
+        </div>
+      </div>
+    );
+
+    const aliceUI = within(screen.getByTestId('alice'));
+
+    await act(async () => aliceStore.dispatch({type: 'ONLINE_PEERS_UPDATED', peers: [{peerId: 'bob-sig', name: 'Bob'}]}));
+
+    await user.click(aliceUI.getByRole('button', {name: /connect/i}));
+
+    await waitFor(() => {
+      expect(aliceStore.getState().peers).toHaveLength(1);
+      expect(bobStore.getState().peers).toHaveLength(1);
+    });
+  });
+
   it('Bob and Carol connect directly after Alice introduces them', async () => {
     const factory = createFakePeerConnectionFactory();
     const user = userEvent.setup();

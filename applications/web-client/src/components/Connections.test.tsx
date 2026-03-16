@@ -313,20 +313,5 @@ describe('Connections', () => {
 
       expect(screen.getByRole('button', {name: /connect/i})).toBeInTheDocument();
     });
-
-    it('clicking Connect dispatches CONNECT_VIA_SERVER with the peer id and name', async () => {
-      const user = userEvent.setup();
-      const {store} = renderConnections();
-
-      await act(async () => store.dispatch({type: 'ONLINE_PEERS_UPDATED', peers: [{peerId: 'sig-1', name: 'Alice'}]}));
-
-      const dispatched: unknown[] = [];
-      const origDispatch = store.dispatch.bind(store);
-      store.dispatch = (action) => { dispatched.push(action); origDispatch(action); };
-
-      await user.click(screen.getByRole('button', {name: /connect/i}));
-
-      expect(dispatched).toContainEqual({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'sig-1', name: 'Alice'});
-    });
   });
 });
