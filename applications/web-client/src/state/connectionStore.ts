@@ -29,19 +29,19 @@ export const createConnectionStore = (middlewareFactory?: MiddlewareFactory): Co
   let state = initialState;
   const listeners = new Set<() => void>();
 
-  const dispatch = (action: ConnectionsAction) => {
-    state = connectionsReducer(state, action);
-    listeners.forEach(fn => fn());
-    middleware(action);
-  };
-
-  const middleware = middlewareFactory ? middlewareFactory({dispatch, getState: () => state}) : () => undefined;
-
-  return {
+  const store: ConnectionStore = {
     getState: () => state,
     subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
-    dispatch,
+    dispatch: (action: ConnectionsAction) => {
+      middleware(action);
+      state = connectionsReducer(state, action);
+      listeners.forEach(fn => fn());
+    },
   };
+
+  const middleware = middlewareFactory ? middlewareFactory({dispatch: (action) => store.dispatch(action), getState: () => state}) : () => undefined;
+
+  return store;
 };
 
 type HandlerMiddlewareConfig = {
@@ -75,6 +75,10 @@ export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMid
         dispatch({type: 'RELAY_OFFER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
       }
       else if (event.type === 'SERVER_ANSWER_CREATED') dispatch({type: 'RELAY_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
+      else if (event.type === 'PEER_CONNECTION_UNSTABLE') dispatch({type: 'PEER_CONNECTION_UNSTABLE', peerId: event.peerId});
+      else if (event.type === 'PEER_CONNECTION_RESTORED') dispatch({type: 'PEER_CONNECTION_RESTORED', peerId: event.peerId});
+      else if (event.type === 'ICE_RESTART_OFFER_CREATED') dispatch({type: 'RELAY_ICE_RESTART', targetPeerId: event.signalingPeerId, sdp: event.sdp});
+      else if (event.type === 'ICE_RESTART_ANSWER_CREATED') dispatch({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
     };
 
     const handler = createPeerHandler({name, createPeerConnection, emit});
@@ -93,6 +97,8 @@ export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMid
       else if (action.type === 'RECONNECT_VIA_SERVER') handler.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: action.signalingPeerId, name: action.name});
       else if (action.type === 'SERVER_OFFER_RECEIVED') handler.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: action.signalingPeerId, name: action.name, sdp: action.sdp});
       else if (action.type === 'SERVER_ANSWER_RECEIVED') handler.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
+      else if (action.type === 'ICE_RESTART_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
+      else if (action.type === 'ICE_RESTART_ANSWER_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
     };
   };
 
@@ -101,12 +107,10 @@ export const encodingMiddleware: MiddlewareFactory =
     (action: ConnectionsAction) => {
       if (action.type !== 'OFFER_SDP_READY' && action.type !== 'ANSWER_SDP_READY') return;
       const {flow} = getState();
-      if (flow.phase === 'encoding-offer') {
-        const {peerId, sdp, passphrase} = flow;
-        encodeConnectionCode(sdp, passphrase).onSuccess(code => dispatch({type: 'OFFER_ENCODED', peerId, code}));
-      } else if (flow.phase === 'encoding-answer') {
-        const {sdp, passphrase} = flow;
-        encodeConnectionCode(sdp, passphrase).onSuccess(code => dispatch({type: 'ANSWER_ENCODED', code}));
+      if (action.type === 'OFFER_SDP_READY' && flow.phase === 'creating') {
+        encodeConnectionCode(action.sdp, flow.passphrase).onSuccess(code => dispatch({type: 'OFFER_ENCODED', peerId: action.peerId, code}));
+      } else if (action.type === 'ANSWER_SDP_READY' && flow.phase === 'joining') {
+        encodeConnectionCode(action.sdp, flow.passphrase).onSuccess(code => dispatch({type: 'ANSWER_ENCODED', code}));
       }
     };
 

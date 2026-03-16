@@ -11,7 +11,7 @@ const makeStore = (extra: MiddlewareFactory[] = []) => {
     codecMiddleware,
     ...extra,
   ]));
-  return {store};
+  return {store, factory};
 };
 
 describe('connectionStore', () => {
@@ -185,6 +185,57 @@ describe('connectionStore', () => {
       store.dispatch({type: 'ONLINE_PEER_LEFT', peerId: 'p1'});
 
       expect(store.getState().onlinePeers).toEqual([]);
+    });
+  });
+
+  describe('ICE restart', () => {
+    const connectViaServerAndGetOfferSdp = async (store: ReturnType<typeof makeStore>['store']) => {
+      const dispatched: ConnectionsAction[] = [];
+      store.dispatch = ((original) => (action: ConnectionsAction) => {
+        dispatched.push(action);
+        return original(action);
+      })(store.dispatch);
+
+      store.dispatch({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'bob-sig', name: 'Bob'});
+      await vi.waitFor(() => expect(dispatched).toContainEqual(expect.objectContaining({type: 'RELAY_OFFER'})));
+      return (dispatched.find(a => a.type === 'RELAY_OFFER') as {sdp: string}).sdp;
+    };
+
+    it('ICE disconnect marks peer as unstable in store state', async () => {
+      const {store, factory} = makeStore();
+
+      const offerSdp = await connectViaServerAndGetOfferSdp(store);
+      factory.simulateIceStateChange(offerSdp, 'disconnected');
+
+      await vi.waitFor(() =>
+        expect(Object.values(store.getState().peerConnectionHealth)).toContain('unstable')
+      );
+    });
+
+    it('ICE recovery marks peer as stable in store state', async () => {
+      const {store, factory} = makeStore();
+
+      const offerSdp = await connectViaServerAndGetOfferSdp(store);
+      factory.simulateIceStateChange(offerSdp, 'disconnected');
+      await vi.waitFor(() => expect(Object.values(store.getState().peerConnectionHealth)).toContain('unstable'));
+
+      factory.simulateIceStateChange(offerSdp, 'connected');
+
+      await vi.waitFor(() =>
+        expect(Object.values(store.getState().peerConnectionHealth)).toContain('stable')
+      );
+    });
+
+    it('ICE disconnect triggers RELAY_ICE_RESTART dispatch', async () => {
+      const dispatched: ConnectionsAction[] = [];
+      const {store, factory} = makeStore([() => (action) => dispatched.push(action)]);
+
+      const offerSdp = await connectViaServerAndGetOfferSdp(store);
+      factory.simulateIceStateChange(offerSdp, 'disconnected');
+
+      await vi.waitFor(() =>
+        expect(dispatched).toContainEqual(expect.objectContaining({type: 'RELAY_ICE_RESTART', targetPeerId: 'bob-sig'}))
+      );
     });
   });
 
