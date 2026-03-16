@@ -2,6 +2,7 @@ import * as Decoder from 'schemawax';
 import {maybe} from '../lib/maybe';
 import {tryCatch} from '../lib/result';
 import {asyncTryCatch} from '../lib/asyncResult';
+import type {PreviousPeer} from '../state/connections';
 
 export type OnlinePeer = {peerId: string; name: string}
 
@@ -11,6 +12,7 @@ export type SignalingEvent =
   | {type: 'PEER_LEFT'; peerId: string}
   | {type: 'OFFER_RECEIVED'; fromPeerId: string; name: string; sdp: string}
   | {type: 'ANSWER_RECEIVED'; fromPeerId: string; sdp: string}
+  | {type: 'PREVIOUS_PEERS'; peers: PreviousPeer[]}
 
 export type SignalingHandle = {
   stop: () => void
@@ -25,6 +27,10 @@ export type SignalingConfig = {
 }
 
 const peerDecoder = Decoder.object({required: {peerId: Decoder.string, name: Decoder.string}});
+
+const previousPeerDecoder = Decoder.object({
+  required: {peerId: Decoder.string, name: Decoder.string, online: Decoder.boolean},
+});
 
 const peersDecoder = Decoder.object({
   required: {type: Decoder.literal('PEERS'), peers: Decoder.array(peerDecoder)},
@@ -44,6 +50,10 @@ const offerReceivedDecoder = Decoder.object({
 
 const answerReceivedDecoder = Decoder.object({
   required: {type: Decoder.literal('ANSWER_RECEIVED'), fromPeerId: Decoder.string, sdp: Decoder.string},
+});
+
+const previousPeersDecoder = Decoder.object({
+  required: {type: Decoder.literal('PREVIOUS_PEERS'), peers: Decoder.array(previousPeerDecoder)},
 });
 
 export const startSignaling = (
@@ -74,7 +84,8 @@ export const startSignaling = (
             .or(() => maybe(peerJoinedDecoder.decode(parsed)).map(msg => onEvent({type: 'PEER_JOINED', peerId: msg.peerId, name: msg.name})))
             .or(() => maybe(peerLeftDecoder.decode(parsed)).map(msg => onEvent({type: 'PEER_LEFT', peerId: msg.peerId})))
             .or(() => maybe(offerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'OFFER_RECEIVED', fromPeerId: msg.fromPeerId, name: msg.name, sdp: msg.sdp})))
-            .or(() => maybe(answerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'ANSWER_RECEIVED', fromPeerId: msg.fromPeerId, sdp: msg.sdp})));
+            .or(() => maybe(answerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'ANSWER_RECEIVED', fromPeerId: msg.fromPeerId, sdp: msg.sdp})))
+            .or(() => maybe(previousPeersDecoder.decode(parsed)).map(msg => onEvent({type: 'PREVIOUS_PEERS', peers: msg.peers})));
         });
     };
 

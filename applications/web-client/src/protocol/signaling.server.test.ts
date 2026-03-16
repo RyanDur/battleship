@@ -104,6 +104,16 @@ describe('startSignaling', () => {
     await cleanup();
   });
 
+  it('emits PREVIOUS_PEERS when server sends PREVIOUS_PEERS', async () => {
+    const {events, getConn, cleanup} = await connect();
+
+    const peers = [{peerId: 'p1', name: 'Alice', online: false}];
+    getConn().send(JSON.stringify({type: 'PREVIOUS_PEERS', peers}));
+
+    await vi.waitFor(() => expect(events).toContainEqual({type: 'PREVIOUS_PEERS', peers}));
+    await cleanup();
+  });
+
   it('stop prevents further events', async () => {
     const {events, handle, getConn, cleanup} = await connect();
     handle.stop();
