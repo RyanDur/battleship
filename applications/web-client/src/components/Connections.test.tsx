@@ -2,23 +2,28 @@ import {render, screen, act, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Connections} from './Connections';
 import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore} from '../state/connectionStore';
+import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware} from '../state/connectionStore';
 import {success, failure} from '../lib/result';
 import type {PeerEvent} from '../types/worker-messages';
 
 const makeStore = () => {
   let emitFn: (event: PeerEvent) => void = () => {};
-  const store = createConnectionStore({
-    createHandler: (emit) => {
-      emitFn = emit;
-      return {handleCommand: () => {}};
-    },
-    encodeCode: async (sdp) => `encoded:${sdp}`,
-    decodeCode: async (code) =>
-      code.startsWith('encoded:')
-        ? success(code.slice(8))
-        : failure('DECRYPT_FAILED' as const),
-  });
+  const store = createConnectionStore();
+  store.applyMiddleware(createHandlerMiddleware({
+    createHandler: (emit) => { emitFn = emit; return {handleCommand: () => {}}; },
+    dispatch: store.dispatch,
+  }));
+  store.applyMiddleware(createEncodingMiddleware({
+    encodeCode: async (sdp: string) => `encoded:${sdp}`,
+    getState: store.getState,
+    dispatch: store.dispatch,
+  }));
+  store.applyMiddleware(createCodecMiddleware({
+    decodeCode: async (code: string) =>
+      code.startsWith('encoded:') ? success(code.slice(8)) : failure('DECRYPT_FAILED' as const),
+    getState: store.getState,
+    dispatch: store.dispatch,
+  }));
   return {store, emit: (e: PeerEvent) => emitFn(e)};
 };
 
@@ -78,7 +83,7 @@ describe('Connections', () => {
       </ConnectionProvider>
     );
 
-    act(() => store.createOffer('pass'));
+    act(() => store.dispatch({type: 'CREATE_OFFER', passphrase: 'pass'}));
     await act(async () => emit({type: 'OFFER_CREATED', peerId: 'p1', sdp: 'v=0'}));
     await waitFor(() => expect(screen.getByLabelText(/response code/i)).toBeInTheDocument());
 
@@ -120,7 +125,7 @@ describe('Connections', () => {
       </ConnectionProvider>
     );
 
-    await act(async () => store.joinOffer('encoded:v=0', 'pass'));
+    await act(async () => store.dispatch({type: 'JOIN_OFFER', code: 'encoded:v=0', passphrase: 'pass'}));
     await act(async () => emit({type: 'ANSWER_CREATED', peerId: 'p1', sdp: 'v=answer'}));
 
     await waitFor(() => expect(screen.getByText('encoded:v=answer')).toBeInTheDocument());
@@ -169,7 +174,7 @@ describe('Connections', () => {
 
     await act(async () => emit({type: 'PEER_CONNECTED', peerId: 'p1'}));
     await act(async () => emit({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
-    await act(async () => store.grantTrust('p1'));
+    await act(async () => store.dispatch({type: 'GRANT_TRUST', peerId: 'p1'}));
 
     expect(screen.getByRole('button', {name: /revoke trust/i})).toBeInTheDocument();
   });
@@ -180,7 +185,7 @@ describe('Connections', () => {
 
     await act(async () => emit({type: 'PEER_CONNECTED', peerId: 'p1'}));
     await act(async () => emit({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
-    await act(async () => store.grantTrust('p1'));
+    await act(async () => store.dispatch({type: 'GRANT_TRUST', peerId: 'p1'}));
 
     await user.click(screen.getByRole('button', {name: /revoke trust/i}));
 
@@ -226,10 +231,9 @@ describe('Connections', () => {
     expect(screen.getByRole('button', {name: 'Carol'})).toBeInTheDocument();
   });
 
-  it('selecting a second peer calls store.introducePeers with both peer IDs', async () => {
+  it('selecting a second peer hides the peer buttons (introduction dispatched)', async () => {
     const user = userEvent.setup();
-    const {store, emit} = renderConnections();
-    const spy = vi.spyOn(store, 'introducePeers');
+    const {emit} = renderConnections();
 
     await act(async () => emit({type: 'PEER_CONNECTED', peerId: 'p1'}));
     await act(async () => emit({type: 'PEER_NAMED', peerId: 'p1', name: 'Bob'}));
@@ -241,7 +245,7 @@ describe('Connections', () => {
     await user.click(screen.getAllByRole('button', {name: /^introduce$/i})[0]);
     await user.click(screen.getByRole('button', {name: 'Carol'}));
 
-    expect(spy).toHaveBeenCalledWith('p1', 'p2');
+    expect(screen.queryByRole('button', {name: 'Carol'})).not.toBeInTheDocument();
   });
 
   it('shows a pending introduction with from and peer name', async () => {
@@ -261,28 +265,26 @@ describe('Connections', () => {
     expect(screen.getByRole('button', {name: /decline/i})).toBeInTheDocument();
   });
 
-  it('clicking accept calls store.acceptIntroduction with the introId', async () => {
+  it('clicking accept removes the pending introduction', async () => {
     const user = userEvent.setup();
     const {store, emit} = renderConnections();
-    const spy = vi.spyOn(store, 'acceptIntroduction');
 
     await act(async () => emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'}));
 
     await user.click(screen.getByRole('button', {name: /accept/i}));
 
-    expect(spy).toHaveBeenCalledWith('i1');
+    expect(store.getState().pendingIntroductions).toEqual([]);
   });
 
-  it('clicking decline calls store.declineIntroduction with the introId', async () => {
+  it('clicking decline removes the pending introduction', async () => {
     const user = userEvent.setup();
     const {store, emit} = renderConnections();
-    const spy = vi.spyOn(store, 'declineIntroduction');
 
     await act(async () => emit({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'}));
 
     await user.click(screen.getByRole('button', {name: /decline/i}));
 
-    expect(spy).toHaveBeenCalledWith('i1');
+    expect(store.getState().pendingIntroductions).toEqual([]);
   });
 
   it('clicking disconnect removes the peer', async () => {

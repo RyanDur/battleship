@@ -2,7 +2,6 @@ import {render, screen, act} from '@testing-library/react';
 import {ConnectionProvider} from './ConnectionProvider';
 import {useConnectionState, useConnectionStore} from './useConnection';
 import {initialState} from './connections';
-import {asyncSuccess} from '../lib/asyncResult';
 import type {ConnectionStore} from './connectionStore';
 import type {ConnectionsState} from './connections';
 
@@ -16,16 +15,6 @@ const makeFakeStore = (initial: ConnectionsState = initialState): ConnectionStor
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    createOffer: vi.fn(),
-    joinOffer: vi.fn(() => asyncSuccess(undefined)),
-    acceptAnswer: vi.fn(() => asyncSuccess(undefined)),
-    disconnect: vi.fn(),
-    grantTrust: vi.fn(),
-    revokeTrust: vi.fn(),
-    introducePeers: vi.fn(),
-    acceptIntroduction: vi.fn(),
-    declineIntroduction: vi.fn(),
-    connectViaPeer: vi.fn(),
     dispatch: vi.fn(),
     applyMiddleware: vi.fn(() => () => {}),
     _emit: () => {
@@ -89,12 +78,12 @@ describe('ConnectionContext', () => {
   });
 
   describe('useConnectionStore', () => {
-    it('exposes createOffer action method', () => {
+    it('exposes dispatch method', () => {
       const store = makeFakeStore();
 
       const Button = () => {
         const s = useConnectionStore();
-        return <button onClick={() => s.createOffer('pass')}>go</button>;
+        return <button onClick={() => s.dispatch({type: 'CREATE_OFFER', passphrase: 'pass'})}>go</button>;
       };
 
       render(
@@ -105,7 +94,7 @@ describe('ConnectionContext', () => {
 
       screen.getByRole('button').click();
 
-      expect(store.createOffer).toHaveBeenCalledWith('pass');
+      expect(store.dispatch).toHaveBeenCalledWith({type: 'CREATE_OFFER', passphrase: 'pass'});
     });
   });
 });

@@ -2,7 +2,7 @@ import {render, screen, within, waitFor, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Connections} from './Connections';
 import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore} from '../state/connectionStore';
+import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware} from '../state/connectionStore';
 import {createPeerHandler} from '../workers/connection.handler';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import {success, failure} from '../lib/result';
@@ -14,13 +14,20 @@ describe('Connections integration', () => {
     const factory = createFakePeerConnectionFactory();
     const user = userEvent.setup();
 
-    const makeStore = (name: string) =>
-      createConnectionStore({
+    const makeStore = (name: string) => {
+      const s = createConnectionStore();
+      s.applyMiddleware(createHandlerMiddleware({
         createHandler: emit => createPeerHandler({name, emit, createPeerConnection: factory.createPeerConnection}),
-        encodeCode: async sdp => `encoded:${sdp}`,
-        decodeCode: async code =>
-          code.startsWith('encoded:') ? success(code.slice(8)) : failure('DECRYPT_FAILED' as const),
-      });
+        dispatch: s.dispatch,
+      }));
+      s.applyMiddleware(createEncodingMiddleware({encodeCode: async sdp => `encoded:${sdp}`, getState: s.getState, dispatch: s.dispatch}));
+      s.applyMiddleware(createCodecMiddleware({
+        decodeCode: async code => code.startsWith('encoded:') ? success(code.slice(8)) : failure('DECRYPT_FAILED' as const),
+        getState: s.getState,
+        dispatch: s.dispatch,
+      }));
+      return s;
+    };
 
     const aliceStore = makeStore('Alice');
     const bobStore = makeStore('Bob');
@@ -48,15 +55,15 @@ describe('Connections integration', () => {
       const priorOffererPeers = offerer.getState().peers.length;
       const priorAnswererPeers = answerer.getState().peers.length;
 
-      await act(async () => { offerer.createOffer('pass'); });
+      await act(async () => { offerer.dispatch({type: 'CREATE_OFFER', passphrase: 'pass'}); });
       await waitFor(() => expect(offerer.getState().flow.phase).toBe('offer-ready'));
       const offerFlow = offerer.getState().flow as Extract<ConnectionFlow, {phase: 'offer-ready'}>;
 
-      await act(async () => { await answerer.joinOffer(offerFlow.code, 'pass').value; });
+      await act(async () => { answerer.dispatch({type: 'JOIN_OFFER', code: offerFlow.code, passphrase: 'pass'}); });
       await waitFor(() => expect(answerer.getState().flow.phase).toBe('answer-ready'));
       const answerFlow = answerer.getState().flow as Extract<ConnectionFlow, {phase: 'answer-ready'}>;
 
-      await act(async () => { await offerer.acceptAnswer(answerFlow.code).value; });
+      await act(async () => { offerer.dispatch({type: 'ACCEPT_ANSWER_CODE', responseCode: answerFlow.code}); });
       await waitFor(() => {
         expect(offerer.getState().peers.length).toBeGreaterThan(priorOffererPeers);
         expect(answerer.getState().peers.length).toBeGreaterThan(priorAnswererPeers);
