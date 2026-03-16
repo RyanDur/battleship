@@ -1,6 +1,7 @@
 import * as Decoder from 'schemawax';
 import {maybe} from '../lib/maybe';
 import {tryCatch} from '../lib/result';
+import {asyncTryCatch} from '../lib/asyncResult';
 
 export type OnlinePeer = {peerId: string; name: string}
 
@@ -80,9 +81,8 @@ export const startSignaling = (
     currentWs.onclose = () => undefined;
   };
 
-  void fetch(config.sessionUrl, {credentials: 'include'})
-    .catch(() => undefined)
-    .then(() => connect());
+  asyncTryCatch(() => fetch(config.sessionUrl, {credentials: 'include'}))
+    .onComplete(() => connect());
 
   return {
     stop: () => {
