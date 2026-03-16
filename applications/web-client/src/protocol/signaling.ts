@@ -8,6 +8,8 @@ export type SignalingEvent =
   | {type: 'PEERS'; peers: OnlinePeer[]}
   | {type: 'PEER_JOINED'; peerId: string; name: string}
   | {type: 'PEER_LEFT'; peerId: string}
+  | {type: 'OFFER_RECEIVED'; fromPeerId: string; name: string; sdp: string}
+  | {type: 'ANSWER_RECEIVED'; fromPeerId: string; sdp: string}
 
 export type SignalingHandle = {
   stop: () => void
@@ -35,6 +37,14 @@ const peerLeftDecoder = Decoder.object({
   required: {type: Decoder.literal('PEER_LEFT'), peerId: Decoder.string},
 });
 
+const offerReceivedDecoder = Decoder.object({
+  required: {type: Decoder.literal('OFFER_RECEIVED'), fromPeerId: Decoder.string, name: Decoder.string, sdp: Decoder.string},
+});
+
+const answerReceivedDecoder = Decoder.object({
+  required: {type: Decoder.literal('ANSWER_RECEIVED'), fromPeerId: Decoder.string, sdp: Decoder.string},
+});
+
 export const startSignaling = (
   config: SignalingConfig,
   onEvent: (event: SignalingEvent) => void
@@ -59,15 +69,11 @@ export const startSignaling = (
       tryCatch(() => JSON.parse(event.data as string), () => 'invalid json')
         .onFailure(() => console.warn('Received malformed signaling message'))
         .onSuccess(parsed => {
-          maybe(peersDecoder.decode(parsed)).map(msg =>
-            onEvent({type: 'PEERS', peers: msg.peers})
-          );
-          maybe(peerJoinedDecoder.decode(parsed)).map(msg =>
-            onEvent({type: 'PEER_JOINED', peerId: msg.peerId, name: msg.name})
-          );
-          maybe(peerLeftDecoder.decode(parsed)).map(msg =>
-            onEvent({type: 'PEER_LEFT', peerId: msg.peerId})
-          );
+          maybe(peersDecoder.decode(parsed)).map(msg => onEvent({type: 'PEERS', peers: msg.peers}))
+            .or(() => maybe(peerJoinedDecoder.decode(parsed)).map(msg => onEvent({type: 'PEER_JOINED', peerId: msg.peerId, name: msg.name})))
+            .or(() => maybe(peerLeftDecoder.decode(parsed)).map(msg => onEvent({type: 'PEER_LEFT', peerId: msg.peerId})))
+            .or(() => maybe(offerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'OFFER_RECEIVED', fromPeerId: msg.fromPeerId, name: msg.name, sdp: msg.sdp})))
+            .or(() => maybe(answerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'ANSWER_RECEIVED', fromPeerId: msg.fromPeerId, sdp: msg.sdp})));
         });
     };
 

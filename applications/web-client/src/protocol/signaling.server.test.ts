@@ -86,6 +86,24 @@ describe('startSignaling', () => {
     await cleanup();
   });
 
+  it('emits OFFER_RECEIVED when server sends OFFER_RECEIVED', async () => {
+    const {events, getConn, cleanup} = await connect();
+
+    getConn().send(JSON.stringify({type: 'OFFER_RECEIVED', fromPeerId: 'p2', name: 'Bob', sdp: 'fake-sdp'}));
+
+    await vi.waitFor(() => expect(events).toContainEqual({type: 'OFFER_RECEIVED', fromPeerId: 'p2', name: 'Bob', sdp: 'fake-sdp'}));
+    await cleanup();
+  });
+
+  it('emits ANSWER_RECEIVED when server sends ANSWER_RECEIVED', async () => {
+    const {events, getConn, cleanup} = await connect();
+
+    getConn().send(JSON.stringify({type: 'ANSWER_RECEIVED', fromPeerId: 'p2', sdp: 'fake-answer-sdp'}));
+
+    await vi.waitFor(() => expect(events).toContainEqual({type: 'ANSWER_RECEIVED', fromPeerId: 'p2', sdp: 'fake-answer-sdp'}));
+    await cleanup();
+  });
+
   it('stop prevents further events', async () => {
     const {events, handle, getConn, cleanup} = await connect();
     handle.stop();
