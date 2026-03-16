@@ -40,7 +40,7 @@ describe('connectionsReducer', () => {
   });
 
   it('JOIN_OFFER transitions to joining', () => {
-    const next = connectionsReducer(initialState, {type: 'JOIN_OFFER', passphrase: 'secret'});
+    const next = connectionsReducer(initialState, {type: 'JOIN_OFFER', code: 'abc', passphrase: 'secret'});
 
     expect(next.flow).toEqual({phase: 'joining', passphrase: 'secret'});
   });
@@ -97,18 +97,18 @@ describe('connectionsReducer', () => {
     expect(next.peers).toEqual([{id: 'p1', name: 'Alice'}, {id: 'p2'}]);
   });
 
-  it('TRUST_PEER sets trusted on matching peer', () => {
+  it('GRANT_TRUST sets trusted on matching peer', () => {
     const state = withPeers([{id: 'p1'}, {id: 'p2'}]);
 
-    const next = connectionsReducer(state, {type: 'TRUST_PEER', peerId: 'p1'});
+    const next = connectionsReducer(state, {type: 'GRANT_TRUST', peerId: 'p1'});
 
     expect(next.peers).toEqual([{id: 'p1', trusted: true}, {id: 'p2'}]);
   });
 
-  it('REVOKE_PEER_TRUST clears trusted on matching peer', () => {
+  it('REVOKE_TRUST clears trusted on matching peer', () => {
     const state = withPeers([{id: 'p1', trusted: true}, {id: 'p2'}]);
 
-    const next = connectionsReducer(state, {type: 'REVOKE_PEER_TRUST', peerId: 'p1'});
+    const next = connectionsReducer(state, {type: 'REVOKE_TRUST', peerId: 'p1'});
 
     expect(next.peers).toEqual([{id: 'p1', trusted: false}, {id: 'p2'}]);
   });
@@ -139,6 +139,22 @@ describe('connectionsReducer', () => {
     const state = {...initialState, pendingIntroductions: [{introId: 'i1', from: 'Alice', peer: 'Carol'}]};
 
     const next = connectionsReducer(state, {type: 'INTRODUCTION_RESOLVED', introId: 'i1'});
+
+    expect(next.pendingIntroductions).toEqual([]);
+  });
+
+  it('ACCEPT_INTRODUCTION removes matching pendingIntroduction', () => {
+    const state = {...initialState, pendingIntroductions: [{introId: 'i1', from: 'Alice', peer: 'Carol'}]};
+
+    const next = connectionsReducer(state, {type: 'ACCEPT_INTRODUCTION', introId: 'i1'});
+
+    expect(next.pendingIntroductions).toEqual([]);
+  });
+
+  it('DECLINE_INTRODUCTION removes matching pendingIntroduction', () => {
+    const state = {...initialState, pendingIntroductions: [{introId: 'i1', from: 'Alice', peer: 'Carol'}]};
+
+    const next = connectionsReducer(state, {type: 'DECLINE_INTRODUCTION', introId: 'i1'});
 
     expect(next.pendingIntroductions).toEqual([]);
   });

@@ -24,18 +24,20 @@ export type ConnectionsAction =
   | {type: 'CREATE_OFFER'; passphrase: string}
   | {type: 'OFFER_SDP_READY'; peerId: string; sdp: string}
   | {type: 'OFFER_ENCODED'; peerId: string; code: string}
-  | {type: 'JOIN_OFFER'; passphrase: string}
+  | {type: 'JOIN_OFFER'; code: string; passphrase: string}
   | {type: 'ANSWER_SDP_READY'; sdp: string}
   | {type: 'ANSWER_ENCODED'; code: string}
   | {type: 'DECODE_FAILED'}
   | {type: 'PEER_CONNECTED'; peerId: string}
   | {type: 'PEER_DISCONNECTED'; peerId: string}
   | {type: 'PEER_NAMED'; peerId: string; name: string}
-  | {type: 'TRUST_PEER'; peerId: string}
-  | {type: 'REVOKE_PEER_TRUST'; peerId: string}
+  | {type: 'GRANT_TRUST'; peerId: string}
+  | {type: 'REVOKE_TRUST'; peerId: string}
   | {type: 'PEER_TRUST_UPDATED'; peerId: string; trusts: boolean}
   | {type: 'INTRODUCTION_RECEIVED'; introId: string; from: string; peer: string}
   | {type: 'INTRODUCTION_RESOLVED'; introId: string}
+  | {type: 'ACCEPT_INTRODUCTION'; introId: string}
+  | {type: 'DECLINE_INTRODUCTION'; introId: string}
   | {type: 'ONLINE_PEERS_UPDATED'; peers: OnlinePeer[]}
   | {type: 'ONLINE_PEER_JOINED'; peerId: string; name: string}
   | {type: 'ONLINE_PEER_LEFT'; peerId: string}
@@ -43,6 +45,12 @@ export type ConnectionsAction =
   | {type: 'SERVER_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string}
   | {type: 'RELAY_OFFER'; targetPeerId: string; sdp: string}
   | {type: 'RELAY_ANSWER'; targetPeerId: string; sdp: string}
+  | {type: 'DISCONNECT'; peerId: string}
+  | {type: 'INTRODUCE_PEERS'; peerId1: string; peerId2: string}
+  | {type: 'CONNECT_VIA_SERVER'; signalingPeerId: string; name: string}
+  | {type: 'ACCEPT_OFFER'; sdp: string}
+  | {type: 'ACCEPT_ANSWER'; peerId: string; sdp: string}
+  | {type: 'ACCEPT_ANSWER_CODE'; responseCode: string}
 
 export const initialState: ConnectionsState = {
   flow: {phase: 'idle'},
@@ -86,10 +94,10 @@ export const connectionsReducer = (state: ConnectionsState, action: ConnectionsA
     case 'PEER_NAMED':
       return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, name: action.name} : p)};
 
-    case 'TRUST_PEER':
+    case 'GRANT_TRUST':
       return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trusted: true} : p)};
 
-    case 'REVOKE_PEER_TRUST':
+    case 'REVOKE_TRUST':
       return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trusted: false} : p)};
 
     case 'PEER_TRUST_UPDATED':
@@ -99,6 +107,8 @@ export const connectionsReducer = (state: ConnectionsState, action: ConnectionsA
       return {...state, pendingIntroductions: [...state.pendingIntroductions, {introId: action.introId, from: action.from, peer: action.peer}]};
 
     case 'INTRODUCTION_RESOLVED':
+    case 'ACCEPT_INTRODUCTION':
+    case 'DECLINE_INTRODUCTION':
       return {...state, pendingIntroductions: state.pendingIntroductions.filter(i => i.introId !== action.introId)};
 
     case 'ONLINE_PEERS_UPDATED':
