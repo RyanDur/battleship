@@ -29,6 +29,7 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
             "REGISTER" -> handleRegister(session, payload)
             "RELAY_OFFER" -> handleRelayOffer(session, payload)
             "RELAY_ANSWER" -> handleRelayAnswer(session, payload)
+            "FORGET_PEER" -> handleForgetPeer(session, payload)
         }
     }
 
@@ -69,6 +70,12 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         val target = peerToSession[targetPeerId] ?: return
         registry.recordRelationship(fromPeerId, targetPeerId)
         send(target, mapOf("type" to "ANSWER_RECEIVED", "fromPeerId" to fromPeerId, "sdp" to sdp))
+    }
+
+    private fun handleForgetPeer(session: WebSocketSession, payload: Map<String, Any>) {
+        val peerId = sessionToPeer[session.id] ?: return
+        val targetPeerId = payload["targetPeerId"] as? String ?: return
+        registry.forgetRelationship(peerId, targetPeerId)
     }
 
     private fun send(session: WebSocketSession, payload: Map<String, Any>) {

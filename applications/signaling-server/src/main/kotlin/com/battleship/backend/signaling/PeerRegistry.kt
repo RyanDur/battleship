@@ -12,6 +12,7 @@ interface RelationshipRepository {
     fun findRelated(peerId: String): Set<String>
     fun saveName(peerId: String, name: String)
     fun findName(peerId: String): String?
+    fun forget(peerId: String, targetPeerId: String)
 }
 
 @Component
@@ -29,6 +30,10 @@ class PeerRegistry(private val relationships: RelationshipRepository) {
 
     fun recordRelationship(peerId1: String, peerId2: String) {
         relationships.save(peerId1, peerId2)
+    }
+
+    fun forgetRelationship(peerId: String, targetPeerId: String) {
+        relationships.forget(peerId, targetPeerId)
     }
 
     fun getPreviousPeers(peerId: String): List<PreviousPeerInfo> =

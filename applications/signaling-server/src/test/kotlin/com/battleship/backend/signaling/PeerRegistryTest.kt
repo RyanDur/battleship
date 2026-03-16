@@ -89,6 +89,28 @@ class PeerRegistryTest {
     }
 
     @Test
+    fun `forgotten peer no longer appears in previous peers`() {
+        registry.register("peer-1", "Alice")
+        registry.register("peer-2", "Bob")
+        registry.recordRelationship("peer-1", "peer-2")
+
+        registry.forgetRelationship("peer-1", "peer-2")
+
+        assertTrue(registry.getPreviousPeers("peer-1").isEmpty())
+    }
+
+    @Test
+    fun `forgetful peer no longer appears in forgotten peer's previous peers`() {
+        registry.register("peer-1", "Alice")
+        registry.register("peer-2", "Bob")
+        registry.recordRelationship("peer-1", "peer-2")
+
+        registry.forgetRelationship("peer-1", "peer-2")
+
+        assertTrue(registry.getPreviousPeers("peer-2").isEmpty())
+    }
+
+    @Test
     fun `getPreviousPeers resolves names from repository even when peer was never registered in this session`() {
         val repo = InMemoryRelationshipRepository()
         // Simulate a previous session: Bob and Alice were connected

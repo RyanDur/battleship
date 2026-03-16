@@ -247,4 +247,45 @@ class SignalingFeatureTest {
         sessionA.close()
         sessionB.close()
     }
+
+    @Test
+    fun `FORGET_PEER removes peer from PREVIOUS_PEERS on next registration`() {
+        val (sessionA, messagesA) = connect("forget-a")
+        val (sessionB, messagesB) = connect("forget-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice"))
+        messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED
+        messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        // SDP relay to record relationship
+        send(sessionA, mapOf("type" to "RELAY_OFFER", "targetPeerId" to "forget-b", "sdp" to "v=offer"))
+        messagesB.poll(2, TimeUnit.SECONDS) // OFFER_RECEIVED
+        send(sessionB, mapOf("type" to "RELAY_ANSWER", "targetPeerId" to "forget-a", "sdp" to "v=answer"))
+        messagesA.poll(2, TimeUnit.SECONDS) // ANSWER_RECEIVED
+
+        // Alice forgets Bob
+        send(sessionA, mapOf("type" to "FORGET_PEER", "targetPeerId" to "forget-b"))
+
+        // Alice reconnects — Bob should not appear in PREVIOUS_PEERS
+        sessionA.close()
+        val (sessionA2, messagesA2) = connect("forget-a")
+        send(sessionA2, mapOf("type" to "REGISTER", "name" to "Alice"))
+        messagesA2.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesA2.poll(2, TimeUnit.SECONDS) // PEERS
+        val previousPeers = messagesA2.poll(2, TimeUnit.SECONDS)
+
+        @Suppress("UNCHECKED_CAST")
+        val peers = previousPeers?.get("peers") as? List<*> ?: emptyList<Any>()
+        assertEquals(0, peers.size)
+
+        sessionA2.close()
+        sessionB.close()
+    }
 }

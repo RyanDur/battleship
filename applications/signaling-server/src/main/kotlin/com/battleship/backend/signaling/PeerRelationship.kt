@@ -32,9 +32,24 @@ interface PeerRelationshipJpaRepository : JpaRepository<PeerRelationship, Long> 
 @Repository
 interface PeerNameJpaRepository : JpaRepository<PeerName, String>
 
+@Entity
+class ForgottenPair(
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Long = 0,
+    var forgetter: String = "",
+    var forgotten: String = "",
+)
+
+@Repository
+interface ForgottenPairJpaRepository : JpaRepository<ForgottenPair, Long> {
+    @Query("SELECT f FROM ForgottenPair f WHERE (f.forgetter = :peerId1 AND f.forgotten = :peerId2) OR (f.forgetter = :peerId2 AND f.forgotten = :peerId1)")
+    fun findByEitherPeer(peerId1: String, peerId2: String): List<ForgottenPair>
+}
+
 class JpaPeerRelationshipRepository(
     private val jpaRepo: PeerRelationshipJpaRepository,
     private val nameRepo: PeerNameJpaRepository,
+    private val forgottenRepo: ForgottenPairJpaRepository,
 ) : RelationshipRepository {
 
     override fun save(peerId1: String, peerId2: String) {
@@ -50,6 +65,8 @@ class JpaPeerRelationshipRepository(
     override fun findRelated(peerId: String): Set<String> =
         jpaRepo.findAllByPeerId(peerId).map { rel ->
             if (rel.peerId1 == peerId) rel.peerId2 else rel.peerId1
+        }.filter { related ->
+            forgottenRepo.findByEitherPeer(peerId, related).isEmpty()
         }.toSet()
 
     override fun saveName(peerId: String, name: String) {
@@ -58,4 +75,10 @@ class JpaPeerRelationshipRepository(
 
     override fun findName(peerId: String): String? =
         nameRepo.findById(peerId).orElse(null)?.name
+
+    override fun forget(peerId: String, targetPeerId: String) {
+        if (forgottenRepo.findByEitherPeer(peerId, targetPeerId).isEmpty()) {
+            forgottenRepo.save(ForgottenPair(forgetter = peerId, forgotten = targetPeerId))
+        }
+    }
 }
