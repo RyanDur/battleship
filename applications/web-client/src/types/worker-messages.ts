@@ -8,6 +8,9 @@ export type PeerCommand =
   | { type: 'INTRODUCE_PEERS'; peerId1: string; peerId2: string }
   | { type: 'ACCEPT_INTRODUCTION'; introId: string }
   | { type: 'DECLINE_INTRODUCTION'; introId: string }
+  | { type: 'CONNECT_VIA_SERVER'; signalingPeerId: string; name: string }
+  | { type: 'SERVER_OFFER_RECEIVED'; signalingPeerId: string; name: string; sdp: string }
+  | { type: 'SERVER_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string }
 
 export type PeerEvent =
   | { type: 'OFFER_CREATED'; peerId: string; sdp: string }
@@ -20,3 +23,5 @@ export type PeerEvent =
   | { type: 'INTRODUCTION_DECLINED'; introId: string }
   | { type: 'INTRODUCTION_EXPIRED'; introId: string }
   | { type: 'ERROR'; message: string }
+  | { type: 'SERVER_OFFER_CREATED'; signalingPeerId: string; localPeerId: string; sdp: string }
+  | { type: 'SERVER_ANSWER_CREATED'; signalingPeerId: string; sdp: string }
