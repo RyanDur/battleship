@@ -114,6 +114,24 @@ describe('startSignaling', () => {
     await cleanup();
   });
 
+  it('emits ICE_RESTART_RECEIVED when server sends ICE_RESTART_RECEIVED', async () => {
+    const {events, getConn, cleanup} = await connect();
+
+    getConn().send(JSON.stringify({type: 'ICE_RESTART_RECEIVED', fromPeerId: 'p2', sdp: 'fake-restart-sdp'}));
+
+    await vi.waitFor(() => expect(events).toContainEqual({type: 'ICE_RESTART_RECEIVED', fromPeerId: 'p2', sdp: 'fake-restart-sdp'}));
+    await cleanup();
+  });
+
+  it('emits ICE_RESTART_ANSWER_RECEIVED when server sends ICE_RESTART_ANSWER_RECEIVED', async () => {
+    const {events, getConn, cleanup} = await connect();
+
+    getConn().send(JSON.stringify({type: 'ICE_RESTART_ANSWER_RECEIVED', fromPeerId: 'p2', sdp: 'fake-restart-answer-sdp'}));
+
+    await vi.waitFor(() => expect(events).toContainEqual({type: 'ICE_RESTART_ANSWER_RECEIVED', fromPeerId: 'p2', sdp: 'fake-restart-answer-sdp'}));
+    await cleanup();
+  });
+
   it('stop prevents further events', async () => {
     const {events, handle, getConn, cleanup} = await connect();
     handle.stop();
