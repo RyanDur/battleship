@@ -6,10 +6,20 @@ import {createPeerHandler} from '../workers/connection.handler';
 import {startSignaling} from '../protocol/signaling';
 import type {SignalingConfig, SignalingEvent, SignalingHandle} from '../protocol/signaling';
 
+export type ListenerContext = {
+  prevState: ConnectionsState
+  state: ConnectionsState
+  dispatch: (action: ConnectionsAction) => void
+  getState: () => ConnectionsState
+}
+
+export type ListenerFn = (action: ConnectionsAction, context: ListenerContext) => void
+
 export type ConnectionStore = {
   getState: () => ConnectionsState
   subscribe: (fn: () => void) => () => void
   dispatch: (action: ConnectionsAction) => void
+  addListener: (fn: ListenerFn) => () => void
 }
 
 type MiddlewareDeps = {
@@ -27,15 +37,19 @@ export const applyMiddleware = (factories: MiddlewareFactory[]): MiddlewareFacto
 
 export const createConnectionStore = (middlewareFactory?: MiddlewareFactory): ConnectionStore => {
   let state = initialState;
-  const listeners = new Set<() => void>();
+  const subscribers = new Set<() => void>();
+  const actionListeners = new Set<ListenerFn>();
 
   const store: ConnectionStore = {
     getState: () => state,
-    subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
+    subscribe: (fn) => { subscribers.add(fn); return () => subscribers.delete(fn); },
+    addListener: (fn) => { actionListeners.add(fn); return () => actionListeners.delete(fn); },
     dispatch: (action: ConnectionsAction) => {
       middleware(action);
+      const prevState = state;
       state = connectionsReducer(state, action);
-      listeners.forEach(fn => fn());
+      subscribers.forEach(fn => fn());
+      actionListeners.forEach(fn => fn(action, {prevState, state, dispatch: (a) => store.dispatch(a), getState: () => state}));
     },
   };
 

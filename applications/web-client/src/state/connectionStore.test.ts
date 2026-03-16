@@ -1,6 +1,6 @@
 import {createConnectionStore, createHandlerMiddleware, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import type {ConnectionsAction} from './connections';
+import type {ConnectionsAction, ConnectionsState} from './connections';
 import type {MiddlewareFactory} from './connectionStore';
 
 const makeStore = (extra: MiddlewareFactory[] = []) => {
@@ -296,6 +296,57 @@ describe('connectionStore', () => {
       store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
 
       expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('addListener', () => {
+    it('receives action and prevState and state after dispatch', () => {
+      const {store} = makeStore();
+      const received: Array<{action: ConnectionsAction; prevState: ConnectionsState; state: ConnectionsState}> = [];
+      store.addListener((action, {prevState, state}) => received.push({action, prevState, state}));
+
+      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+
+      const entry = received.find(r => r.action.type === 'CREATE_OFFER');
+      expect(entry).toBeDefined();
+      expect(entry!.prevState.flow.phase).toBe('idle');
+      expect(entry!.state.flow.phase).toBe('creating');
+    });
+
+    it('receives post-reducer state', () => {
+      const {store} = makeStore();
+      let seenState: ConnectionsState | undefined;
+      store.addListener((_action, {state}) => { seenState = state; });
+
+      store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'});
+
+      expect(seenState?.peers).toContainEqual({id: 'p1'});
+    });
+
+    it('can dispatch from listener and the action enters the full chain', () => {
+      const {store} = makeStore();
+      const seen: string[] = [];
+      store.addListener((action, {dispatch}) => {
+        seen.push(action.type);
+        if (action.type === 'PEER_CONNECTED') dispatch({type: 'PEER_NAMED', peerId: action.peerId, name: 'Alice'});
+      });
+
+      store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'});
+
+      expect(seen).toContain('PEER_CONNECTED');
+      expect(seen).toContain('PEER_NAMED');
+      expect(store.getState().peers).toContainEqual({id: 'p1', name: 'Alice'});
+    });
+
+    it('unsubscribe stops listener from receiving actions', () => {
+      const {store} = makeStore();
+      const received: ConnectionsAction[] = [];
+      const unsubscribe = store.addListener((action) => received.push(action));
+
+      unsubscribe();
+      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+
+      expect(received).toHaveLength(0);
     });
   });
 });
