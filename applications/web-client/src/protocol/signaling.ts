@@ -88,7 +88,6 @@ export const startSignaling = (
     currentWs.onmessage = (event: MessageEvent) => {
       if (gen !== generation) return;
       tryCatch(() => JSON.parse(event.data as string), () => 'invalid json')
-        .onFailure(() => console.warn('Received malformed signaling message'))
         .onSuccess(parsed => {
           maybe(peersDecoder.decode(parsed)).map(msg => onEvent({type: 'PEERS', peers: msg.peers}))
             .or(() => maybe(peerJoinedDecoder.decode(parsed)).map(msg => onEvent({type: 'PEER_JOINED', peerId: msg.peerId, name: msg.name})))

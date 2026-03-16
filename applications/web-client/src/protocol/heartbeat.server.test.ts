@@ -93,13 +93,13 @@ describe('startHeartbeat', () => {
     await cleanup();
   });
 
-  it('logs a warning when server sends malformed JSON', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const {getConn, cleanup} = await startWithServer(() => undefined);
+  it('silently ignores malformed JSON from server', async () => {
+    const {states, getConn, cleanup} = await startWithServer(() => undefined);
 
     getConn().send('not-valid-json');
+    await new Promise(r => setTimeout(r, 50));
 
-    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(states.filter(s => s.status === 'online')).toHaveLength(0);
     await cleanup();
   });
 

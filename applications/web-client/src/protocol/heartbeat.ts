@@ -74,7 +74,6 @@ export const startHeartbeat = (
     currentWs.onmessage = (event: MessageEvent) => {
       if (gen !== generation) return;
       tryCatch(() => JSON.parse(event.data as string), () => 'invalid json')
-        .onFailure(() => console.warn('Received malformed message from server'))
         .onSuccess(parsed => {
           const data = maybe(heartbeatDecoder.decode(parsed)).orNull();
           if (!data) return;
