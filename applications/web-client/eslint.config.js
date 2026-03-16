@@ -26,6 +26,7 @@ export default defineConfig([
       'semi': ['error', 'always'],
       'prefer-const': 'error',
       'no-param-reassign': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', {argsIgnorePattern: '^_'}],
     },
   },
   {

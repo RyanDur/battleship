@@ -3,34 +3,17 @@ import type {ConnectionsState, ConnectionsAction} from './connections';
 import type {PeerCommand, PeerEvent} from '../types/worker-messages';
 import type {CodecError} from '../protocol/connection-code';
 import type {Result} from '../lib/result';
-import {ofPromise, asyncSuccess, type AsyncResult} from '../lib/asyncResult';
 
 type Handler = {handleCommand: (cmd: PeerCommand) => void}
 
-type StoreDeps = {
-  createHandler: (emit: (event: PeerEvent) => void) => Handler
-  encodeCode: (sdp: string, passphrase: string) => Promise<string>
-  decodeCode: (code: string, passphrase: string) => Promise<Result<string, CodecError>>
-}
-
 export type ConnectionStore = {
   getState: () => ConnectionsState
-  subscribe: (listener: () => void) => () => void
+  subscribe: (fn: () => void) => () => void
   dispatch: (action: ConnectionsAction) => void
   applyMiddleware: (fn: (action: ConnectionsAction) => void) => () => void
-  connectViaPeer: (signalingPeerId: string, name: string) => void
-  createOffer: (passphrase: string) => void
-  joinOffer: (code: string, passphrase: string) => AsyncResult<void, CodecError>
-  acceptAnswer: (responseCode: string) => AsyncResult<void, CodecError>
-  disconnect: (peerId: string) => void
-  grantTrust: (peerId: string) => void
-  revokeTrust: (peerId: string) => void
-  introducePeers: (peerId1: string, peerId2: string) => void
-  acceptIntroduction: (introId: string) => void
-  declineIntroduction: (introId: string) => void
 }
 
-export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
+export const createConnectionStore = (): ConnectionStore => {
   let state = initialState;
   const listeners = new Set<() => void>();
   const middlewares = new Set<(action: ConnectionsAction) => void>();
@@ -39,22 +22,22 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
     state = connectionsReducer(state, action);
     listeners.forEach(fn => fn());
     middlewares.forEach(fn => fn(action));
-
-    if (state.flow.phase === 'encoding-offer') {
-      const {peerId, sdp, passphrase} = state.flow;
-      deps.encodeCode(sdp, passphrase).then(code => dispatch({type: 'OFFER_ENCODED', peerId, code}));
-    } else if (state.flow.phase === 'encoding-answer') {
-      const {sdp, passphrase} = state.flow;
-      deps.encodeCode(sdp, passphrase).then(code => dispatch({type: 'ANSWER_ENCODED', code}));
-    }
-
-    if (action.type === 'SERVER_OFFER_RECEIVED') {
-      handler.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: action.signalingPeerId, name: action.name, sdp: action.sdp});
-    } else if (action.type === 'SERVER_ANSWER_RECEIVED') {
-      handler.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
-    }
   };
 
+  return {
+    getState: () => state,
+    subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
+    dispatch,
+    applyMiddleware: (fn) => { middlewares.add(fn); return () => middlewares.delete(fn); },
+  };
+};
+
+type HandlerMiddlewareDeps = {
+  createHandler: (emit: (event: PeerEvent) => void) => Handler
+  dispatch: (action: ConnectionsAction) => void
+}
+
+export const createHandlerMiddleware = ({createHandler, dispatch}: HandlerMiddlewareDeps) => {
   const emit = (event: PeerEvent) => {
     if (event.type === 'PEER_CONNECTED') dispatch({type: 'PEER_CONNECTED', peerId: event.peerId});
     else if (event.type === 'PEER_NAMED') dispatch({type: 'PEER_NAMED', peerId: event.peerId, name: event.name});
@@ -69,79 +52,62 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
     else if (event.type === 'SERVER_ANSWER_CREATED') dispatch({type: 'RELAY_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
   };
 
-  const handler = deps.createHandler(emit);
+  const handler = createHandler(emit);
 
-  return {
-    getState: () => state,
-
-    subscribe: (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-
-    dispatch,
-
-    applyMiddleware: (fn) => {
-      middlewares.add(fn);
-      return () => middlewares.delete(fn);
-    },
-
-    connectViaPeer: (signalingPeerId, name) => {
-      handler.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId, name});
-    },
-
-    createOffer: (passphrase) => {
-      dispatch({type: 'CREATE_OFFER', passphrase});
-      handler.handleCommand({type: 'CREATE_OFFER'});
-    },
-
-    joinOffer: (code, passphrase) => {
-      dispatch({type: 'JOIN_OFFER', passphrase});
-      return ofPromise(
-        deps.decodeCode(code, passphrase).then(result =>
-          result
-            .map(sdp => handler.handleCommand({type: 'ACCEPT_OFFER', sdp}))
-            .onFailure(() => dispatch({type: 'DECODE_FAILED'}))
-        )
-      );
-    },
-
-    acceptAnswer: (responseCode) => {
-      const {flow} = state;
-      if (flow.phase !== 'offer-ready') return asyncSuccess<void, CodecError>(undefined);
-      return ofPromise(
-        deps.decodeCode(responseCode, flow.passphrase).then(result =>
-          result.map(sdp => handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: flow.peerId, sdp}))
-        )
-      );
-    },
-
-    disconnect: (peerId) => {
-      handler.handleCommand({type: 'DISCONNECT', peerId});
-    },
-
-    grantTrust: (peerId) => {
-      dispatch({type: 'TRUST_PEER', peerId});
-      handler.handleCommand({type: 'GRANT_TRUST', peerId});
-    },
-
-    revokeTrust: (peerId) => {
-      dispatch({type: 'REVOKE_PEER_TRUST', peerId});
-      handler.handleCommand({type: 'REVOKE_TRUST', peerId});
-    },
-
-    introducePeers: (peerId1, peerId2) => {
-      handler.handleCommand({type: 'INTRODUCE_PEERS', peerId1, peerId2});
-    },
-
-    acceptIntroduction: (introId) => {
-      dispatch({type: 'INTRODUCTION_RESOLVED', introId});
-      handler.handleCommand({type: 'ACCEPT_INTRODUCTION', introId});
-    },
-
-    declineIntroduction: (introId) => {
-      dispatch({type: 'INTRODUCTION_RESOLVED', introId});
-      handler.handleCommand({type: 'DECLINE_INTRODUCTION', introId});
-    },
+  return (action: ConnectionsAction) => {
+    if (action.type === 'CREATE_OFFER') handler.handleCommand({type: 'CREATE_OFFER'});
+    else if (action.type === 'ACCEPT_OFFER') handler.handleCommand({type: 'ACCEPT_OFFER', sdp: action.sdp});
+    else if (action.type === 'ACCEPT_ANSWER') handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: action.peerId, sdp: action.sdp});
+    else if (action.type === 'DISCONNECT') handler.handleCommand({type: 'DISCONNECT', peerId: action.peerId});
+    else if (action.type === 'GRANT_TRUST') handler.handleCommand({type: 'GRANT_TRUST', peerId: action.peerId});
+    else if (action.type === 'REVOKE_TRUST') handler.handleCommand({type: 'REVOKE_TRUST', peerId: action.peerId});
+    else if (action.type === 'INTRODUCE_PEERS') handler.handleCommand({type: 'INTRODUCE_PEERS', peerId1: action.peerId1, peerId2: action.peerId2});
+    else if (action.type === 'ACCEPT_INTRODUCTION') handler.handleCommand({type: 'ACCEPT_INTRODUCTION', introId: action.introId});
+    else if (action.type === 'DECLINE_INTRODUCTION') handler.handleCommand({type: 'DECLINE_INTRODUCTION', introId: action.introId});
+    else if (action.type === 'CONNECT_VIA_SERVER') handler.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: action.signalingPeerId, name: action.name});
+    else if (action.type === 'SERVER_OFFER_RECEIVED') handler.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: action.signalingPeerId, name: action.name, sdp: action.sdp});
+    else if (action.type === 'SERVER_ANSWER_RECEIVED') handler.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
   };
 };
+
+type EncodingMiddlewareDeps = {
+  encodeCode: (sdp: string, passphrase: string) => Promise<string>
+  getState: () => ConnectionsState
+  dispatch: (action: ConnectionsAction) => void
+}
+
+export const createEncodingMiddleware = ({encodeCode, getState, dispatch}: EncodingMiddlewareDeps) =>
+  (_: ConnectionsAction) => {
+    const {flow} = getState();
+    if (flow.phase === 'encoding-offer') {
+      const {peerId, sdp, passphrase} = flow;
+      encodeCode(sdp, passphrase).then(code => dispatch({type: 'OFFER_ENCODED', peerId, code}));
+    } else if (flow.phase === 'encoding-answer') {
+      const {sdp, passphrase} = flow;
+      encodeCode(sdp, passphrase).then(code => dispatch({type: 'ANSWER_ENCODED', code}));
+    }
+  };
+
+type CodecMiddlewareDeps = {
+  decodeCode: (code: string, passphrase: string) => Promise<Result<string, CodecError>>
+  getState: () => ConnectionsState
+  dispatch: (action: ConnectionsAction) => void
+}
+
+export const createCodecMiddleware = ({decodeCode, getState, dispatch}: CodecMiddlewareDeps) =>
+  (action: ConnectionsAction) => {
+    if (action.type === 'JOIN_OFFER') {
+      decodeCode(action.code, action.passphrase).then(result =>
+        result
+          .map(sdp => dispatch({type: 'ACCEPT_OFFER', sdp}))
+          .onFailure(() => dispatch({type: 'DECODE_FAILED'}))
+      );
+    } else if (action.type === 'ACCEPT_ANSWER_CODE') {
+      const {flow} = getState();
+      if (flow.phase === 'offer-ready') {
+        decodeCode(action.responseCode, flow.passphrase).then(result =>
+          result.map(sdp => dispatch({type: 'ACCEPT_ANSWER', peerId: flow.peerId, sdp}))
+        );
+      }
+    }
+  };
