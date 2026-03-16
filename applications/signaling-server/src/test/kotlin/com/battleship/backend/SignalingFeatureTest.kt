@@ -128,6 +128,7 @@ class SignalingFeatureTest {
         send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
         messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
         messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Alice
 
         send(sessionA, mapOf("type" to "RELAY_OFFER", "targetPeerId" to "relay-offer-b", "sdp" to "fake-sdp-offer"))
 
@@ -147,9 +148,10 @@ class SignalingFeatureTest {
         val (sessionB, _) = connect("relay-answer-b")
 
         send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice"))
-        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
         messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
         messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
         messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Bob
 
         send(sessionB, mapOf("type" to "RELAY_ANSWER", "targetPeerId" to "relay-answer-a", "sdp" to "fake-sdp-answer"))
