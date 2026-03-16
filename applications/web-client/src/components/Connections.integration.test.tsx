@@ -2,7 +2,7 @@ import {render, screen, within, waitFor, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Connections} from './Connections';
 import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware} from '../state/connectionStore';
+import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware, applyMiddleware} from '../state/connectionStore';
 import {createPeerHandler} from '../workers/connection.handler';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import {success, failure} from '../lib/result';
@@ -14,20 +14,16 @@ describe('Connections integration', () => {
     const factory = createFakePeerConnectionFactory();
     const user = userEvent.setup();
 
-    const makeStore = (name: string) => {
-      const s = createConnectionStore();
-      s.applyMiddleware(createHandlerMiddleware({
-        createHandler: emit => createPeerHandler({name, emit, createPeerConnection: factory.createPeerConnection}),
-        dispatch: s.dispatch,
-      }));
-      s.applyMiddleware(createEncodingMiddleware({encodeCode: async sdp => `encoded:${sdp}`, getState: s.getState, dispatch: s.dispatch}));
-      s.applyMiddleware(createCodecMiddleware({
-        decodeCode: async code => code.startsWith('encoded:') ? success(code.slice(8)) : failure('DECRYPT_FAILED' as const),
-        getState: s.getState,
-        dispatch: s.dispatch,
-      }));
-      return s;
-    };
+    const makeStore = (name: string) =>
+      createConnectionStore(applyMiddleware([
+        createHandlerMiddleware({
+          createHandler: emit => createPeerHandler({name, emit, createPeerConnection: factory.createPeerConnection}),
+        }),
+        createEncodingMiddleware({encodeCode: async sdp => `encoded:${sdp}`}),
+        createCodecMiddleware({
+          decodeCode: async code => code.startsWith('encoded:') ? success(code.slice(8)) : failure('DECRYPT_FAILED' as const),
+        }),
+      ]));
 
     const aliceStore = makeStore('Alice');
     const bobStore = makeStore('Bob');

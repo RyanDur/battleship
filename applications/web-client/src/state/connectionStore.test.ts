@@ -1,36 +1,27 @@
 import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware, applyMiddleware} from './connectionStore';
 import {success, failure} from '../lib/result';
 import type {PeerEvent} from '../types/worker-messages';
-import type {ConnectionsAction} from './connections';
+import type {ConnectionsAction, ConnectionsState} from './connections';
 
-const makeStore = () => {
+type MiddlewareFactory = (deps: {dispatch: (action: ConnectionsAction) => void; getState: () => ConnectionsState}) => (action: ConnectionsAction) => void;
+
+const makeStore = (extra: MiddlewareFactory[] = []) => {
   let emitFn: (event: PeerEvent) => void = () => {};
   const commands: Array<{type: string; [key: string]: unknown}> = [];
 
-  const store = createConnectionStore();
-
-  store.applyMiddleware(createHandlerMiddleware({
-    createHandler: (emit) => {
-      emitFn = emit;
-      return {handleCommand: (cmd) => commands.push(cmd)};
-    },
-    dispatch: store.dispatch,
-  }));
-
-  store.applyMiddleware(createEncodingMiddleware({
-    encodeCode: async (sdp: string) => `encoded:${sdp}`,
-    getState: store.getState,
-    dispatch: store.dispatch,
-  }));
-
-  store.applyMiddleware(createCodecMiddleware({
-    decodeCode: async (code: string) =>
-      code.startsWith('encoded:')
-        ? success(code.slice(8))
-        : failure('DECRYPT_FAILED' as const),
-    getState: store.getState,
-    dispatch: store.dispatch,
-  }));
+  const store = createConnectionStore(applyMiddleware([
+    createHandlerMiddleware({
+      createHandler: (emit) => { emitFn = emit; return {handleCommand: (cmd) => commands.push(cmd)}; },
+    }),
+    createEncodingMiddleware({encodeCode: async (sdp: string) => `encoded:${sdp}`}),
+    createCodecMiddleware({
+      decodeCode: async (code: string) =>
+        code.startsWith('encoded:')
+          ? success(code.slice(8))
+          : failure('DECRYPT_FAILED' as const),
+    }),
+    ...extra,
+  ]));
 
   return {store, commands, emit: (e: PeerEvent) => emitFn(e)};
 };
@@ -309,9 +300,8 @@ describe('connectionStore', () => {
     });
 
     it('SERVER_OFFER_CREATED event dispatches RELAY_OFFER', () => {
-      const {store, emit} = makeStore();
       const actions: ConnectionsAction[] = [];
-      store.applyMiddleware((action) => actions.push(action));
+      const {emit} = makeStore([() => (action) => actions.push(action)]);
 
       emit({type: 'SERVER_OFFER_CREATED', signalingPeerId: 'bob-sig', localPeerId: 'local-p1', sdp: 'offer-sdp'});
 
@@ -319,9 +309,8 @@ describe('connectionStore', () => {
     });
 
     it('SERVER_ANSWER_CREATED event dispatches RELAY_ANSWER', () => {
-      const {store, emit} = makeStore();
       const actions: ConnectionsAction[] = [];
-      store.applyMiddleware((action) => actions.push(action));
+      const {emit} = makeStore([() => (action) => actions.push(action)]);
 
       emit({type: 'SERVER_ANSWER_CREATED', signalingPeerId: 'alice-sig', sdp: 'answer-sdp'});
 
@@ -341,44 +330,36 @@ describe('connectionStore', () => {
     it('fans out action to all middleware in list', () => {
       const received1: ConnectionsAction[] = [];
       const received2: ConnectionsAction[] = [];
+      const noop = () => {};
       const composed = applyMiddleware([
-        (action) => received1.push(action),
-        (action) => received2.push(action),
+        () => (action) => received1.push(action),
+        () => (action) => received2.push(action),
       ]);
       const action: ConnectionsAction = {type: 'CREATE_OFFER', passphrase: 'secret'};
+      const middleware = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: []})});
 
-      composed(action);
+      middleware(action);
 
       expect(received1).toContainEqual(action);
       expect(received2).toContainEqual(action);
     });
 
     it('is a no-op for an empty list', () => {
+      const noop = () => {};
       const composed = applyMiddleware([]);
-      expect(() => composed({type: 'CREATE_OFFER', passphrase: 'secret'})).not.toThrow();
+      const middleware = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: []})});
+      expect(() => middleware({type: 'CREATE_OFFER', passphrase: 'secret'})).not.toThrow();
     });
   });
 
-  describe('applyMiddleware', () => {
+  describe('middleware', () => {
     it('receives every dispatched action', () => {
-      const {store} = makeStore();
       const actions: ConnectionsAction[] = [];
-      store.applyMiddleware((action) => actions.push(action));
+      const {store} = makeStore([() => (action) => actions.push(action)]);
 
       store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
 
       expect(actions).toContainEqual({type: 'CREATE_OFFER', passphrase: 'secret'});
-    });
-
-    it('unsubscribe stops receiving actions', () => {
-      const {store} = makeStore();
-      const actions: ConnectionsAction[] = [];
-      const unsubscribe = store.applyMiddleware((action) => actions.push(action));
-
-      unsubscribe();
-      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
-
-      expect(actions).toHaveLength(0);
     });
   });
 

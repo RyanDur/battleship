@@ -16,7 +16,6 @@ const makeFakeStore = (initial: ConnectionsState = initialState): ConnectionStor
       return () => listeners.delete(listener);
     },
     dispatch: vi.fn(),
-    applyMiddleware: vi.fn(() => () => {}),
     _emit: () => {
       state = {...state, peers: [{id: 'p1', name: 'Alice'}]};
       notify();

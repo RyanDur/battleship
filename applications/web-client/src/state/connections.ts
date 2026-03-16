@@ -51,6 +51,8 @@ export type ConnectionsAction =
   | {type: 'ACCEPT_OFFER'; sdp: string}
   | {type: 'ACCEPT_ANSWER'; peerId: string; sdp: string}
   | {type: 'ACCEPT_ANSWER_CODE'; responseCode: string}
+  | {type: 'START_SIGNALING'}
+  | {type: 'STOP_SIGNALING'}
 
 export const initialState: ConnectionsState = {
   flow: {phase: 'idle'},

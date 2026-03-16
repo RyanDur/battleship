@@ -2,28 +2,22 @@ import {render, screen, act, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Connections} from './Connections';
 import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware} from '../state/connectionStore';
+import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware, applyMiddleware} from '../state/connectionStore';
 import {success, failure} from '../lib/result';
 import type {PeerEvent} from '../types/worker-messages';
 
 const makeStore = () => {
   let emitFn: (event: PeerEvent) => void = () => {};
-  const store = createConnectionStore();
-  store.applyMiddleware(createHandlerMiddleware({
-    createHandler: (emit) => { emitFn = emit; return {handleCommand: () => {}}; },
-    dispatch: store.dispatch,
-  }));
-  store.applyMiddleware(createEncodingMiddleware({
-    encodeCode: async (sdp: string) => `encoded:${sdp}`,
-    getState: store.getState,
-    dispatch: store.dispatch,
-  }));
-  store.applyMiddleware(createCodecMiddleware({
-    decodeCode: async (code: string) =>
-      code.startsWith('encoded:') ? success(code.slice(8)) : failure('DECRYPT_FAILED' as const),
-    getState: store.getState,
-    dispatch: store.dispatch,
-  }));
+  const store = createConnectionStore(applyMiddleware([
+    createHandlerMiddleware({
+      createHandler: (emit) => { emitFn = emit; return {handleCommand: () => {}}; },
+    }),
+    createEncodingMiddleware({encodeCode: async (sdp: string) => `encoded:${sdp}`}),
+    createCodecMiddleware({
+      decodeCode: async (code: string) =>
+        code.startsWith('encoded:') ? success(code.slice(8)) : failure('DECRYPT_FAILED' as const),
+    }),
+  ]));
   return {store, emit: (e: PeerEvent) => emitFn(e)};
 };
 
