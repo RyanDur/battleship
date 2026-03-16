@@ -1,9 +1,7 @@
 package com.battleship.backend.signaling
 
-import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
 
-@Component
 class InMemoryRelationshipRepository : RelationshipRepository {
     private val relationships = ConcurrentHashMap<String, MutableSet<String>>()
 
