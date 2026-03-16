@@ -145,7 +145,10 @@ export const Connections = ({serviceOnline}: Props) => {
       {onlinePeers.length > 0 && (
         <ul aria-label="Online peers">
           {onlinePeers.map(peer => (
-            <li key={peer.peerId}>{peer.name}</li>
+            <li key={peer.peerId}>
+              {peer.name}
+              <button onClick={() => store.dispatch({type: 'CONNECT_VIA_SERVER', signalingPeerId: peer.peerId, name: peer.name})}>Connect</button>
+            </li>
           ))}
         </ul>
       )}
