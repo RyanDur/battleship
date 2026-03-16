@@ -188,6 +188,22 @@ describe('connectionsReducer', () => {
     expect(next.onlinePeers).toEqual([{peerId: 'p2', name: 'Bob'}]);
   });
 
+  it('ONLINE_PEER_JOINED marks matching previous peer as online', () => {
+    const state = {...initialState, previousPeers: [{peerId: 'p1', name: 'Alice', online: false}]};
+
+    const next = connectionsReducer(state, {type: 'ONLINE_PEER_JOINED', peerId: 'p1', name: 'Alice'});
+
+    expect(next.previousPeers).toEqual([{peerId: 'p1', name: 'Alice', online: true}]);
+  });
+
+  it('ONLINE_PEER_JOINED leaves previousPeers unchanged when peer is not in previousPeers', () => {
+    const state = {...initialState, previousPeers: [{peerId: 'p2', name: 'Bob', online: false}]};
+
+    const next = connectionsReducer(state, {type: 'ONLINE_PEER_JOINED', peerId: 'p1', name: 'Alice'});
+
+    expect(next.previousPeers).toEqual([{peerId: 'p2', name: 'Bob', online: false}]);
+  });
+
   it('PREVIOUS_PEERS_RECEIVED replaces previousPeers list', () => {
     const peers = [{peerId: 'p1', name: 'Alice', online: false}];
 

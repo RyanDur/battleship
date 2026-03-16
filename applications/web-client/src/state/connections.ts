@@ -122,7 +122,11 @@ export const connectionsReducer = (state: ConnectionsState, action: ConnectionsA
       return {...state, onlinePeers: action.peers};
 
     case 'ONLINE_PEER_JOINED':
-      return {...state, onlinePeers: [...state.onlinePeers, {peerId: action.peerId, name: action.name}]};
+      return {
+        ...state,
+        onlinePeers: [...state.onlinePeers, {peerId: action.peerId, name: action.name}],
+        previousPeers: state.previousPeers.map(p => p.peerId === action.peerId ? {...p, online: true} : p),
+      };
 
     case 'ONLINE_PEER_LEFT':
       return {
