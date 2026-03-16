@@ -13,6 +13,8 @@ export type SignalingEvent =
   | {type: 'OFFER_RECEIVED'; fromPeerId: string; name: string; sdp: string}
   | {type: 'ANSWER_RECEIVED'; fromPeerId: string; sdp: string}
   | {type: 'PREVIOUS_PEERS'; peers: PreviousPeer[]}
+  | {type: 'ICE_RESTART_RECEIVED'; fromPeerId: string; sdp: string}
+  | {type: 'ICE_RESTART_ANSWER_RECEIVED'; fromPeerId: string; sdp: string}
 
 export type SignalingHandle = {
   stop: () => void
@@ -56,6 +58,14 @@ const previousPeersDecoder = Decoder.object({
   required: {type: Decoder.literal('PREVIOUS_PEERS'), peers: Decoder.array(previousPeerDecoder)},
 });
 
+const iceRestartReceivedDecoder = Decoder.object({
+  required: {type: Decoder.literal('ICE_RESTART_RECEIVED'), fromPeerId: Decoder.string, sdp: Decoder.string},
+});
+
+const iceRestartAnswerReceivedDecoder = Decoder.object({
+  required: {type: Decoder.literal('ICE_RESTART_ANSWER_RECEIVED'), fromPeerId: Decoder.string, sdp: Decoder.string},
+});
+
 export const startSignaling = (
   config: SignalingConfig,
   onEvent: (event: SignalingEvent) => void
@@ -85,7 +95,9 @@ export const startSignaling = (
             .or(() => maybe(peerLeftDecoder.decode(parsed)).map(msg => onEvent({type: 'PEER_LEFT', peerId: msg.peerId})))
             .or(() => maybe(offerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'OFFER_RECEIVED', fromPeerId: msg.fromPeerId, name: msg.name, sdp: msg.sdp})))
             .or(() => maybe(answerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'ANSWER_RECEIVED', fromPeerId: msg.fromPeerId, sdp: msg.sdp})))
-            .or(() => maybe(previousPeersDecoder.decode(parsed)).map(msg => onEvent({type: 'PREVIOUS_PEERS', peers: msg.peers})));
+            .or(() => maybe(previousPeersDecoder.decode(parsed)).map(msg => onEvent({type: 'PREVIOUS_PEERS', peers: msg.peers})))
+            .or(() => maybe(iceRestartReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'ICE_RESTART_RECEIVED', fromPeerId: msg.fromPeerId, sdp: msg.sdp})))
+            .or(() => maybe(iceRestartAnswerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'ICE_RESTART_ANSWER_RECEIVED', fromPeerId: msg.fromPeerId, sdp: msg.sdp})));
         });
     };
 

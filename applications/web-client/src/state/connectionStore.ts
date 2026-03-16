@@ -147,6 +147,8 @@ export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): 
           else if (event.type === 'OFFER_RECEIVED') dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: event.fromPeerId, name: event.name, sdp: event.sdp});
           else if (event.type === 'ANSWER_RECEIVED') dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: event.fromPeerId, sdp: event.sdp});
           else if (event.type === 'PREVIOUS_PEERS') dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: event.peers});
+          else if (event.type === 'ICE_RESTART_RECEIVED') dispatch({type: 'ICE_RESTART_RECEIVED', signalingPeerId: event.fromPeerId, sdp: event.sdp});
+          else if (event.type === 'ICE_RESTART_ANSWER_RECEIVED') dispatch({type: 'ICE_RESTART_ANSWER_RECEIVED', signalingPeerId: event.fromPeerId, sdp: event.sdp});
         });
       } else if (action.type === 'STOP_SIGNALING') {
         handle?.stop();
@@ -157,6 +159,10 @@ export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): 
         handle?.send({type: 'RELAY_ANSWER', targetPeerId: action.targetPeerId, sdp: action.sdp});
       } else if (action.type === 'FORGET_PEER') {
         handle?.send({type: 'FORGET_PEER', targetPeerId: action.peerId});
+      } else if (action.type === 'RELAY_ICE_RESTART') {
+        handle?.send({type: 'RELAY_ICE_RESTART', targetPeerId: action.targetPeerId, sdp: action.sdp});
+      } else if (action.type === 'RELAY_ICE_RESTART_ANSWER') {
+        handle?.send({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: action.targetPeerId, sdp: action.sdp});
       }
     };
   };

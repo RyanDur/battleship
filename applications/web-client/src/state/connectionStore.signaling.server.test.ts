@@ -108,6 +108,58 @@ describe('createSignalingMiddleware (server)', () => {
     await cleanup();
   });
 
+  it('RELAY_ICE_RESTART dispatch sends message to server', async () => {
+    const received: string[] = [];
+    const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
+
+    store.dispatch({type: 'RELAY_ICE_RESTART', targetPeerId: 'p1', sdp: 'v=restart'});
+
+    await vi.waitFor(() =>
+      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'RELAY_ICE_RESTART', targetPeerId: 'p1', sdp: 'v=restart'})
+    );
+    await cleanup();
+  });
+
+  it('RELAY_ICE_RESTART_ANSWER dispatch sends message to server', async () => {
+    const received: string[] = [];
+    const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
+
+    store.dispatch({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: 'p1', sdp: 'v=restart-answer'});
+
+    await vi.waitFor(() =>
+      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: 'p1', sdp: 'v=restart-answer'})
+    );
+    await cleanup();
+  });
+
+  it('ICE_RESTART_RECEIVED message from server dispatches store action', async () => {
+    const {store, getConn, cleanup} = await connectStore();
+    const captured: import('../state/connections').ConnectionsAction[] = [];
+    const origDispatch = store.dispatch;
+    store.dispatch = (action) => { captured.push(action); origDispatch(action); };
+
+    getConn().send(JSON.stringify({type: 'ICE_RESTART_RECEIVED', fromPeerId: 'p1', sdp: 'v=restart'}));
+
+    await vi.waitFor(() =>
+      expect(captured).toContainEqual(expect.objectContaining({type: 'ICE_RESTART_RECEIVED', signalingPeerId: 'p1', sdp: 'v=restart'}))
+    );
+    await cleanup();
+  });
+
+  it('ICE_RESTART_ANSWER_RECEIVED message from server dispatches store action', async () => {
+    const {store, getConn, cleanup} = await connectStore();
+    const captured: import('../state/connections').ConnectionsAction[] = [];
+    const origDispatch = store.dispatch;
+    store.dispatch = (action) => { captured.push(action); origDispatch(action); };
+
+    getConn().send(JSON.stringify({type: 'ICE_RESTART_ANSWER_RECEIVED', fromPeerId: 'p1', sdp: 'v=restart-answer'}));
+
+    await vi.waitFor(() =>
+      expect(captured).toContainEqual(expect.objectContaining({type: 'ICE_RESTART_ANSWER_RECEIVED', signalingPeerId: 'p1', sdp: 'v=restart-answer'}))
+    );
+    await cleanup();
+  });
+
   it('STOP_SIGNALING prevents further server events from updating state', async () => {
     const {store, getConn, cleanup} = await connectStore();
 
