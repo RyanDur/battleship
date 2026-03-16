@@ -243,4 +243,20 @@ describe('connectionsReducer', () => {
 
     expect(next.previousPeers).toEqual([{peerId: 'p1', name: 'Alice', online: true}]);
   });
+
+  it('FORGET_PEER removes peer from previousPeers', () => {
+    const state = {...initialState, previousPeers: [{peerId: 'p1', name: 'Alice', online: false}]};
+
+    const next = connectionsReducer(state, {type: 'FORGET_PEER', peerId: 'p1'});
+
+    expect(next.previousPeers).toEqual([]);
+  });
+
+  it('FORGET_PEER leaves previousPeers unchanged when peer not found', () => {
+    const state = {...initialState, previousPeers: [{peerId: 'p1', name: 'Alice', online: false}]};
+
+    const next = connectionsReducer(state, {type: 'FORGET_PEER', peerId: 'unknown'});
+
+    expect(next.previousPeers).toEqual([{peerId: 'p1', name: 'Alice', online: false}]);
+  });
 });
