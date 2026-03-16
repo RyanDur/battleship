@@ -13,6 +13,9 @@ export type ConnectionStore = {
   applyMiddleware: (fn: (action: ConnectionsAction) => void) => () => void
 }
 
+export const applyMiddleware = (fns: Array<(action: ConnectionsAction) => void>) =>
+  (action: ConnectionsAction) => fns.forEach(fn => fn(action));
+
 export const createConnectionStore = (): ConnectionStore => {
   let state = initialState;
   const listeners = new Set<() => void>();

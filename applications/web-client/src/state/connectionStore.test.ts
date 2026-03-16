@@ -1,4 +1,4 @@
-import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware} from './connectionStore';
+import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware, applyMiddleware} from './connectionStore';
 import {success, failure} from '../lib/result';
 import type {PeerEvent} from '../types/worker-messages';
 import type {ConnectionsAction} from './connections';
@@ -334,6 +334,28 @@ describe('connectionStore', () => {
       store.dispatch({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'bob-sig', name: 'Bob'});
 
       expect(commands).toContainEqual({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'bob-sig', name: 'Bob'});
+    });
+  });
+
+  describe('applyMiddleware (standalone)', () => {
+    it('fans out action to all middleware in list', () => {
+      const received1: ConnectionsAction[] = [];
+      const received2: ConnectionsAction[] = [];
+      const composed = applyMiddleware([
+        (action) => received1.push(action),
+        (action) => received2.push(action),
+      ]);
+      const action: ConnectionsAction = {type: 'CREATE_OFFER', passphrase: 'secret'};
+
+      composed(action);
+
+      expect(received1).toContainEqual(action);
+      expect(received2).toContainEqual(action);
+    });
+
+    it('is a no-op for an empty list', () => {
+      const composed = applyMiddleware([]);
+      expect(() => composed({type: 'CREATE_OFFER', passphrase: 'secret'})).not.toThrow();
     });
   });
 
