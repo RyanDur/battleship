@@ -51,8 +51,17 @@ type HandlerMiddlewareConfig = {
 
 export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMiddlewareConfig): MiddlewareFactory =>
   ({dispatch}) => {
+    const signalingPeerIds = new Map<string, string>();
+
     const emit = (event: PeerEvent) => {
-      if (event.type === 'PEER_CONNECTED') dispatch({type: 'PEER_CONNECTED', peerId: event.peerId});
+      if (event.type === 'PEER_CONNECTED') {
+        dispatch({type: 'PEER_CONNECTED', peerId: event.peerId});
+        const signalingPeerId = signalingPeerIds.get(event.peerId);
+        if (signalingPeerId) {
+          dispatch({type: 'PREVIOUS_PEER_CONNECTED', signalingPeerId});
+          signalingPeerIds.delete(event.peerId);
+        }
+      }
       else if (event.type === 'PEER_NAMED') dispatch({type: 'PEER_NAMED', peerId: event.peerId, name: event.name});
       else if (event.type === 'PEER_DISCONNECTED') dispatch({type: 'PEER_DISCONNECTED', peerId: event.peerId});
       else if (event.type === 'PEER_TRUST_UPDATED') dispatch({type: 'PEER_TRUST_UPDATED', peerId: event.peerId, trusts: event.trusts});
@@ -61,7 +70,10 @@ export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMid
       else if (event.type === 'INTRODUCTION_RECEIVED') dispatch({type: 'INTRODUCTION_RECEIVED', introId: event.introId, from: event.from, peer: event.peer});
       else if (event.type === 'INTRODUCTION_DECLINED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
       else if (event.type === 'INTRODUCTION_EXPIRED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
-      else if (event.type === 'SERVER_OFFER_CREATED') dispatch({type: 'RELAY_OFFER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
+      else if (event.type === 'SERVER_OFFER_CREATED') {
+        signalingPeerIds.set(event.localPeerId, event.signalingPeerId);
+        dispatch({type: 'RELAY_OFFER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
+      }
       else if (event.type === 'SERVER_ANSWER_CREATED') dispatch({type: 'RELAY_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
     };
 
@@ -78,6 +90,7 @@ export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMid
       else if (action.type === 'ACCEPT_INTRODUCTION') handler.handleCommand({type: 'ACCEPT_INTRODUCTION', introId: action.introId});
       else if (action.type === 'DECLINE_INTRODUCTION') handler.handleCommand({type: 'DECLINE_INTRODUCTION', introId: action.introId});
       else if (action.type === 'CONNECT_VIA_SERVER') handler.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: action.signalingPeerId, name: action.name});
+      else if (action.type === 'RECONNECT_VIA_SERVER') handler.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: action.signalingPeerId, name: action.name});
       else if (action.type === 'SERVER_OFFER_RECEIVED') handler.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: action.signalingPeerId, name: action.name, sdp: action.sdp});
       else if (action.type === 'SERVER_ANSWER_RECEIVED') handler.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
     };

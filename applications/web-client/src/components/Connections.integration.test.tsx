@@ -8,6 +8,51 @@ import type {ConnectionStore, MiddlewareFactory} from '../state/connectionStore'
 import type {ConnectionFlow} from '../state/connections';
 
 describe('Connections integration', () => {
+  it('reconnecting to a previous peer removes them from previous peers list', async () => {
+    const factory = createFakePeerConnectionFactory();
+
+    const alice: {store?: ConnectionStore} = {};
+    const bob: {store?: ConnectionStore} = {};
+
+    const makeRelayMiddleware = (myName: string, mySignalingPeerId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
+      (_deps) => (action) => {
+        if (action.type === 'RELAY_OFFER') {
+          getOther().dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: mySignalingPeerId, name: myName, sdp: action.sdp});
+        } else if (action.type === 'RELAY_ANSWER') {
+          getOther().dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: mySignalingPeerId, sdp: action.sdp});
+        }
+      };
+
+    alice.store = createConnectionStore(applyMiddleware([
+      createHandlerMiddleware({name: 'Alice', createPeerConnection: factory.createPeerConnection}),
+      encodingMiddleware,
+      codecMiddleware,
+      makeRelayMiddleware('Alice', 'alice-sig', () => bob.store!),
+    ]));
+
+    bob.store = createConnectionStore(applyMiddleware([
+      createHandlerMiddleware({name: 'Bob', createPeerConnection: factory.createPeerConnection}),
+      encodingMiddleware,
+      codecMiddleware,
+      makeRelayMiddleware('Bob', 'bob-sig', () => alice.store!),
+    ]));
+
+    const aliceStore = alice.store;
+
+    // Alice has Bob as a previous peer (e.g. from a prior session)
+    await act(async () => aliceStore.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'bob-sig', name: 'Bob', online: true}]}));
+
+    expect(aliceStore.getState().previousPeers).toHaveLength(1);
+
+    // Alice reconnects to Bob
+    await act(async () => aliceStore.dispatch({type: 'RECONNECT_VIA_SERVER', signalingPeerId: 'bob-sig', name: 'Bob'}));
+
+    await waitFor(() => {
+      expect(aliceStore.getState().peers).toHaveLength(1);
+      expect(aliceStore.getState().previousPeers).toHaveLength(0);
+    });
+  });
+
   it('Alice connects to Bob via signaling relay', async () => {
     const factory = createFakePeerConnectionFactory();
     const user = userEvent.setup();
