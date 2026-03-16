@@ -12,7 +12,6 @@ import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware
 import {ConnectionProvider} from './state/ConnectionProvider';
 import {createPeerHandler} from './workers/connection.handler';
 
-
 const platform = detectPlatform(navigator.userAgent);
 
 const actionFor = (state: HeartbeatState) => {

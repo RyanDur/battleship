@@ -1,9 +1,8 @@
 import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware, applyMiddleware} from './connectionStore';
 import {success, failure} from '../lib/result';
 import type {PeerEvent} from '../types/worker-messages';
-import type {ConnectionsAction, ConnectionsState} from './connections';
-
-type MiddlewareFactory = (deps: {dispatch: (action: ConnectionsAction) => void; getState: () => ConnectionsState}) => (action: ConnectionsAction) => void;
+import type {ConnectionsAction} from './connections';
+import type {MiddlewareFactory} from './connectionStore';
 
 const makeStore = (extra: MiddlewareFactory[] = []) => {
   let emitFn: (event: PeerEvent) => void = () => {};

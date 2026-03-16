@@ -19,7 +19,7 @@ type MiddlewareDeps = {
   getState: () => ConnectionsState
 }
 
-type MiddlewareFactory = (deps: MiddlewareDeps) => (action: ConnectionsAction) => void
+export type MiddlewareFactory = (deps: MiddlewareDeps) => (action: ConnectionsAction) => void
 
 export const applyMiddleware = (factories: MiddlewareFactory[]): MiddlewareFactory =>
   (deps) => {
@@ -90,7 +90,8 @@ type EncodingMiddlewareConfig = {
 
 export const createEncodingMiddleware = ({encodeCode}: EncodingMiddlewareConfig): MiddlewareFactory =>
   ({dispatch, getState}) =>
-    (_: ConnectionsAction) => {
+    (action: ConnectionsAction) => {
+      if (action.type !== 'OFFER_SDP_READY' && action.type !== 'ANSWER_SDP_READY') return;
       const {flow} = getState();
       if (flow.phase === 'encoding-offer') {
         const {peerId, sdp, passphrase} = flow;
