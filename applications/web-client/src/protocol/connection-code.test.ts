@@ -26,23 +26,28 @@ describe('connection codes (Story #39)', () => {
   it('decodes what was encoded with the same passphrase', async () => {
     const passphrase = 'hello world';
 
-    const code = await encodeConnectionCode(SAMPLE_SDP, passphrase);
-    const result = await decodeConnectionCode(code, passphrase);
+    const encoded = await encodeConnectionCode(SAMPLE_SDP, passphrase).value;
+    expect(encoded.kind).toBe('success');
+    if (encoded.kind !== 'success') return;
 
-    expect(result.kind).toBe('success');
-    expect(result.kind === 'success' && result.value).toBe(SAMPLE_SDP);
+    const decoded = await decodeConnectionCode(encoded.value, passphrase).value;
+    expect(decoded.kind).toBe('success');
+    expect(decoded.kind === 'success' && decoded.value).toBe(SAMPLE_SDP);
   });
 
   it('produces a code significantly shorter than the raw SDP', async () => {
-    const code = await encodeConnectionCode(SAMPLE_SDP, 'passphrase');
+    const result = await encodeConnectionCode(SAMPLE_SDP, 'passphrase').value;
+    expect(result.kind).toBe('success');
+    if (result.kind !== 'success') return;
 
-    expect(code.length).toBeLessThan(SAMPLE_SDP.length);
+    expect(result.value.length).toBeLessThan(SAMPLE_SDP.length);
   });
 
   it('fails with a clear error when the passphrase is wrong', async () => {
-    const code = await encodeConnectionCode(SAMPLE_SDP, 'correct-passphrase');
-    const result = await decodeConnectionCode(code, 'wrong-passphrase');
+    const encoded = await encodeConnectionCode(SAMPLE_SDP, 'correct-passphrase').value;
+    if (encoded.kind !== 'success') return;
 
+    const result = await decodeConnectionCode(encoded.value, 'wrong-passphrase').value;
     expect(result.kind).toBe('failure');
   });
 });
