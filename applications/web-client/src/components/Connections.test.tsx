@@ -260,6 +260,29 @@ describe('Connections', () => {
     expect(store.getState().pendingIntroductions).toEqual([]);
   });
 
+  describe('connection health', () => {
+    it('shows reconnecting indicator when peer connection is unstable', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
+      await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
+      await act(async () => store.dispatch({type: 'PEER_CONNECTION_UNSTABLE', peerId: 'p1'}));
+
+      expect(screen.getByText(/reconnecting/i)).toBeInTheDocument();
+    });
+
+    it('hides reconnecting indicator when peer connection is restored', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
+      await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
+      await act(async () => store.dispatch({type: 'PEER_CONNECTION_UNSTABLE', peerId: 'p1'}));
+      await act(async () => store.dispatch({type: 'PEER_CONNECTION_RESTORED', peerId: 'p1'}));
+
+      expect(screen.queryByText(/reconnecting/i)).not.toBeInTheDocument();
+    });
+  });
+
   it('clicking disconnect removes the peer', async () => {
     const user = userEvent.setup();
     const {store} = renderConnections();

@@ -244,6 +244,28 @@ describe('connectionsReducer', () => {
     expect(next.previousPeers).toEqual([{peerId: 'p1', name: 'Alice', online: true}]);
   });
 
+  it('PEER_CONNECTION_UNSTABLE marks peer as unstable in peerConnectionHealth', () => {
+    const next = connectionsReducer(initialState, {type: 'PEER_CONNECTION_UNSTABLE', peerId: 'p1'});
+
+    expect(next.peerConnectionHealth).toEqual({'p1': 'unstable'});
+  });
+
+  it('PEER_CONNECTION_RESTORED marks peer as stable in peerConnectionHealth', () => {
+    const state = {...initialState, peerConnectionHealth: {'p1': 'unstable' as const}};
+
+    const next = connectionsReducer(state, {type: 'PEER_CONNECTION_RESTORED', peerId: 'p1'});
+
+    expect(next.peerConnectionHealth).toEqual({'p1': 'stable'});
+  });
+
+  it('PEER_DISCONNECTED removes peer from peerConnectionHealth', () => {
+    const state = {...initialState, peerConnectionHealth: {'p1': 'unstable' as const}};
+
+    const next = connectionsReducer(state, {type: 'PEER_DISCONNECTED', peerId: 'p1'});
+
+    expect(next.peerConnectionHealth).toEqual({});
+  });
+
   it('FORGET_PEER removes peer from previousPeers', () => {
     const state = {...initialState, previousPeers: [{peerId: 'p1', name: 'Alice', online: false}]};
 

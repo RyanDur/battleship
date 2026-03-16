@@ -21,6 +21,7 @@ export type ConnectionsState = {
   pendingIntroductions: PendingIntroduction[]
   onlinePeers: OnlinePeer[]
   previousPeers: PreviousPeer[]
+  peerConnectionHealth: Record<string, 'stable' | 'unstable'>
 }
 
 export type ConnectionsAction =
@@ -60,6 +61,8 @@ export type ConnectionsAction =
   | {type: 'RECONNECT_VIA_SERVER'; signalingPeerId: string; name: string}
   | {type: 'PREVIOUS_PEER_CONNECTED'; signalingPeerId: string}
   | {type: 'FORGET_PEER'; peerId: string}
+  | {type: 'PEER_CONNECTION_UNSTABLE'; peerId: string}
+  | {type: 'PEER_CONNECTION_RESTORED'; peerId: string}
 
 export const initialState: ConnectionsState = {
   flow: {phase: 'idle'},
@@ -67,6 +70,7 @@ export const initialState: ConnectionsState = {
   pendingIntroductions: [],
   onlinePeers: [],
   previousPeers: [],
+  peerConnectionHealth: {},
 };
 
 export const connectionsReducer = (state: ConnectionsState, action: ConnectionsAction): ConnectionsState => {
@@ -99,7 +103,11 @@ export const connectionsReducer = (state: ConnectionsState, action: ConnectionsA
       return {...state, peers: [...state.peers, {id: action.peerId}]};
 
     case 'PEER_DISCONNECTED':
-      return {...state, peers: state.peers.filter(p => p.id !== action.peerId)};
+      return {
+        ...state,
+        peers: state.peers.filter(p => p.id !== action.peerId),
+        peerConnectionHealth: Object.fromEntries(Object.entries(state.peerConnectionHealth).filter(([k]) => k !== action.peerId)),
+      };
 
     case 'PEER_NAMED':
       return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, name: action.name} : p)};
@@ -146,6 +154,12 @@ export const connectionsReducer = (state: ConnectionsState, action: ConnectionsA
 
     case 'FORGET_PEER':
       return {...state, previousPeers: state.previousPeers.filter(p => p.peerId !== action.peerId)};
+
+    case 'PEER_CONNECTION_UNSTABLE':
+      return {...state, peerConnectionHealth: {...state.peerConnectionHealth, [action.peerId]: 'unstable'}};
+
+    case 'PEER_CONNECTION_RESTORED':
+      return {...state, peerConnectionHealth: {...state.peerConnectionHealth, [action.peerId]: 'stable'}};
 
     default:
       return state;

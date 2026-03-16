@@ -21,7 +21,7 @@ type Props = {
   serviceOnline: boolean
 }
 
-const PeerRow = ({peer, otherTrustingPeers}: {peer: Peer; otherTrustingPeers: Peer[]}) => {
+const PeerRow = ({peer, otherTrustingPeers, unstable}: {peer: Peer; otherTrustingPeers: Peer[]; unstable: boolean}) => {
   const store = useConnectionStore();
   const [introducing, setIntroducing] = useState(false);
   const showIntroduceButton = peer.trustsMe && otherTrustingPeers.length > 0;
@@ -29,6 +29,7 @@ const PeerRow = ({peer, otherTrustingPeers}: {peer: Peer; otherTrustingPeers: Pe
   return (
     <li>
       {peer.name ?? 'Unknown'}
+      {unstable && <span>Reconnecting...</span>}
       {peer.trustsMe && <span>Trusts you to introduce them</span>}
       {showIntroduceButton && !introducing && (
         <button onClick={() => setIntroducing(true)}>Introduce</button>
@@ -68,6 +69,7 @@ export const Connections = ({serviceOnline}: Props) => {
   const store = useConnectionStore();
   const flow = toFlowPhase(useConnectionState(s => s.flow));
   const peers = useConnectionState(s => s.peers);
+  const peerConnectionHealth = useConnectionState(s => s.peerConnectionHealth);
   const pendingIntroductions = useConnectionState(s => s.pendingIntroductions);
   const onlinePeers = useConnectionState(s => s.onlinePeers);
   const previousPeers = useConnectionState(s => s.previousPeers);
@@ -182,6 +184,7 @@ export const Connections = ({serviceOnline}: Props) => {
               key={peer.id}
               peer={peer}
               otherTrustingPeers={trustingPeers.filter(p => p.id !== peer.id)}
+              unstable={peerConnectionHealth[peer.id] === 'unstable'}
             />
           ))}
         </ul>
