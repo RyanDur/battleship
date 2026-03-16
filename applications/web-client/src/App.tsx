@@ -6,6 +6,7 @@ import {loadConfig} from './protocol/config';
 import {fetchDownloadUrl} from './protocol/download';
 import type {HeartbeatState} from './protocol/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
+import {asyncResult} from './lib/asyncResult';
 import {detectPlatform} from './protocol/platform';
 import {createConnectionStore, createHandlerMiddleware, encodingMiddleware, codecMiddleware, createSignalingMiddleware, applyMiddleware} from './state/connectionStore';
 import {ConnectionProvider} from './state/ConnectionProvider';
@@ -23,7 +24,7 @@ const App = () => {
   const {state: heartbeat, retry} = useHeartbeat(config);
 
   useEffect(() => {
-    void loadConfig().then(setConfig);
+    asyncResult(loadConfig()).onSuccess(setConfig);
   }, []);
 
   const store = useMemo(() => {
