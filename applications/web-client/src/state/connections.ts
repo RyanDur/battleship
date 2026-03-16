@@ -63,6 +63,10 @@ export type ConnectionsAction =
   | {type: 'FORGET_PEER'; peerId: string}
   | {type: 'PEER_CONNECTION_UNSTABLE'; peerId: string}
   | {type: 'PEER_CONNECTION_RESTORED'; peerId: string}
+  | {type: 'RELAY_ICE_RESTART'; targetPeerId: string; sdp: string}
+  | {type: 'RELAY_ICE_RESTART_ANSWER'; targetPeerId: string; sdp: string}
+  | {type: 'ICE_RESTART_RECEIVED'; signalingPeerId: string; sdp: string}
+  | {type: 'ICE_RESTART_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string}
 
 export const initialState: ConnectionsState = {
   flow: {phase: 'idle'},
