@@ -227,4 +227,20 @@ describe('connectionsReducer', () => {
 
     expect(next.previousPeers).toEqual([{peerId: 'p2', name: 'Bob', online: true}]);
   });
+
+  it('PREVIOUS_PEER_CONNECTED removes peer from previousPeers', () => {
+    const state = {...initialState, previousPeers: [{peerId: 'p1', name: 'Alice', online: true}]};
+
+    const next = connectionsReducer(state, {type: 'PREVIOUS_PEER_CONNECTED', signalingPeerId: 'p1'});
+
+    expect(next.previousPeers).toEqual([]);
+  });
+
+  it('PREVIOUS_PEER_CONNECTED leaves previousPeers unchanged when peer not found', () => {
+    const state = {...initialState, previousPeers: [{peerId: 'p1', name: 'Alice', online: true}]};
+
+    const next = connectionsReducer(state, {type: 'PREVIOUS_PEER_CONNECTED', signalingPeerId: 'unknown'});
+
+    expect(next.previousPeers).toEqual([{peerId: 'p1', name: 'Alice', online: true}]);
+  });
 });

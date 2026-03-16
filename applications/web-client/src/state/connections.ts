@@ -57,6 +57,8 @@ export type ConnectionsAction =
   | {type: 'ACCEPT_ANSWER_CODE'; responseCode: string}
   | {type: 'START_SIGNALING'}
   | {type: 'STOP_SIGNALING'}
+  | {type: 'RECONNECT_VIA_SERVER'; signalingPeerId: string; name: string}
+  | {type: 'PREVIOUS_PEER_CONNECTED'; signalingPeerId: string}
 
 export const initialState: ConnectionsState = {
   flow: {phase: 'idle'},
@@ -137,6 +139,9 @@ export const connectionsReducer = (state: ConnectionsState, action: ConnectionsA
 
     case 'PREVIOUS_PEERS_RECEIVED':
       return {...state, previousPeers: action.peers};
+
+    case 'PREVIOUS_PEER_CONNECTED':
+      return {...state, previousPeers: state.previousPeers.filter(p => p.peerId !== action.signalingPeerId)};
 
     default:
       return state;
