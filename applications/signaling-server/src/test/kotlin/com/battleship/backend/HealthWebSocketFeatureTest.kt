@@ -16,7 +16,10 @@ import java.util.concurrent.TimeUnit
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["app.heartbeat-interval=1000"]
+    properties = [
+        "app.heartbeat-interval=1000",
+        "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
+    ]
 )
 class HealthWebSocketFeatureTest {
 
