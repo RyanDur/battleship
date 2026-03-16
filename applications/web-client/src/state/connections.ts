@@ -2,6 +2,8 @@ export type Peer = {id: string; name?: string; trusted?: boolean; trustsMe?: boo
 
 export type OnlinePeer = {peerId: string; name: string}
 
+export type PreviousPeer = {peerId: string; name: string; online: boolean; email?: string}
+
 export type PendingIntroduction = {introId: string; from: string; peer: string}
 
 export type ConnectionFlow =
@@ -18,6 +20,7 @@ export type ConnectionsState = {
   peers: Peer[]
   pendingIntroductions: PendingIntroduction[]
   onlinePeers: OnlinePeer[]
+  previousPeers: PreviousPeer[]
 }
 
 export type ConnectionsAction =
@@ -48,6 +51,7 @@ export type ConnectionsAction =
   | {type: 'DISCONNECT'; peerId: string}
   | {type: 'INTRODUCE_PEERS'; peerId1: string; peerId2: string}
   | {type: 'CONNECT_VIA_SERVER'; signalingPeerId: string; name: string}
+  | {type: 'PREVIOUS_PEERS_RECEIVED'; peers: PreviousPeer[]}
   | {type: 'ACCEPT_OFFER'; sdp: string}
   | {type: 'ACCEPT_ANSWER'; peerId: string; sdp: string}
   | {type: 'ACCEPT_ANSWER_CODE'; responseCode: string}
@@ -59,6 +63,7 @@ export const initialState: ConnectionsState = {
   peers: [],
   pendingIntroductions: [],
   onlinePeers: [],
+  previousPeers: [],
 };
 
 export const connectionsReducer = (state: ConnectionsState, action: ConnectionsAction): ConnectionsState => {
@@ -120,7 +125,14 @@ export const connectionsReducer = (state: ConnectionsState, action: ConnectionsA
       return {...state, onlinePeers: [...state.onlinePeers, {peerId: action.peerId, name: action.name}]};
 
     case 'ONLINE_PEER_LEFT':
-      return {...state, onlinePeers: state.onlinePeers.filter(p => p.peerId !== action.peerId)};
+      return {
+        ...state,
+        onlinePeers: state.onlinePeers.filter(p => p.peerId !== action.peerId),
+        previousPeers: state.previousPeers.map(p => p.peerId === action.peerId ? {...p, online: false} : p),
+      };
+
+    case 'PREVIOUS_PEERS_RECEIVED':
+      return {...state, previousPeers: action.peers};
 
     default:
       return state;

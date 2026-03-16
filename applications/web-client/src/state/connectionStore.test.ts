@@ -198,7 +198,7 @@ describe('connectionStore', () => {
         () => (action) => received2.push(action),
       ]);
       const action: ConnectionsAction = {type: 'CREATE_OFFER', passphrase: 'secret'};
-      const middleware = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: []})});
+      const middleware = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: []})});
 
       middleware(action);
 
@@ -209,7 +209,7 @@ describe('connectionStore', () => {
     it('is a no-op for an empty list', () => {
       const noop = () => {};
       const composed = applyMiddleware([]);
-      const middleware = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: []})});
+      const middleware = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: []})});
       expect(() => middleware({type: 'CREATE_OFFER', passphrase: 'secret'})).not.toThrow();
     });
   });
