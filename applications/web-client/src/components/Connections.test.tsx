@@ -331,12 +331,32 @@ describe('Connections', () => {
       expect(screen.queryByRole('button', {name: /reconnect/i})).not.toBeInTheDocument();
     });
 
-    it('shows Forget button for each previous peer', async () => {
+    it('shows Forget button for offline previous peer', async () => {
       const {store} = renderConnections();
 
       await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
 
       expect(screen.getByRole('button', {name: /forget/i})).toBeInTheDocument();
+    });
+
+    it('shows Forget button for online previous peer', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true}]}));
+
+      expect(screen.getByRole('button', {name: /forget/i})).toBeInTheDocument();
+    });
+
+    it('clicking Forget removes the peer row from the UI', async () => {
+      const user = userEvent.setup();
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+      expect(screen.getByText('Bob')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', {name: /forget/i}));
+
+      expect(screen.queryByText('Bob')).not.toBeInTheDocument();
     });
 
     it('clicking Forget dispatches FORGET_PEER with correct peerId', async () => {
