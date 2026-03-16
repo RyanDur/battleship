@@ -86,6 +86,7 @@ class SignalingFeatureTest {
         send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice"))
         messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
         messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
 
         send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
 
@@ -106,6 +107,7 @@ class SignalingFeatureTest {
         send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice"))
         messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
         messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
 
         send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
         messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED
@@ -128,6 +130,7 @@ class SignalingFeatureTest {
         send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
         messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
         messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
         messagesB.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Alice
 
         send(sessionA, mapOf("type" to "RELAY_OFFER", "targetPeerId" to "relay-offer-b", "sdp" to "fake-sdp-offer"))
@@ -143,6 +146,82 @@ class SignalingFeatureTest {
     }
 
     @Test
+    fun `REGISTER receives PREVIOUS_PEERS after PEERS`() {
+        val (session, messages) = connect("test-prev-peers-solo")
+
+        send(session, mapOf("type" to "REGISTER", "name" to "Solo"))
+
+        messages.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messages.poll(2, TimeUnit.SECONDS) // PEERS
+        val previousPeers = messages.poll(2, TimeUnit.SECONDS)
+
+        assertEquals("PREVIOUS_PEERS", previousPeers?.get("type"))
+
+        session.close()
+    }
+
+    @Test
+    fun `PREVIOUS_PEERS is empty when no relationships exist`() {
+        val (session, messages) = connect("test-prev-empty")
+
+        send(session, mapOf("type" to "REGISTER", "name" to "Solo"))
+
+        messages.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messages.poll(2, TimeUnit.SECONDS) // PEERS
+        val previousPeers = messages.poll(2, TimeUnit.SECONDS)
+
+        @Suppress("UNCHECKED_CAST")
+        val peers = previousPeers?.get("peers") as? List<*> ?: emptyList<Any>()
+        assertEquals(0, peers.size)
+
+        session.close()
+    }
+
+    @Test
+    fun `PREVIOUS_PEERS includes peer who disconnected after SDP relay`() {
+        val (sessionA, messagesA) = connect("prev-relayed-a")
+        val (sessionB, messagesB) = connect("prev-relayed-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice"))
+        messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED
+        messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        // SDP relay to record relationship
+        send(sessionA, mapOf("type" to "RELAY_OFFER", "targetPeerId" to "prev-relayed-b", "sdp" to "v=offer"))
+        messagesB.poll(2, TimeUnit.SECONDS) // OFFER_RECEIVED
+        send(sessionB, mapOf("type" to "RELAY_ANSWER", "targetPeerId" to "prev-relayed-a", "sdp" to "v=answer"))
+        messagesA.poll(2, TimeUnit.SECONDS) // ANSWER_RECEIVED
+
+        // Bob disconnects
+        sessionB.close()
+        messagesA.poll(2, TimeUnit.SECONDS) // PEER_LEFT
+
+        // Alice reconnects, should see Bob as previous peer
+        val (sessionA2, messagesA2) = connect("prev-relayed-a")
+        send(sessionA2, mapOf("type" to "REGISTER", "name" to "Alice"))
+        messagesA2.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesA2.poll(2, TimeUnit.SECONDS) // PEERS
+        val previousPeers = messagesA2.poll(2, TimeUnit.SECONDS)
+
+        @Suppress("UNCHECKED_CAST")
+        val peers = previousPeers?.get("peers") as? List<Map<String, Any>> ?: emptyList()
+        assertEquals(1, peers.size)
+        assertEquals("prev-relayed-b", peers[0]["peerId"])
+        assertEquals("Bob", peers[0]["name"])
+        assertEquals(false, peers[0]["online"])
+
+        sessionA.close()
+        sessionA2.close()
+    }
+
+    @Test
     fun `RELAY_ANSWER is forwarded as ANSWER_RECEIVED to the target peer`() {
         val (sessionA, messagesA) = connect("relay-answer-a")
         val (sessionB, _) = connect("relay-answer-b")
@@ -150,6 +229,7 @@ class SignalingFeatureTest {
         send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice"))
         messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
         messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
 
         send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
         messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Bob

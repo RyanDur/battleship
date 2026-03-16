@@ -45,6 +45,11 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         val peers = registry.getPeersExcluding(peerId).map { mapOf("peerId" to it.peerId, "name" to it.name) }
         send(session, mapOf("type" to "PEERS", "peers" to peers))
 
+        val previousPeers = registry.getPreviousPeers(peerId).map {
+            mapOf("peerId" to it.peerId, "name" to it.name, "online" to it.online)
+        }
+        send(session, mapOf("type" to "PREVIOUS_PEERS", "peers" to previousPeers))
+
         broadcast(mapOf("type" to "PEER_JOINED", "peerId" to peerId, "name" to name), excludePeerId = peerId)
     }
 
@@ -62,6 +67,7 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         val targetPeerId = payload["targetPeerId"] as? String ?: return
         val sdp = payload["sdp"] as? String ?: return
         val target = peerToSession[targetPeerId] ?: return
+        registry.recordRelationship(fromPeerId, targetPeerId)
         send(target, mapOf("type" to "ANSWER_RECEIVED", "fromPeerId" to fromPeerId, "sdp" to sdp))
     }
 
