@@ -39,6 +39,10 @@ export type ConnectionsAction =
   | {type: 'ONLINE_PEERS_UPDATED'; peers: OnlinePeer[]}
   | {type: 'ONLINE_PEER_JOINED'; peerId: string; name: string}
   | {type: 'ONLINE_PEER_LEFT'; peerId: string}
+  | {type: 'SERVER_OFFER_RECEIVED'; signalingPeerId: string; name: string; sdp: string}
+  | {type: 'SERVER_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string}
+  | {type: 'RELAY_OFFER'; targetPeerId: string; sdp: string}
+  | {type: 'RELAY_ANSWER'; targetPeerId: string; sdp: string}
 
 export const initialState: ConnectionsState = {
   flow: {phase: 'idle'},
@@ -105,5 +109,8 @@ export const connectionsReducer = (state: ConnectionsState, action: ConnectionsA
 
     case 'ONLINE_PEER_LEFT':
       return {...state, onlinePeers: state.onlinePeers.filter(p => p.peerId !== action.peerId)};
+
+    default:
+      return state;
   }
 };
