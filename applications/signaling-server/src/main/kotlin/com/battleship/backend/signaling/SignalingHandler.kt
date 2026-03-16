@@ -27,6 +27,8 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         val payload: Map<String, Any> = mapper.readValue(message.payload)
         when (payload["type"]) {
             "REGISTER" -> handleRegister(session, payload)
+            "RELAY_OFFER" -> handleRelayOffer(session, payload)
+            "RELAY_ANSWER" -> handleRelayAnswer(session, payload)
         }
     }
 
@@ -44,6 +46,23 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         send(session, mapOf("type" to "PEERS", "peers" to peers))
 
         broadcast(mapOf("type" to "PEER_JOINED", "peerId" to peerId, "name" to name), excludePeerId = peerId)
+    }
+
+    private fun handleRelayOffer(session: WebSocketSession, payload: Map<String, Any>) {
+        val fromPeerId = sessionToPeer[session.id] ?: return
+        val targetPeerId = payload["targetPeerId"] as? String ?: return
+        val sdp = payload["sdp"] as? String ?: return
+        val name = registry.getPeers().find { it.peerId == fromPeerId }?.name ?: return
+        val target = peerToSession[targetPeerId] ?: return
+        send(target, mapOf("type" to "OFFER_RECEIVED", "fromPeerId" to fromPeerId, "name" to name, "sdp" to sdp))
+    }
+
+    private fun handleRelayAnswer(session: WebSocketSession, payload: Map<String, Any>) {
+        val fromPeerId = sessionToPeer[session.id] ?: return
+        val targetPeerId = payload["targetPeerId"] as? String ?: return
+        val sdp = payload["sdp"] as? String ?: return
+        val target = peerToSession[targetPeerId] ?: return
+        send(target, mapOf("type" to "ANSWER_RECEIVED", "fromPeerId" to fromPeerId, "sdp" to sdp))
     }
 
     private fun send(session: WebSocketSession, payload: Map<String, Any>) {

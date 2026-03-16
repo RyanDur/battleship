@@ -118,4 +118,48 @@ class SignalingFeatureTest {
 
         sessionA.close()
     }
+
+    @Test
+    fun `RELAY_OFFER is forwarded as OFFER_RECEIVED to the target peer`() {
+        val (sessionA, _) = connect("relay-offer-a")
+        val (sessionB, messagesB) = connect("relay-offer-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice"))
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+
+        send(sessionA, mapOf("type" to "RELAY_OFFER", "targetPeerId" to "relay-offer-b", "sdp" to "fake-sdp-offer"))
+
+        val received = messagesB.poll(2, TimeUnit.SECONDS)
+        assertEquals("OFFER_RECEIVED", received?.get("type"))
+        assertEquals("relay-offer-a", received?.get("fromPeerId"))
+        assertEquals("Alice", received?.get("name"))
+        assertEquals("fake-sdp-offer", received?.get("sdp"))
+
+        sessionA.close()
+        sessionB.close()
+    }
+
+    @Test
+    fun `RELAY_ANSWER is forwarded as ANSWER_RECEIVED to the target peer`() {
+        val (sessionA, messagesA) = connect("relay-answer-a")
+        val (sessionB, _) = connect("relay-answer-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice"))
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Bob
+
+        send(sessionB, mapOf("type" to "RELAY_ANSWER", "targetPeerId" to "relay-answer-a", "sdp" to "fake-sdp-answer"))
+
+        val received = messagesA.poll(2, TimeUnit.SECONDS)
+        assertEquals("ANSWER_RECEIVED", received?.get("type"))
+        assertEquals("relay-answer-b", received?.get("fromPeerId"))
+        assertEquals("fake-sdp-answer", received?.get("sdp"))
+
+        sessionA.close()
+        sessionB.close()
+    }
 }
