@@ -299,4 +299,65 @@ describe('Peer Handler', () => {
       });
     });
   });
+
+  describe('connecting via signaling server', () => {
+    it('CONNECT_VIA_SERVER emits SERVER_OFFER_CREATED with signalingPeerId and SDP', async () => {
+      const {createPeerConnection} = createFakePeerConnectionFactory();
+      const alice = makeHandler('Alice', createPeerConnection);
+
+      alice.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'bob-sig-id', name: 'Bob'});
+
+      await vi.waitFor(() =>
+        expect(alice.events).toContainEqual(expect.objectContaining({type: 'SERVER_OFFER_CREATED', signalingPeerId: 'bob-sig-id', sdp: expect.any(String)}))
+      );
+      const event = alice.events.find(e => e.type === 'SERVER_OFFER_CREATED') as {localPeerId: string};
+      expect(typeof event.localPeerId).toBe('string');
+    });
+
+    it('SERVER_OFFER_RECEIVED emits SERVER_ANSWER_CREATED with signalingPeerId and SDP', async () => {
+      const factory = createFakePeerConnectionFactory();
+      const alice = makeHandler('Alice', factory.createPeerConnection);
+      const bob = makeHandler('Bob', factory.createPeerConnection);
+
+      alice.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'bob-sig-id', name: 'Bob'});
+
+      await vi.waitFor(() =>
+        expect(alice.events).toContainEqual(expect.objectContaining({type: 'SERVER_OFFER_CREATED'}))
+      );
+      const offerEvent = alice.events.find(e => e.type === 'SERVER_OFFER_CREATED') as {sdp: string};
+
+      bob.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: 'alice-sig-id', name: 'Alice', sdp: offerEvent.sdp});
+
+      await vi.waitFor(() =>
+        expect(bob.events).toContainEqual(expect.objectContaining({type: 'SERVER_ANSWER_CREATED', signalingPeerId: 'alice-sig-id', sdp: expect.any(String)}))
+      );
+    });
+
+    it('both peers are connected after full server-brokered SDP exchange', async () => {
+      const factory = createFakePeerConnectionFactory();
+      const alice = makeHandler('Alice', factory.createPeerConnection);
+      const bob = makeHandler('Bob', factory.createPeerConnection);
+
+      alice.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'bob-sig-id', name: 'Bob'});
+
+      await vi.waitFor(() =>
+        expect(alice.events).toContainEqual(expect.objectContaining({type: 'SERVER_OFFER_CREATED'}))
+      );
+      const offerEvent = alice.events.find(e => e.type === 'SERVER_OFFER_CREATED') as {sdp: string};
+
+      bob.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: 'alice-sig-id', name: 'Alice', sdp: offerEvent.sdp});
+
+      await vi.waitFor(() =>
+        expect(bob.events).toContainEqual(expect.objectContaining({type: 'SERVER_ANSWER_CREATED'}))
+      );
+      const answerEvent = bob.events.find(e => e.type === 'SERVER_ANSWER_CREATED') as {sdp: string};
+
+      alice.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: 'bob-sig-id', sdp: answerEvent.sdp});
+
+      await vi.waitFor(() => {
+        expect(alice.events).toContainEqual(expect.objectContaining({type: 'PEER_CONNECTED'}));
+        expect(bob.events).toContainEqual(expect.objectContaining({type: 'PEER_CONNECTED'}));
+      });
+    });
+  });
 });

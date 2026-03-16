@@ -106,6 +106,26 @@ const negotiateAnswer = async (pc: RTCPeerConnection, peerId: string, name: stri
   if (sdp) emit({ type: 'ANSWER_CREATED', peerId, sdp });
 };
 
+const negotiateServerOffer = async (pc: RTCPeerConnection, localPeerId: string, signalingPeerId: string, name: string, emit: (event: PeerEvent) => void, cbs: ChannelCallbacks) => {
+  const channel = pc.createDataChannel('game');
+  wireChannel(channel, localPeerId, name, emit, cbs);
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  const sdp = await gatherIceCandidates(pc);
+  if (sdp) emit({ type: 'SERVER_OFFER_CREATED', signalingPeerId, localPeerId, sdp });
+};
+
+const negotiateServerAnswer = async (pc: RTCPeerConnection, localPeerId: string, signalingPeerId: string, name: string, emit: (event: PeerEvent) => void, remoteSdp: string, cbs: ChannelCallbacks) => {
+  pc.ondatachannel = ({ channel }) => wireChannel(channel as RTCDataChannel, localPeerId, name, emit, cbs);
+
+  await pc.setRemoteDescription({ type: 'offer', sdp: remoteSdp } as RTCSessionDescriptionInit);
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  const sdp = await gatherIceCandidates(pc);
+  if (sdp) emit({ type: 'SERVER_ANSWER_CREATED', signalingPeerId, sdp });
+};
+
 const negotiateIntroOffer = async (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void, cbs: ChannelCallbacks, relayChannel: RTCDataChannel, introId: string) => {
   const channel = pc.createDataChannel('game');
   wireChannel(channel, peerId, name, emit, cbs);
@@ -130,6 +150,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
   const connections = new Map<string, RTCPeerConnection>();
   const dataChannels = new Map<string, RTCDataChannel>();
   const peerNames = new Map<string, string>();
+  const signalingToPeer = new Map<string, string>();
 
   type PendingIntro = {
     peerId1: string
@@ -318,6 +339,31 @@ export const createPeerHandler = (deps: Deps): Handler => {
           introChannels.delete(command.introId);
           dataChannels.get(introducerPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: command.introId, accepted: false }));
         }
+        break;
+      }
+      case 'CONNECT_VIA_SERVER': {
+        const localPeerId = generatePeerId();
+        const pc = deps.createPeerConnection();
+        connections.set(localPeerId, pc);
+        signalingToPeer.set(command.signalingPeerId, localPeerId);
+        peerNames.set(localPeerId, command.name);
+        negotiateServerOffer(pc, localPeerId, command.signalingPeerId, deps.name, deps.emit, cbs);
+        break;
+      }
+      case 'SERVER_OFFER_RECEIVED': {
+        const localPeerId = generatePeerId();
+        const pc = deps.createPeerConnection();
+        connections.set(localPeerId, pc);
+        signalingToPeer.set(command.signalingPeerId, localPeerId);
+        peerNames.set(localPeerId, command.name);
+        negotiateServerAnswer(pc, localPeerId, command.signalingPeerId, deps.name, deps.emit, command.sdp, cbs);
+        break;
+      }
+      case 'SERVER_ANSWER_RECEIVED': {
+        const localPeerId = signalingToPeer.get(command.signalingPeerId);
+        if (!localPeerId) break;
+        const pc = connections.get(localPeerId);
+        if (pc) pc.setRemoteDescription({ type: 'answer', sdp: command.sdp } as RTCSessionDescriptionInit);
         break;
       }
     }
