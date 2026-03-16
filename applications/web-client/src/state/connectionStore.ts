@@ -4,7 +4,6 @@ import type {PeerCommand, PeerEvent} from '../types/worker-messages';
 import type {CodecError} from '../protocol/connection-code';
 import type {Result} from '../lib/result';
 import {ofPromise, asyncSuccess, type AsyncResult} from '../lib/asyncResult';
-import type {SignalingEvent} from '../protocol/signaling';
 
 type Handler = {handleCommand: (cmd: PeerCommand) => void}
 
@@ -17,7 +16,9 @@ type StoreDeps = {
 export type ConnectionStore = {
   getState: () => ConnectionsState
   subscribe: (listener: () => void) => () => void
-  handleSignalingEvent: (event: SignalingEvent) => void
+  dispatch: (action: ConnectionsAction) => void
+  applyMiddleware: (fn: (action: ConnectionsAction) => void) => () => void
+  connectViaPeer: (signalingPeerId: string, name: string) => void
   createOffer: (passphrase: string) => void
   joinOffer: (code: string, passphrase: string) => AsyncResult<void, CodecError>
   acceptAnswer: (responseCode: string) => AsyncResult<void, CodecError>
@@ -32,10 +33,12 @@ export type ConnectionStore = {
 export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
   let state = initialState;
   const listeners = new Set<() => void>();
+  const middlewares = new Set<(action: ConnectionsAction) => void>();
 
   const dispatch = (action: ConnectionsAction) => {
     state = connectionsReducer(state, action);
     listeners.forEach(fn => fn());
+    middlewares.forEach(fn => fn(action));
 
     if (state.flow.phase === 'encoding-offer') {
       const {peerId, sdp, passphrase} = state.flow;
@@ -43,6 +46,12 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
     } else if (state.flow.phase === 'encoding-answer') {
       const {sdp, passphrase} = state.flow;
       deps.encodeCode(sdp, passphrase).then(code => dispatch({type: 'ANSWER_ENCODED', code}));
+    }
+
+    if (action.type === 'SERVER_OFFER_RECEIVED') {
+      handler.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: action.signalingPeerId, name: action.name, sdp: action.sdp});
+    } else if (action.type === 'SERVER_ANSWER_RECEIVED') {
+      handler.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
     }
   };
 
@@ -56,6 +65,8 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
     else if (event.type === 'INTRODUCTION_RECEIVED') dispatch({type: 'INTRODUCTION_RECEIVED', introId: event.introId, from: event.from, peer: event.peer});
     else if (event.type === 'INTRODUCTION_DECLINED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
     else if (event.type === 'INTRODUCTION_EXPIRED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
+    else if (event.type === 'SERVER_OFFER_CREATED') dispatch({type: 'RELAY_OFFER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
+    else if (event.type === 'SERVER_ANSWER_CREATED') dispatch({type: 'RELAY_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
   };
 
   const handler = deps.createHandler(emit);
@@ -68,10 +79,15 @@ export const createConnectionStore = (deps: StoreDeps): ConnectionStore => {
       return () => listeners.delete(listener);
     },
 
-    handleSignalingEvent: (event: SignalingEvent) => {
-      if (event.type === 'PEERS') dispatch({type: 'ONLINE_PEERS_UPDATED', peers: event.peers});
-      else if (event.type === 'PEER_JOINED') dispatch({type: 'ONLINE_PEER_JOINED', peerId: event.peerId, name: event.name});
-      else if (event.type === 'PEER_LEFT') dispatch({type: 'ONLINE_PEER_LEFT', peerId: event.peerId});
+    dispatch,
+
+    applyMiddleware: (fn) => {
+      middlewares.add(fn);
+      return () => middlewares.delete(fn);
+    },
+
+    connectViaPeer: (signalingPeerId, name) => {
+      handler.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId, name});
     },
 
     createOffer: (passphrase) => {
