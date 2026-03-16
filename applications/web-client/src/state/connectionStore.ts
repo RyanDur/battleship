@@ -129,6 +129,7 @@ export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): 
           else if (event.type === 'PEER_LEFT') dispatch({type: 'ONLINE_PEER_LEFT', peerId: event.peerId});
           else if (event.type === 'OFFER_RECEIVED') dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: event.fromPeerId, name: event.name, sdp: event.sdp});
           else if (event.type === 'ANSWER_RECEIVED') dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: event.fromPeerId, sdp: event.sdp});
+          else if (event.type === 'PREVIOUS_PEERS') dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: event.peers});
         });
       } else if (action.type === 'STOP_SIGNALING') {
         handle?.stop();

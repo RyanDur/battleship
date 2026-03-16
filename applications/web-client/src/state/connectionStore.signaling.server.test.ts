@@ -87,6 +87,15 @@ describe('createSignalingMiddleware (server)', () => {
     await cleanup();
   });
 
+  it('PREVIOUS_PEERS message updates previousPeers in state', async () => {
+    const {store, getConn, cleanup} = await connectStore();
+
+    getConn().send(JSON.stringify({type: 'PREVIOUS_PEERS', peers: [{peerId: 'p1', name: 'Alice', online: false}]}));
+
+    await vi.waitFor(() => expect(store.getState().previousPeers).toEqual([{peerId: 'p1', name: 'Alice', online: false}]));
+    await cleanup();
+  });
+
   it('STOP_SIGNALING prevents further server events from updating state', async () => {
     const {store, getConn, cleanup} = await connectStore();
 
