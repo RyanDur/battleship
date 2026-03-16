@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 
 class PeerRegistryTest {
 
-    private val registry = PeerRegistry()
+    private val registry = PeerRegistry(InMemoryRelationshipRepository())
 
     @Test
     fun `registered peer appears in peer list`() {
@@ -37,6 +37,55 @@ class PeerRegistryTest {
         val peers = registry.getPeersExcluding("peer-1")
         assertEquals(1, peers.size)
         assertEquals("peer-2", peers[0].peerId)
+    }
+
+    @Test
+    fun `recordRelationship stores bidirectional relationship`() {
+        registry.register("peer-1", "Alice")
+        registry.register("peer-2", "Bob")
+        registry.recordRelationship("peer-1", "peer-2")
+
+        val alicePrev = registry.getPreviousPeers("peer-1")
+        val bobPrev = registry.getPreviousPeers("peer-2")
+
+        assertEquals(1, alicePrev.size)
+        assertEquals("peer-2", alicePrev[0].peerId)
+        assertEquals(1, bobPrev.size)
+        assertEquals("peer-1", bobPrev[0].peerId)
+    }
+
+    @Test
+    fun `previous peer is online when currently registered`() {
+        registry.register("peer-1", "Alice")
+        registry.register("peer-2", "Bob")
+        registry.recordRelationship("peer-1", "peer-2")
+
+        val prev = registry.getPreviousPeers("peer-1")
+
+        assertEquals("Bob", prev[0].name)
+        assertEquals(true, prev[0].online)
+    }
+
+    @Test
+    fun `previous peer is offline when unregistered`() {
+        registry.register("peer-1", "Alice")
+        registry.register("peer-2", "Bob")
+        registry.recordRelationship("peer-1", "peer-2")
+        registry.unregister("peer-2")
+
+        val prev = registry.getPreviousPeers("peer-1")
+
+        assertEquals("Bob", prev[0].name)
+        assertEquals(false, prev[0].online)
+    }
+
+    @Test
+    fun `getPreviousPeers returns empty when no relationships`() {
+        registry.register("peer-1", "Alice")
+
+        val prev = registry.getPreviousPeers("peer-1")
+
+        assertTrue(prev.isEmpty())
     }
 
 }
