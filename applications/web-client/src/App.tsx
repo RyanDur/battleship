@@ -8,7 +8,7 @@ import {fetchDownloadUrl} from './protocol/download';
 import type {HeartbeatState} from './protocol/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
 import {detectPlatform} from './protocol/platform';
-import {createConnectionStore} from './state/connectionStore';
+import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware} from './state/connectionStore';
 import {ConnectionProvider} from './state/ConnectionProvider';
 import {createPeerHandler} from './workers/connection.handler';
 import {startSignaling} from './protocol/signaling';
@@ -24,15 +24,16 @@ const actionFor = (state: HeartbeatState) => {
 const App = () => {
   const [config, setConfig] = useState<Awaited<ReturnType<typeof loadConfig>> | null>(null);
   const {state: heartbeat, retry} = useHeartbeat(config);
-  const [store] = useState(() => createConnectionStore({
-    createHandler: (emit) => createPeerHandler({
-      name: 'Player',
-      createPeerConnection: () => new RTCPeerConnection(),
-      emit,
-    }),
-    encodeCode: encodeConnectionCode,
-    decodeCode: decodeConnectionCode,
-  }));
+  const [store] = useState(() => {
+    const s = createConnectionStore();
+    s.applyMiddleware(createHandlerMiddleware({
+      createHandler: (emit) => createPeerHandler({name: 'Player', createPeerConnection: () => new RTCPeerConnection(), emit}),
+      dispatch: s.dispatch,
+    }));
+    s.applyMiddleware(createEncodingMiddleware({encodeCode: encodeConnectionCode, getState: s.getState, dispatch: s.dispatch}));
+    s.applyMiddleware(createCodecMiddleware({decodeCode: decodeConnectionCode, getState: s.getState, dispatch: s.dispatch}));
+    return s;
+  });
 
   useEffect(() => {
     loadConfig().then(setConfig);
