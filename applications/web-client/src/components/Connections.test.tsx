@@ -304,7 +304,7 @@ describe('Connections', () => {
     it('shows online peer names from signaling', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.handleSignalingEvent({type: 'PEERS', peers: [{peerId: 'p1', name: 'Alice'}]}));
+      await act(async () => store.dispatch({type: 'ONLINE_PEERS_UPDATED', peers: [{peerId: 'p1', name: 'Alice'}]}));
 
       expect(screen.getByText('Alice')).toBeInTheDocument();
     });
@@ -318,7 +318,7 @@ describe('Connections', () => {
     it('PEER_JOINED adds to online peers', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.handleSignalingEvent({type: 'PEER_JOINED', peerId: 'p2', name: 'Bob'}));
+      await act(async () => store.dispatch({type: 'ONLINE_PEER_JOINED', peerId: 'p2', name: 'Bob'}));
 
       expect(screen.getByText('Bob')).toBeInTheDocument();
     });
@@ -326,8 +326,8 @@ describe('Connections', () => {
     it('PEER_LEFT removes from online peers', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.handleSignalingEvent({type: 'PEERS', peers: [{peerId: 'p1', name: 'Alice'}]}));
-      await act(async () => store.handleSignalingEvent({type: 'PEER_LEFT', peerId: 'p1'}));
+      await act(async () => store.dispatch({type: 'ONLINE_PEERS_UPDATED', peers: [{peerId: 'p1', name: 'Alice'}]}));
+      await act(async () => store.dispatch({type: 'ONLINE_PEER_LEFT', peerId: 'p1'}));
 
       expect(screen.queryByText('Alice')).not.toBeInTheDocument();
     });

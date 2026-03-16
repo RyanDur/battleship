@@ -46,8 +46,18 @@ const App = () => {
       sessionUrl: `${config.serviceUrl}/session`,
       url: signalingUrl,
       name: 'Player',
-    }, (event) => store.handleSignalingEvent(event));
-    return () => signaling.stop();
+    }, (event) => {
+      if (event.type === 'PEERS') store.dispatch({type: 'ONLINE_PEERS_UPDATED', peers: event.peers});
+      else if (event.type === 'PEER_JOINED') store.dispatch({type: 'ONLINE_PEER_JOINED', peerId: event.peerId, name: event.name});
+      else if (event.type === 'PEER_LEFT') store.dispatch({type: 'ONLINE_PEER_LEFT', peerId: event.peerId});
+      else if (event.type === 'OFFER_RECEIVED') store.dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: event.fromPeerId, name: event.name, sdp: event.sdp});
+      else if (event.type === 'ANSWER_RECEIVED') store.dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: event.fromPeerId, sdp: event.sdp});
+    });
+    const unsubscribe = store.applyMiddleware((action) => {
+      if (action.type === 'RELAY_OFFER') signaling.send({type: 'RELAY_OFFER', targetPeerId: action.targetPeerId, sdp: action.sdp});
+      else if (action.type === 'RELAY_ANSWER') signaling.send({type: 'RELAY_ANSWER', targetPeerId: action.targetPeerId, sdp: action.sdp});
+    });
+    return () => { signaling.stop(); unsubscribe(); };
   }, [config, store]);
 
   return (
