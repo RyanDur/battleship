@@ -9,12 +9,12 @@ export type HeartbeatState =
   | {status: 'reconnecting'; attempt: number}
   | {status: 'disconnected'}
 
-export interface HeartbeatHandle {
+export type HeartbeatHandle = {
   stop: () => void
   retry: () => void
 }
 
-export interface HeartbeatConfig {
+export type HeartbeatConfig = {
   createWebSocket: (url: string) => WebSocket
   url: string
   expectedVersion: string
