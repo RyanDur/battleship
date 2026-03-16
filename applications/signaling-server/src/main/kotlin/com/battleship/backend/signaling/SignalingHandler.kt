@@ -30,6 +30,8 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
             "RELAY_OFFER" -> handleRelayOffer(session, payload)
             "RELAY_ANSWER" -> handleRelayAnswer(session, payload)
             "FORGET_PEER" -> handleForgetPeer(session, payload)
+            "RELAY_ICE_RESTART" -> handleRelayIceRestart(session, payload)
+            "RELAY_ICE_RESTART_ANSWER" -> handleRelayIceRestartAnswer(session, payload)
         }
     }
 
@@ -70,6 +72,22 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         val target = peerToSession[targetPeerId] ?: return
         registry.recordRelationship(fromPeerId, targetPeerId)
         send(target, mapOf("type" to "ANSWER_RECEIVED", "fromPeerId" to fromPeerId, "sdp" to sdp))
+    }
+
+    private fun handleRelayIceRestart(session: WebSocketSession, payload: Map<String, Any>) {
+        val fromPeerId = sessionToPeer[session.id] ?: return
+        val targetPeerId = payload["targetPeerId"] as? String ?: return
+        val sdp = payload["sdp"] as? String ?: return
+        val target = peerToSession[targetPeerId] ?: return
+        send(target, mapOf("type" to "ICE_RESTART_RECEIVED", "fromPeerId" to fromPeerId, "sdp" to sdp))
+    }
+
+    private fun handleRelayIceRestartAnswer(session: WebSocketSession, payload: Map<String, Any>) {
+        val fromPeerId = sessionToPeer[session.id] ?: return
+        val targetPeerId = payload["targetPeerId"] as? String ?: return
+        val sdp = payload["sdp"] as? String ?: return
+        val target = peerToSession[targetPeerId] ?: return
+        send(target, mapOf("type" to "ICE_RESTART_ANSWER_RECEIVED", "fromPeerId" to fromPeerId, "sdp" to sdp))
     }
 
     private fun handleForgetPeer(session: WebSocketSession, payload: Map<String, Any>) {

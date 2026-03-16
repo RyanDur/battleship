@@ -249,6 +249,53 @@ class SignalingFeatureTest {
     }
 
     @Test
+    fun `RELAY_ICE_RESTART is forwarded as ICE_RESTART_RECEIVED to the target peer`() {
+        val (sessionA, _) = connect("ice-restart-offer-a")
+        val (sessionB, messagesB) = connect("ice-restart-offer-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice"))
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Alice
+
+        send(sessionA, mapOf("type" to "RELAY_ICE_RESTART", "targetPeerId" to "ice-restart-offer-b", "sdp" to "fake-restart-sdp"))
+
+        val received = messagesB.poll(2, TimeUnit.SECONDS)
+        assertEquals("ICE_RESTART_RECEIVED", received?.get("type"))
+        assertEquals("ice-restart-offer-a", received?.get("fromPeerId"))
+        assertEquals("fake-restart-sdp", received?.get("sdp"))
+
+        sessionA.close()
+        sessionB.close()
+    }
+
+    @Test
+    fun `RELAY_ICE_RESTART_ANSWER is forwarded as ICE_RESTART_ANSWER_RECEIVED to the target peer`() {
+        val (sessionA, messagesA) = connect("ice-restart-answer-a")
+        val (sessionB, _) = connect("ice-restart-answer-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice"))
+        messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Bob
+
+        send(sessionB, mapOf("type" to "RELAY_ICE_RESTART_ANSWER", "targetPeerId" to "ice-restart-answer-a", "sdp" to "fake-restart-answer-sdp"))
+
+        val received = messagesA.poll(2, TimeUnit.SECONDS)
+        assertEquals("ICE_RESTART_ANSWER_RECEIVED", received?.get("type"))
+        assertEquals("ice-restart-answer-b", received?.get("fromPeerId"))
+        assertEquals("fake-restart-answer-sdp", received?.get("sdp"))
+
+        sessionA.close()
+        sessionB.close()
+    }
+
+    @Test
     fun `FORGET_PEER removes peer from PREVIOUS_PEERS on next registration`() {
         val (sessionA, messagesA) = connect("forget-a")
         val (sessionB, messagesB) = connect("forget-b")
