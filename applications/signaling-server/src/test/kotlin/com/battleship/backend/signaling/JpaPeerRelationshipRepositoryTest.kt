@@ -2,6 +2,7 @@ package com.battleship.backend.signaling
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
@@ -12,9 +13,12 @@ class JpaPeerRelationshipRepositoryTest {
     @Autowired
     lateinit var jpaRepo: PeerRelationshipJpaRepository
 
+    @Autowired
+    lateinit var nameRepo: PeerNameJpaRepository
+
     @Test
     fun `saved relationship is findable from either peer's perspective`() {
-        val repo = JpaPeerRelationshipRepository(jpaRepo)
+        val repo = JpaPeerRelationshipRepository(jpaRepo, nameRepo)
 
         repo.save("alice", "bob")
 
@@ -24,7 +28,7 @@ class JpaPeerRelationshipRepositoryTest {
 
     @Test
     fun `saving the same relationship twice does not create duplicates`() {
-        val repo = JpaPeerRelationshipRepository(jpaRepo)
+        val repo = JpaPeerRelationshipRepository(jpaRepo, nameRepo)
 
         repo.save("alice", "bob")
         repo.save("alice", "bob")
@@ -34,7 +38,7 @@ class JpaPeerRelationshipRepositoryTest {
 
     @Test
     fun `saving reverse order does not create duplicate`() {
-        val repo = JpaPeerRelationshipRepository(jpaRepo)
+        val repo = JpaPeerRelationshipRepository(jpaRepo, nameRepo)
 
         repo.save("alice", "bob")
         repo.save("bob", "alice")
@@ -45,10 +49,36 @@ class JpaPeerRelationshipRepositoryTest {
 
     @Test
     fun `findRelated returns empty when no relationships`() {
-        val repo = JpaPeerRelationshipRepository(jpaRepo)
+        val repo = JpaPeerRelationshipRepository(jpaRepo, nameRepo)
 
         val result = repo.findRelated("alice")
 
         assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `saved name is findable`() {
+        val repo = JpaPeerRelationshipRepository(jpaRepo, nameRepo)
+
+        repo.saveName("alice", "Alice")
+
+        assertEquals("Alice", repo.findName("alice"))
+    }
+
+    @Test
+    fun `findName returns null when name not saved`() {
+        val repo = JpaPeerRelationshipRepository(jpaRepo, nameRepo)
+
+        assertNull(repo.findName("unknown"))
+    }
+
+    @Test
+    fun `saveName overwrites previous name`() {
+        val repo = JpaPeerRelationshipRepository(jpaRepo, nameRepo)
+
+        repo.saveName("alice", "Alice")
+        repo.saveName("alice", "Alicia")
+
+        assertEquals("Alicia", repo.findName("alice"))
     }
 }

@@ -7,6 +7,6 @@ import org.springframework.context.annotation.Configuration
 class RelationshipConfig {
 
     @Bean
-    fun relationshipRepository(jpaRepo: PeerRelationshipJpaRepository): RelationshipRepository =
-        JpaPeerRelationshipRepository(jpaRepo)
+    fun relationshipRepository(jpaRepo: PeerRelationshipJpaRepository, nameRepo: PeerNameJpaRepository): RelationshipRepository =
+        JpaPeerRelationshipRepository(jpaRepo, nameRepo)
 }
