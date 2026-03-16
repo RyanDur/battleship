@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import {useConnectionState, useConnectionStore} from '../state/useConnection';
-import type {ConnectionFlow, Peer} from '../state/connections';
+import type {ConnectionFlow, Peer, PreviousPeer} from '../state/connections';
 
 type FlowPhase =
   | {phase: 'idle'}
@@ -50,12 +50,20 @@ const PeerRow = ({peer, otherTrustingPeers}: {peer: Peer; otherTrustingPeers: Pe
   );
 };
 
+const PreviousPeerRow = ({peer}: {peer: PreviousPeer}) => (
+  <li>
+    {peer.name}
+    <span>{peer.online ? 'Online' : 'Offline'}</span>
+  </li>
+);
+
 export const Connections = ({serviceOnline}: Props) => {
   const store = useConnectionStore();
   const flow = toFlowPhase(useConnectionState(s => s.flow));
   const peers = useConnectionState(s => s.peers);
   const pendingIntroductions = useConnectionState(s => s.pendingIntroductions);
   const onlinePeers = useConnectionState(s => s.onlinePeers);
+  const previousPeers = useConnectionState(s => s.previousPeers);
 
   const [formMode, setFormMode] = useState<'none' | 'create' | 'join'>('none');
   const [passphrase, setPassphrase] = useState('');
@@ -142,6 +150,13 @@ export const Connections = ({serviceOnline}: Props) => {
 
   return (
     <section>
+      {previousPeers.length > 0 && (
+        <ul aria-label="Previous peers">
+          {previousPeers.map(peer => (
+            <PreviousPeerRow key={peer.peerId} peer={peer} />
+          ))}
+        </ul>
+      )}
       {onlinePeers.length > 0 && (
         <ul aria-label="Online peers">
           {onlinePeers.map(peer => (

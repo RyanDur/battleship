@@ -274,6 +274,47 @@ describe('Connections', () => {
     expect(screen.queryByText('Alice')).not.toBeInTheDocument();
   });
 
+  describe('previous peers', () => {
+    it('shows previous peers section with peer names', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+
+      expect(screen.getByText('Bob')).toBeInTheDocument();
+    });
+
+    it('does not show previous peers section when list is empty', () => {
+      renderConnections();
+
+      expect(screen.queryByRole('list', {name: /previous/i})).not.toBeInTheDocument();
+    });
+
+    it('shows offline status for offline previous peer', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+
+      expect(screen.getByText(/offline/i)).toBeInTheDocument();
+    });
+
+    it('shows online status for online previous peer', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true}]}));
+
+      expect(screen.getByText(/online/i)).toBeInTheDocument();
+    });
+
+    it('marks previous peer as offline when they leave', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true}]}));
+      await act(async () => store.dispatch({type: 'ONLINE_PEER_LEFT', peerId: 'p1'}));
+
+      expect(screen.getByText(/offline/i)).toBeInTheDocument();
+    });
+  });
+
   describe('online peers', () => {
     it('shows online peer names from signaling', async () => {
       const {store} = renderConnections();
