@@ -300,6 +300,134 @@ describe('Peer Handler', () => {
     });
   });
 
+  describe('ICE restart', () => {
+    const connectPeersViaServer = async (alice: Handler, bob: Handler, aliceSigId: string, bobSigId: string) => {
+      alice.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: bobSigId, name: 'Bob'});
+
+      await vi.waitFor(() => expect(alice.events).toContainEqual(
+        expect.objectContaining({type: 'SERVER_OFFER_CREATED', signalingPeerId: bobSigId})
+      ));
+      const offerEvent = alice.events.find(e => e.type === 'SERVER_OFFER_CREATED' && (e as {signalingPeerId: string}).signalingPeerId === bobSigId) as {sdp: string};
+
+      bob.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: aliceSigId, name: 'Alice', sdp: offerEvent.sdp});
+
+      await vi.waitFor(() => expect(bob.events).toContainEqual(
+        expect.objectContaining({type: 'SERVER_ANSWER_CREATED', signalingPeerId: aliceSigId})
+      ));
+      const answerEvent = bob.events.find(e => e.type === 'SERVER_ANSWER_CREATED' && (e as {signalingPeerId: string}).signalingPeerId === aliceSigId) as {sdp: string};
+
+      alice.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: bobSigId, sdp: answerEvent.sdp});
+
+      await vi.waitFor(() => {
+        expect(alice.events).toContainEqual(expect.objectContaining({type: 'PEER_CONNECTED'}));
+        expect(bob.events).toContainEqual(expect.objectContaining({type: 'PEER_CONNECTED'}));
+      });
+
+      return {offerSdp: offerEvent.sdp, answerSdp: answerEvent.sdp};
+    };
+
+    it('offerer emits PEER_CONNECTION_UNSTABLE when ICE state becomes disconnected', async () => {
+      const factory = createFakePeerConnectionFactory();
+      const alice = makeHandler('Alice', factory.createPeerConnection);
+      const bob = makeHandler('Bob', factory.createPeerConnection);
+
+      const {offerSdp} = await connectPeersViaServer(alice, bob, 'alice-sig', 'bob-sig');
+
+      factory.simulateIceStateChange(offerSdp, 'disconnected');
+
+      await vi.waitFor(() =>
+        expect(alice.events).toContainEqual(expect.objectContaining({type: 'PEER_CONNECTION_UNSTABLE'}))
+      );
+    });
+
+    it('answerer emits PEER_CONNECTION_UNSTABLE when ICE state becomes disconnected', async () => {
+      const factory = createFakePeerConnectionFactory();
+      const alice = makeHandler('Alice', factory.createPeerConnection);
+      const bob = makeHandler('Bob', factory.createPeerConnection);
+
+      const {answerSdp} = await connectPeersViaServer(alice, bob, 'alice-sig', 'bob-sig');
+
+      factory.simulateIceStateChange(answerSdp, 'disconnected');
+
+      await vi.waitFor(() =>
+        expect(bob.events).toContainEqual(expect.objectContaining({type: 'PEER_CONNECTION_UNSTABLE'}))
+      );
+    });
+
+    it('only offerer emits ICE_RESTART_OFFER_CREATED when connection becomes unstable', async () => {
+      const factory = createFakePeerConnectionFactory();
+      const alice = makeHandler('Alice', factory.createPeerConnection);
+      const bob = makeHandler('Bob', factory.createPeerConnection);
+
+      const {offerSdp, answerSdp} = await connectPeersViaServer(alice, bob, 'alice-sig', 'bob-sig');
+
+      factory.simulateIceStateChange(offerSdp, 'disconnected');
+      factory.simulateIceStateChange(answerSdp, 'disconnected');
+
+      await vi.waitFor(() =>
+        expect(alice.events).toContainEqual(expect.objectContaining({type: 'ICE_RESTART_OFFER_CREATED', signalingPeerId: 'bob-sig'}))
+      );
+      expect(bob.events).not.toContainEqual(expect.objectContaining({type: 'ICE_RESTART_OFFER_CREATED'}));
+    });
+
+    it('both peers emit PEER_CONNECTION_RESTORED when ICE recovers', async () => {
+      const factory = createFakePeerConnectionFactory();
+      const alice = makeHandler('Alice', factory.createPeerConnection);
+      const bob = makeHandler('Bob', factory.createPeerConnection);
+
+      const {offerSdp, answerSdp} = await connectPeersViaServer(alice, bob, 'alice-sig', 'bob-sig');
+
+      factory.simulateIceStateChange(offerSdp, 'disconnected');
+      factory.simulateIceStateChange(answerSdp, 'disconnected');
+      await vi.waitFor(() => expect(alice.events).toContainEqual(expect.objectContaining({type: 'PEER_CONNECTION_UNSTABLE'})));
+
+      factory.simulateIceStateChange(offerSdp, 'connected');
+      factory.simulateIceStateChange(answerSdp, 'connected');
+
+      await vi.waitFor(() => {
+        expect(alice.events).toContainEqual(expect.objectContaining({type: 'PEER_CONNECTION_RESTORED'}));
+        expect(bob.events).toContainEqual(expect.objectContaining({type: 'PEER_CONNECTION_RESTORED'}));
+      });
+    });
+
+    it('ICE_RESTART_RECEIVED command makes answerer emit ICE_RESTART_ANSWER_CREATED', async () => {
+      const factory = createFakePeerConnectionFactory();
+      const alice = makeHandler('Alice', factory.createPeerConnection);
+      const bob = makeHandler('Bob', factory.createPeerConnection);
+
+      await connectPeersViaServer(alice, bob, 'alice-sig', 'bob-sig');
+
+      bob.handleCommand({type: 'ICE_RESTART_RECEIVED', signalingPeerId: 'alice-sig', sdp: 'fake-restart-sdp'});
+
+      await vi.waitFor(() =>
+        expect(bob.events).toContainEqual(
+          expect.objectContaining({type: 'ICE_RESTART_ANSWER_CREATED', signalingPeerId: 'alice-sig'})
+        )
+      );
+    });
+
+    it('offerer emits PEER_DISCONNECTED after max restart attempts fail', async () => {
+      const factory = createFakePeerConnectionFactory();
+      const alice = makeHandler('Alice', factory.createPeerConnection);
+      const bob = makeHandler('Bob', factory.createPeerConnection);
+
+      const {offerSdp} = await connectPeersViaServer(alice, bob, 'alice-sig', 'bob-sig');
+      const alicePeerId = (alice.events.find(e => e.type === 'PEER_CONNECTED') as {peerId: string}).peerId;
+
+      // Trigger more disconnections than allowed retries
+      for (let i = 0; i <= 3; i++) {
+        factory.simulateIceStateChange(offerSdp, 'disconnected');
+        await vi.waitFor(() =>
+          expect(alice.events.filter(e => e.type === 'ICE_RESTART_OFFER_CREATED').length + alice.events.filter(e => e.type === 'PEER_DISCONNECTED').length).toBeGreaterThan(i)
+        );
+      }
+
+      await vi.waitFor(() =>
+        expect(alice.events).toContainEqual({type: 'PEER_DISCONNECTED', peerId: alicePeerId})
+      );
+    });
+  });
+
   describe('connecting via signaling server', () => {
     it('CONNECT_VIA_SERVER emits SERVER_OFFER_CREATED with signalingPeerId and SDP', async () => {
       const {createPeerConnection} = createFakePeerConnectionFactory();

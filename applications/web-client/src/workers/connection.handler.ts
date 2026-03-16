@@ -127,11 +127,32 @@ const negotiateIntroAnswer = (pc: RTCPeerConnection, peerId: string, name: strin
   acceptOfferSdp(pc, peerId, name, emit, remoteSdp, cbs)
     .onSuccess(sdp => { if (sdp) relayChannel.send(JSON.stringify({ type: 'RELAY_SDP_ANSWER', introId, sdp })); });
 
+const MAX_ICE_RESTART_ATTEMPTS = 3;
+
+const createIceRestartOffer = (pc: RTCPeerConnection, signalingPeerId: string, emit: (event: PeerEvent) => void) => {
+  (pc as unknown as {restartIce?: () => void}).restartIce?.();
+  return asyncTryCatch(() => pc.createOffer({iceRestart: true}))
+    .andThen(offer => asyncTryCatch(() => pc.setLocalDescription(offer)))
+    .andThen(() => asyncResult<string | undefined, Error>(gatherIceCandidates(pc)))
+    .onSuccess(sdp => { if (sdp) emit({type: 'ICE_RESTART_OFFER_CREATED', signalingPeerId, sdp}); });
+};
+
+const acceptIceRestartOffer = (pc: RTCPeerConnection, signalingPeerId: string, remoteSdp: string, emit: (event: PeerEvent) => void) =>
+  asyncTryCatch(() => pc.setRemoteDescription({type: 'offer', sdp: remoteSdp} as RTCSessionDescriptionInit))
+    .andThen(() => asyncTryCatch(() => pc.createAnswer()))
+    .andThen(answer => asyncTryCatch(() => pc.setLocalDescription(answer)))
+    .andThen(() => asyncResult<string | undefined, Error>(gatherIceCandidates(pc)))
+    .onSuccess(sdp => { if (sdp) emit({type: 'ICE_RESTART_ANSWER_CREATED', signalingPeerId, sdp}); });
+
 export const createPeerHandler = (deps: Deps): Handler => {
   const connections = new Map<string, RTCPeerConnection>();
   const dataChannels = new Map<string, RTCDataChannel>();
   const peerNames = new Map<string, string>();
   const signalingToPeer = new Map<string, string>();
+  const peerToSignaling = new Map<string, string>();
+  const offererPeerIds = new Set<string>();
+  const unstablePeerIds = new Set<string>();
+  const iceRestartAttempts = new Map<string, number>();
 
   type PendingIntro = {
     peerId1: string
@@ -154,6 +175,33 @@ export const createPeerHandler = (deps: Deps): Handler => {
       pc?.close();
     }
     deps.emit({ type, introId });
+  };
+
+  const wireIceRestart = (pc: RTCPeerConnection, peerId: string) => {
+    pc.oniceconnectionstatechange = () => {
+      const state = pc.iceConnectionState;
+      if (state === 'disconnected' || state === 'failed') {
+        unstablePeerIds.add(peerId);
+        deps.emit({type: 'PEER_CONNECTION_UNSTABLE', peerId});
+        if (offererPeerIds.has(peerId)) {
+          const signalingPeerId = peerToSignaling.get(peerId);
+          if (!signalingPeerId) return;
+          const attempts = (iceRestartAttempts.get(peerId) ?? 0) + 1;
+          if (attempts > MAX_ICE_RESTART_ATTEMPTS) {
+            deps.emit({type: 'PEER_DISCONNECTED', peerId});
+          } else {
+            iceRestartAttempts.set(peerId, attempts);
+            createIceRestartOffer(pc, signalingPeerId, deps.emit);
+          }
+        }
+      } else if (state === 'connected' || state === 'completed') {
+        if (unstablePeerIds.has(peerId)) {
+          unstablePeerIds.delete(peerId);
+          iceRestartAttempts.delete(peerId);
+          deps.emit({type: 'PEER_CONNECTION_RESTORED', peerId});
+        }
+      }
+    };
   };
 
   const cbs: ChannelCallbacks = {
@@ -338,7 +386,10 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const pc = deps.createPeerConnection();
         connections.set(localPeerId, pc);
         signalingToPeer.set(command.signalingPeerId, localPeerId);
+        peerToSignaling.set(localPeerId, command.signalingPeerId);
+        offererPeerIds.add(localPeerId);
         peerNames.set(localPeerId, command.name);
+        wireIceRestart(pc, localPeerId);
         negotiateServerOffer(pc, localPeerId, command.signalingPeerId, deps.name, deps.emit, cbs);
         break;
       }
@@ -347,7 +398,9 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const pc = deps.createPeerConnection();
         connections.set(localPeerId, pc);
         signalingToPeer.set(command.signalingPeerId, localPeerId);
+        peerToSignaling.set(localPeerId, command.signalingPeerId);
         peerNames.set(localPeerId, command.name);
+        wireIceRestart(pc, localPeerId);
         negotiateServerAnswer(pc, localPeerId, command.signalingPeerId, deps.name, deps.emit, command.sdp, cbs);
         break;
       }
@@ -356,6 +409,20 @@ export const createPeerHandler = (deps: Deps): Handler => {
         if (!localPeerId) break;
         const pc = connections.get(localPeerId);
         if (pc) asyncTryCatch(() => pc.setRemoteDescription({ type: 'answer', sdp: command.sdp } as RTCSessionDescriptionInit));
+        break;
+      }
+      case 'ICE_RESTART_RECEIVED': {
+        const localPeerId = signalingToPeer.get(command.signalingPeerId);
+        if (!localPeerId) break;
+        const pc = connections.get(localPeerId);
+        if (pc) acceptIceRestartOffer(pc, command.signalingPeerId, command.sdp, deps.emit);
+        break;
+      }
+      case 'ICE_RESTART_ANSWER_RECEIVED': {
+        const localPeerId = signalingToPeer.get(command.signalingPeerId);
+        if (!localPeerId) break;
+        const pc = connections.get(localPeerId);
+        if (pc) asyncTryCatch(() => pc.setRemoteDescription({type: 'answer', sdp: command.sdp} as RTCSessionDescriptionInit));
         break;
       }
     }

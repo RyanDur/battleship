@@ -11,6 +11,8 @@ export type PeerCommand =
   | { type: 'CONNECT_VIA_SERVER'; signalingPeerId: string; name: string }
   | { type: 'SERVER_OFFER_RECEIVED'; signalingPeerId: string; name: string; sdp: string }
   | { type: 'SERVER_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string }
+  | { type: 'ICE_RESTART_RECEIVED'; signalingPeerId: string; sdp: string }
+  | { type: 'ICE_RESTART_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string }
 
 export type PeerEvent =
   | { type: 'OFFER_CREATED'; peerId: string; sdp: string }
@@ -25,3 +27,7 @@ export type PeerEvent =
   | { type: 'ERROR'; message: string }
   | { type: 'SERVER_OFFER_CREATED'; signalingPeerId: string; localPeerId: string; sdp: string }
   | { type: 'SERVER_ANSWER_CREATED'; signalingPeerId: string; sdp: string }
+  | { type: 'PEER_CONNECTION_UNSTABLE'; peerId: string }
+  | { type: 'PEER_CONNECTION_RESTORED'; peerId: string }
+  | { type: 'ICE_RESTART_OFFER_CREATED'; signalingPeerId: string; sdp: string }
+  | { type: 'ICE_RESTART_ANSWER_CREATED'; signalingPeerId: string; sdp: string }

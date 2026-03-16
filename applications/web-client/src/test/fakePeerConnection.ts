@@ -52,25 +52,37 @@ const pairChannels = (offererCh: FakeDataChannel, answererCh: FakeDataChannel) =
   };
 };
 
+type FakePc = {
+  iceConnectionState: string
+  oniceconnectionstatechange: (() => void) | null
+}
+
 export const createFakePeerConnectionFactory = () => {
   // Maps SDP string → channels registered at setLocalDescription time
   const sdpRegistry = new Map<string, FakeDataChannel[]>();
   // Maps offer SDP → paired channels (set when answerer processes offer)
   const channelPairs = new Map<string, ChannelPair[]>();
+  // Maps localDescription SDP → fake PC (for ICE state simulation)
+  const pcRegistry = new Map<string, FakePc>();
 
   const createPeerConnection = (): RTCPeerConnection => {
     const id = crypto.randomUUID();
     const offerSdp = `fake-offer-${id}`;
     const answerSdp = `fake-answer-${id}`;
+    let restartCount = 0;
     const localChannels: FakeDataChannel[] = [];
     const inboundChannels: FakeDataChannel[] = [];
     let closed = false;
 
     const pc = {
       iceGatheringState: 'new' as string,
+      iceConnectionState: 'new' as string,
       localDescription: null as {sdp: string} | null,
       onicecandidate: null as ((event: {candidate: null}) => void) | null,
+      oniceconnectionstatechange: null as (() => void) | null,
       ondatachannel: null as ((event: {channel: unknown}) => void) | null,
+
+      restartIce: () => { restartCount++; },
 
       createDataChannel: (): FakeDataChannel => {
         const ch = createUnpairedChannel();
@@ -78,13 +90,17 @@ export const createFakePeerConnectionFactory = () => {
         return ch;
       },
 
-      createOffer: async () => ({type: 'offer' as const, sdp: offerSdp}),
+      createOffer: async (options?: {iceRestart?: boolean}) => {
+        const sdp = options?.iceRestart ? `fake-restart-offer-${id}-${restartCount}` : offerSdp;
+        return {type: 'offer' as const, sdp};
+      },
       createAnswer: async () => ({type: 'answer' as const, sdp: answerSdp}),
 
       setLocalDescription: async (desc: {type: string; sdp: string}) => {
         pc.localDescription = {sdp: desc.sdp};
         pc.iceGatheringState = 'complete';
-        sdpRegistry.set(desc.sdp, localChannels);
+        if (!desc.sdp.startsWith('fake-restart')) sdpRegistry.set(desc.sdp, localChannels);
+        pcRegistry.set(desc.sdp, pc);
         queueMicrotask(() => pc.onicecandidate?.({candidate: null}));
       },
 
@@ -129,5 +145,13 @@ export const createFakePeerConnectionFactory = () => {
   const getAnswererChannel = (offerSdp: string): FakeDataChannel | undefined =>
     channelPairs.get(offerSdp)?.[0]?.answererChannel;
 
-  return {createPeerConnection, getAnswererChannel};
+  // Simulates an ICE connection state change on the PC with the given localDescription SDP
+  const simulateIceStateChange = (localSdp: string, state: string) => {
+    const pc = pcRegistry.get(localSdp);
+    if (!pc) return;
+    pc.iceConnectionState = state;
+    queueMicrotask(() => pc.oniceconnectionstatechange?.());
+  };
+
+  return {createPeerConnection, getAnswererChannel, simulateIceStateChange};
 };
