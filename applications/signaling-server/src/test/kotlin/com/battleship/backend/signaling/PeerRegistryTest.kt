@@ -88,4 +88,23 @@ class PeerRegistryTest {
         assertTrue(prev.isEmpty())
     }
 
+    @Test
+    fun `getPreviousPeers resolves names from repository even when peer was never registered in this session`() {
+        val repo = InMemoryRelationshipRepository()
+        // Simulate a previous session: Bob and Alice were connected
+        repo.save("peer-1", "peer-2")
+        repo.saveName("peer-1", "Alice")
+        repo.saveName("peer-2", "Bob")
+
+        // Fresh registry — peer-1 ("Alice") was never registered in this session
+        val freshRegistry = PeerRegistry(repo)
+
+        val prev = freshRegistry.getPreviousPeers("peer-1")
+
+        assertEquals(1, prev.size)
+        assertEquals("peer-2", prev[0].peerId)
+        assertEquals("Bob", prev[0].name)
+        assertEquals(false, prev[0].online)
+    }
+
 }

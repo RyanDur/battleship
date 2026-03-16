@@ -9,11 +9,18 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.stereotype.Repository
 
 @Entity
-data class PeerRelationship(
+class PeerRelationship(
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long = 0,
-    val peerId1: String = "",
-    val peerId2: String = "",
+    var id: Long = 0,
+    var peerId1: String = "",
+    var peerId2: String = "",
+)
+
+@Entity
+class PeerName(
+    @Id
+    var peerId: String = "",
+    var name: String = "",
 )
 
 @Repository
@@ -22,8 +29,12 @@ interface PeerRelationshipJpaRepository : JpaRepository<PeerRelationship, Long> 
     fun findAllByPeerId(peerId: String): List<PeerRelationship>
 }
 
+@Repository
+interface PeerNameJpaRepository : JpaRepository<PeerName, String>
+
 class JpaPeerRelationshipRepository(
     private val jpaRepo: PeerRelationshipJpaRepository,
+    private val nameRepo: PeerNameJpaRepository,
 ) : RelationshipRepository {
 
     override fun save(peerId1: String, peerId2: String) {
@@ -40,4 +51,11 @@ class JpaPeerRelationshipRepository(
         jpaRepo.findAllByPeerId(peerId).map { rel ->
             if (rel.peerId1 == peerId) rel.peerId2 else rel.peerId1
         }.toSet()
+
+    override fun saveName(peerId: String, name: String) {
+        nameRepo.save(PeerName(peerId = peerId, name = name))
+    }
+
+    override fun findName(peerId: String): String? =
+        nameRepo.findById(peerId).orElse(null)?.name
 }

@@ -10,16 +10,17 @@ data class PreviousPeerInfo(val peerId: String, val name: String, val online: Bo
 interface RelationshipRepository {
     fun save(peerId1: String, peerId2: String)
     fun findRelated(peerId: String): Set<String>
+    fun saveName(peerId: String, name: String)
+    fun findName(peerId: String): String?
 }
 
 @Component
 class PeerRegistry(private val relationships: RelationshipRepository) {
     private val peers = ConcurrentHashMap<String, String>()
-    private val peerNames = ConcurrentHashMap<String, String>()
 
     fun register(peerId: String, name: String) {
         peers[peerId] = name
-        peerNames[peerId] = name
+        relationships.saveName(peerId, name)
     }
 
     fun unregister(peerId: String) {
@@ -32,7 +33,7 @@ class PeerRegistry(private val relationships: RelationshipRepository) {
 
     fun getPreviousPeers(peerId: String): List<PreviousPeerInfo> =
         relationships.findRelated(peerId).mapNotNull { relatedId ->
-            val name = peerNames[relatedId] ?: return@mapNotNull null
+            val name = relationships.findName(relatedId) ?: return@mapNotNull null
             PreviousPeerInfo(peerId = relatedId, name = name, online = peers.containsKey(relatedId))
         }
 
