@@ -1,12 +1,10 @@
 import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction} from './connections';
-import type {PeerCommand, PeerEvent} from '../types/worker-messages';
-import type {CodecError} from '../protocol/connection-code';
-import type {Result} from '../lib/result';
+import type {PeerEvent} from '../types/worker-messages';
+import {encodeConnectionCode, decodeConnectionCode} from '../protocol/connection-code';
+import {createPeerHandler} from '../workers/connection.handler';
 import {startSignaling} from '../protocol/signaling';
 import type {SignalingConfig, SignalingEvent, SignalingHandle} from '../protocol/signaling';
-
-type Handler = {handleCommand: (cmd: PeerCommand) => void}
 
 export type ConnectionStore = {
   getState: () => ConnectionsState
@@ -47,10 +45,11 @@ export const createConnectionStore = (middlewareFactory?: MiddlewareFactory): Co
 };
 
 type HandlerMiddlewareConfig = {
-  createHandler: (emit: (event: PeerEvent) => void) => Handler
+  name: string
+  createPeerConnection: () => RTCPeerConnection
 }
 
-export const createHandlerMiddleware = ({createHandler}: HandlerMiddlewareConfig): MiddlewareFactory =>
+export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMiddlewareConfig): MiddlewareFactory =>
   ({dispatch}) => {
     const emit = (event: PeerEvent) => {
       if (event.type === 'PEER_CONNECTED') dispatch({type: 'PEER_CONNECTED', peerId: event.peerId});
@@ -66,7 +65,7 @@ export const createHandlerMiddleware = ({createHandler}: HandlerMiddlewareConfig
       else if (event.type === 'SERVER_ANSWER_CREATED') dispatch({type: 'RELAY_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
     };
 
-    const handler = createHandler(emit);
+    const handler = createPeerHandler({name, createPeerConnection, emit});
 
     return (action: ConnectionsAction) => {
       if (action.type === 'CREATE_OFFER') handler.handleCommand({type: 'CREATE_OFFER'});
@@ -84,33 +83,25 @@ export const createHandlerMiddleware = ({createHandler}: HandlerMiddlewareConfig
     };
   };
 
-type EncodingMiddlewareConfig = {
-  encodeCode: (sdp: string, passphrase: string) => Promise<string>
-}
-
-export const createEncodingMiddleware = ({encodeCode}: EncodingMiddlewareConfig): MiddlewareFactory =>
+export const encodingMiddleware: MiddlewareFactory =
   ({dispatch, getState}) =>
     (action: ConnectionsAction) => {
       if (action.type !== 'OFFER_SDP_READY' && action.type !== 'ANSWER_SDP_READY') return;
       const {flow} = getState();
       if (flow.phase === 'encoding-offer') {
         const {peerId, sdp, passphrase} = flow;
-        encodeCode(sdp, passphrase).then(code => dispatch({type: 'OFFER_ENCODED', peerId, code}));
+        encodeConnectionCode(sdp, passphrase).then(code => dispatch({type: 'OFFER_ENCODED', peerId, code}));
       } else if (flow.phase === 'encoding-answer') {
         const {sdp, passphrase} = flow;
-        encodeCode(sdp, passphrase).then(code => dispatch({type: 'ANSWER_ENCODED', code}));
+        encodeConnectionCode(sdp, passphrase).then(code => dispatch({type: 'ANSWER_ENCODED', code}));
       }
     };
 
-type CodecMiddlewareConfig = {
-  decodeCode: (code: string, passphrase: string) => Promise<Result<string, CodecError>>
-}
-
-export const createCodecMiddleware = ({decodeCode}: CodecMiddlewareConfig): MiddlewareFactory =>
+export const codecMiddleware: MiddlewareFactory =
   ({dispatch, getState}) =>
     (action: ConnectionsAction) => {
       if (action.type === 'JOIN_OFFER') {
-        decodeCode(action.code, action.passphrase).then(result =>
+        decodeConnectionCode(action.code, action.passphrase).then(result =>
           result
             .map(sdp => dispatch({type: 'ACCEPT_OFFER', sdp}))
             .onFailure(() => dispatch({type: 'DECODE_FAILED'}))
@@ -118,7 +109,7 @@ export const createCodecMiddleware = ({decodeCode}: CodecMiddlewareConfig): Midd
       } else if (action.type === 'ACCEPT_ANSWER_CODE') {
         const {flow} = getState();
         if (flow.phase === 'offer-ready') {
-          decodeCode(action.responseCode, flow.passphrase).then(result =>
+          decodeConnectionCode(action.responseCode, flow.passphrase).then(result =>
             result.map(sdp => dispatch({type: 'ACCEPT_ANSWER', peerId: flow.peerId, sdp}))
           );
         }

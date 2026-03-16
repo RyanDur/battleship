@@ -3,14 +3,12 @@ import {Connections} from './components/Connections';
 import {DownloadLink} from './components/DownloadLink';
 import {ServiceHealth} from './components/ServiceHealth';
 import {loadConfig} from './protocol/config';
-import {encodeConnectionCode, decodeConnectionCode} from './protocol/connection-code';
 import {fetchDownloadUrl} from './protocol/download';
 import type {HeartbeatState} from './protocol/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
 import {detectPlatform} from './protocol/platform';
-import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware, createSignalingMiddleware, applyMiddleware} from './state/connectionStore';
+import {createConnectionStore, createHandlerMiddleware, encodingMiddleware, codecMiddleware, createSignalingMiddleware, applyMiddleware} from './state/connectionStore';
 import {ConnectionProvider} from './state/ConnectionProvider';
-import {createPeerHandler} from './workers/connection.handler';
 
 const platform = detectPlatform(navigator.userAgent);
 
@@ -32,11 +30,9 @@ const App = () => {
     if (!config) return null;
     const signalingUrl = `${config.serviceUrl.replace(/^http/, 'ws')}/ws/signaling`;
     return createConnectionStore(applyMiddleware([
-      createHandlerMiddleware({
-        createHandler: (emit) => createPeerHandler({name: 'Player', createPeerConnection: () => new RTCPeerConnection(), emit}),
-      }),
-      createEncodingMiddleware({encodeCode: encodeConnectionCode}),
-      createCodecMiddleware({decodeCode: decodeConnectionCode}),
+      createHandlerMiddleware({name: 'Player', createPeerConnection: () => new RTCPeerConnection()}),
+      encodingMiddleware,
+      codecMiddleware,
       createSignalingMiddleware({
         config: {
           createWebSocket: (url) => new WebSocket(url),

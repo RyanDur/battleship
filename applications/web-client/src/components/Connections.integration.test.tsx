@@ -2,10 +2,8 @@ import {render, screen, within, waitFor, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Connections} from './Connections';
 import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore, createHandlerMiddleware, createEncodingMiddleware, createCodecMiddleware, applyMiddleware} from '../state/connectionStore';
-import {createPeerHandler} from '../workers/connection.handler';
+import {createConnectionStore, createHandlerMiddleware, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import {success, failure} from '../lib/result';
 import type {ConnectionStore} from '../state/connectionStore';
 import type {ConnectionFlow} from '../state/connections';
 
@@ -16,13 +14,9 @@ describe('Connections integration', () => {
 
     const makeStore = (name: string) =>
       createConnectionStore(applyMiddleware([
-        createHandlerMiddleware({
-          createHandler: emit => createPeerHandler({name, emit, createPeerConnection: factory.createPeerConnection}),
-        }),
-        createEncodingMiddleware({encodeCode: async sdp => `encoded:${sdp}`}),
-        createCodecMiddleware({
-          decodeCode: async code => code.startsWith('encoded:') ? success(code.slice(8)) : failure('DECRYPT_FAILED' as const),
-        }),
+        createHandlerMiddleware({name, createPeerConnection: factory.createPeerConnection}),
+        encodingMiddleware,
+        codecMiddleware,
       ]));
 
     const aliceStore = makeStore('Alice');
