@@ -331,6 +331,33 @@ describe('Connections', () => {
       expect(screen.queryByRole('button', {name: /reconnect/i})).not.toBeInTheDocument();
     });
 
+    it('shows Forget button for each previous peer', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+
+      expect(screen.getByRole('button', {name: /forget/i})).toBeInTheDocument();
+    });
+
+    it('clicking Forget dispatches FORGET_PEER with correct peerId', async () => {
+      const user = userEvent.setup();
+      const factory = createFakePeerConnectionFactory();
+      const dispatched: ConnectionsAction[] = [];
+      const store = createConnectionStore(applyMiddleware([
+        createHandlerMiddleware({name: 'Player', createPeerConnection: factory.createPeerConnection}),
+        encodingMiddleware,
+        codecMiddleware,
+        () => (action) => dispatched.push(action),
+      ]));
+      render(<ConnectionProvider store={store}><Connections serviceOnline={true}/></ConnectionProvider>);
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+
+      await user.click(screen.getByRole('button', {name: /forget/i}));
+
+      expect(dispatched).toContainEqual({type: 'FORGET_PEER', peerId: 'p1'});
+    });
+
     it('clicking Reconnect dispatches RECONNECT_VIA_SERVER with correct peer', async () => {
       const user = userEvent.setup();
       const factory = createFakePeerConnectionFactory();

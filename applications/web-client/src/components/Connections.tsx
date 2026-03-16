@@ -59,6 +59,7 @@ const PreviousPeerRow = ({peer}: {peer: PreviousPeer}) => {
       {peer.online && (
         <button onClick={() => store.dispatch({type: 'RECONNECT_VIA_SERVER', signalingPeerId: peer.peerId, name: peer.name})}>Reconnect</button>
       )}
+      <button onClick={() => store.dispatch({type: 'FORGET_PEER', peerId: peer.peerId})}>Forget</button>
     </li>
   );
 };

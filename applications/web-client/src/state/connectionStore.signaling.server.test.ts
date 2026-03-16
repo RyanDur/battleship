@@ -96,6 +96,18 @@ describe('createSignalingMiddleware (server)', () => {
     await cleanup();
   });
 
+  it('FORGET_PEER dispatch sends FORGET_PEER message to server', async () => {
+    const received: string[] = [];
+    const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
+
+    store.dispatch({type: 'FORGET_PEER', peerId: 'p1'});
+
+    await vi.waitFor(() =>
+      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'FORGET_PEER', targetPeerId: 'p1'})
+    );
+    await cleanup();
+  });
+
   it('STOP_SIGNALING prevents further server events from updating state', async () => {
     const {store, getConn, cleanup} = await connectStore();
 

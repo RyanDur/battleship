@@ -151,6 +151,8 @@ export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): 
         handle?.send({type: 'RELAY_OFFER', targetPeerId: action.targetPeerId, sdp: action.sdp});
       } else if (action.type === 'RELAY_ANSWER') {
         handle?.send({type: 'RELAY_ANSWER', targetPeerId: action.targetPeerId, sdp: action.sdp});
+      } else if (action.type === 'FORGET_PEER') {
+        handle?.send({type: 'FORGET_PEER', targetPeerId: action.peerId});
       }
     };
   };
