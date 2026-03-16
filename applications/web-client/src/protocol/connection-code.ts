@@ -1,4 +1,5 @@
 import { asyncResult, asyncSuccess, asyncFailure, type AsyncResult } from '../lib/asyncResult';
+import {tryCatch} from '../lib/result';
 
 export type CodecError = 'DECRYPT_FAILED'
 
@@ -79,17 +80,17 @@ export const encodeConnectionCode = (sdp: string, passphrase: string): AsyncResu
     });
 };
 
-export const decodeConnectionCode = (code: string, passphrase: string): AsyncResult<string, CodecError> => {
-  try {
-    const bytes = fromBase64url(code);
-    const salt = bytes.slice(0, SALT_BYTES);
-    const iv = bytes.slice(SALT_BYTES, SALT_BYTES + IV_BYTES);
-    const ciphertext = bytes.slice(SALT_BYTES + IV_BYTES);
-    return deriveKey(passphrase, salt)
-      .andThen(key => asyncResult(crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext)))
-      .andThen(compressed => decompress(new Uint8Array(compressed)))
-      .or(() => asyncFailure('DECRYPT_FAILED' as CodecError));
-  } catch {
-    return asyncFailure('DECRYPT_FAILED');
-  }
-};
+export const decodeConnectionCode = (code: string, passphrase: string): AsyncResult<string, CodecError> =>
+  tryCatch(() => fromBase64url(code), (): CodecError => 'DECRYPT_FAILED')
+    .mapEither(
+      bytes => {
+        const salt = bytes.slice(0, SALT_BYTES);
+        const iv = bytes.slice(SALT_BYTES, SALT_BYTES + IV_BYTES);
+        const ciphertext = bytes.slice(SALT_BYTES + IV_BYTES);
+        return deriveKey(passphrase, salt)
+          .andThen(key => asyncResult(crypto.subtle.decrypt({name: 'AES-GCM', iv}, key, ciphertext)))
+          .andThen(compressed => decompress(new Uint8Array(compressed)))
+          .or(() => asyncFailure('DECRYPT_FAILED' as CodecError));
+      },
+      asyncFailure,
+    );
