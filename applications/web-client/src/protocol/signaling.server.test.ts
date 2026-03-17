@@ -132,6 +132,34 @@ describe('startSignaling', () => {
     await cleanup();
   });
 
+  it('emits EMAIL_SHARED when server sends EMAIL_SHARED', async () => {
+    const {events, getConn, cleanup} = await connect();
+
+    getConn().send(JSON.stringify({type: 'EMAIL_SHARED', fromPeerId: 'p2', email: 'bob@example.com'}));
+
+    await vi.waitFor(() => expect(events).toContainEqual({type: 'EMAIL_SHARED', fromPeerId: 'p2', email: 'bob@example.com'}));
+    await cleanup();
+  });
+
+  it('emits EMAIL_REVOKED when server sends EMAIL_REVOKED', async () => {
+    const {events, getConn, cleanup} = await connect();
+
+    getConn().send(JSON.stringify({type: 'EMAIL_REVOKED', fromPeerId: 'p2'}));
+
+    await vi.waitFor(() => expect(events).toContainEqual({type: 'EMAIL_REVOKED', fromPeerId: 'p2'}));
+    await cleanup();
+  });
+
+  it('emits PREVIOUS_PEERS with email when server includes email', async () => {
+    const {events, getConn, cleanup} = await connect();
+
+    const peers = [{peerId: 'p1', name: 'Alice', online: false, email: 'alice@example.com'}];
+    getConn().send(JSON.stringify({type: 'PREVIOUS_PEERS', peers}));
+
+    await vi.waitFor(() => expect(events).toContainEqual({type: 'PREVIOUS_PEERS', peers}));
+    await cleanup();
+  });
+
   it('stop prevents further events', async () => {
     const {events, handle, getConn, cleanup} = await connect();
     handle.stop();

@@ -15,6 +15,8 @@ export type SignalingEvent =
   | {type: 'PREVIOUS_PEERS'; peers: PreviousPeer[]}
   | {type: 'ICE_RESTART_RECEIVED'; fromPeerId: string; sdp: string}
   | {type: 'ICE_RESTART_ANSWER_RECEIVED'; fromPeerId: string; sdp: string}
+  | {type: 'EMAIL_SHARED'; fromPeerId: string; email: string}
+  | {type: 'EMAIL_REVOKED'; fromPeerId: string}
 
 export type SignalingHandle = {
   stop: () => void
@@ -32,6 +34,7 @@ const peerDecoder = Decoder.object({required: {peerId: Decoder.string, name: Dec
 
 const previousPeerDecoder = Decoder.object({
   required: {peerId: Decoder.string, name: Decoder.string, online: Decoder.boolean},
+  optional: {email: Decoder.string},
 });
 
 const peersDecoder = Decoder.object({
@@ -66,6 +69,14 @@ const iceRestartAnswerReceivedDecoder = Decoder.object({
   required: {type: Decoder.literal('ICE_RESTART_ANSWER_RECEIVED'), fromPeerId: Decoder.string, sdp: Decoder.string},
 });
 
+const emailSharedDecoder = Decoder.object({
+  required: {type: Decoder.literal('EMAIL_SHARED'), fromPeerId: Decoder.string, email: Decoder.string},
+});
+
+const emailRevokedDecoder = Decoder.object({
+  required: {type: Decoder.literal('EMAIL_REVOKED'), fromPeerId: Decoder.string},
+});
+
 export const startSignaling = (
   config: SignalingConfig,
   onEvent: (event: SignalingEvent) => void
@@ -96,7 +107,9 @@ export const startSignaling = (
             .or(() => maybe(answerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'ANSWER_RECEIVED', fromPeerId: msg.fromPeerId, sdp: msg.sdp})))
             .or(() => maybe(previousPeersDecoder.decode(parsed)).map(msg => onEvent({type: 'PREVIOUS_PEERS', peers: msg.peers})))
             .or(() => maybe(iceRestartReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'ICE_RESTART_RECEIVED', fromPeerId: msg.fromPeerId, sdp: msg.sdp})))
-            .or(() => maybe(iceRestartAnswerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'ICE_RESTART_ANSWER_RECEIVED', fromPeerId: msg.fromPeerId, sdp: msg.sdp})));
+            .or(() => maybe(iceRestartAnswerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'ICE_RESTART_ANSWER_RECEIVED', fromPeerId: msg.fromPeerId, sdp: msg.sdp})))
+            .or(() => maybe(emailSharedDecoder.decode(parsed)).map(msg => onEvent({type: 'EMAIL_SHARED', fromPeerId: msg.fromPeerId, email: msg.email})))
+            .or(() => maybe(emailRevokedDecoder.decode(parsed)).map(msg => onEvent({type: 'EMAIL_REVOKED', fromPeerId: msg.fromPeerId})));
         });
     };
 
