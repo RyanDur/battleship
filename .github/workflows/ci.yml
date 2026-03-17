@@ -25,16 +25,13 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
-      - name: Gradle tests
-        run: ./gradlew test
-
-      - name: Build boot jar
+      - name: Gradle tests and boot jar
         shell: bash
         run: |
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            ./gradlew :applications:signaling-server:bootJar -Pversion=${GITHUB_REF_NAME#v}
+            ./gradlew test :applications:signaling-server:bootJar -Pversion=${GITHUB_REF_NAME#v}
           else
-            ./gradlew :applications:signaling-server:bootJar
+            ./gradlew test :applications:signaling-server:bootJar
           fi
 
       - name: Install frontend dependencies
