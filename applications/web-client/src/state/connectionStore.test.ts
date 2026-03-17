@@ -228,7 +228,7 @@ describe('connectionStore', () => {
 
     it('ICE disconnect triggers RELAY_ICE_RESTART dispatch', async () => {
       const dispatched: ConnectionsAction[] = [];
-      const {store, factory} = makeStore([() => (action) => dispatched.push(action)]);
+      const {store, factory} = makeStore([() => (next) => (action) => { dispatched.push(action); next(action); }]);
 
       const offerSdp = await connectViaServerAndGetOfferSdp(store);
       factory.simulateIceStateChange(offerSdp, 'disconnected');
@@ -240,35 +240,49 @@ describe('connectionStore', () => {
   });
 
   describe('applyMiddleware (standalone)', () => {
-    it('fans out action to all middleware in list', () => {
+    it('fans out action to all middleware via next chain', () => {
       const received1: ConnectionsAction[] = [];
       const received2: ConnectionsAction[] = [];
       const noop = () => {};
       const composed = applyMiddleware([
-        () => (action) => received1.push(action),
-        () => (action) => received2.push(action),
+        () => (next) => (action) => { received1.push(action); next(action); },
+        () => (next) => (action) => { received2.push(action); next(action); },
       ]);
       const action: ConnectionsAction = {type: 'CREATE_OFFER', passphrase: 'secret'};
-      const middleware = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}})});
+      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}})})(noop);
 
-      middleware(action);
+      dispatch(action);
 
       expect(received1).toContainEqual(action);
       expect(received2).toContainEqual(action);
     });
 
+    it('middleware runs before baseDispatch (next)', () => {
+      const order: string[] = [];
+      const noop = () => {};
+      const composed = applyMiddleware([
+        () => (next) => (action) => { order.push('middleware'); next(action); },
+      ]);
+      const baseDispatch = () => order.push('base');
+      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}})})(baseDispatch);
+
+      dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+
+      expect(order).toEqual(['middleware', 'base']);
+    });
+
     it('is a no-op for an empty list', () => {
       const noop = () => {};
       const composed = applyMiddleware([]);
-      const middleware = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}})});
-      expect(() => middleware({type: 'CREATE_OFFER', passphrase: 'secret'})).not.toThrow();
+      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}})})(noop);
+      expect(() => dispatch({type: 'CREATE_OFFER', passphrase: 'secret'})).not.toThrow();
     });
   });
 
   describe('middleware', () => {
     it('receives every dispatched action', () => {
       const actions: ConnectionsAction[] = [];
-      const {store} = makeStore([() => (action) => actions.push(action)]);
+      const {store} = makeStore([() => (next) => (action) => { actions.push(action); next(action); }]);
 
       store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
 

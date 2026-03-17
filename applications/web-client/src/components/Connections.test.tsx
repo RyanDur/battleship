@@ -390,7 +390,7 @@ describe('Connections', () => {
         createHandlerMiddleware({name: 'Player', createPeerConnection: factory.createPeerConnection}),
         encodingMiddleware,
         codecMiddleware,
-        () => (action) => dispatched.push(action),
+        () => (next) => (action) => { dispatched.push(action); next(action); },
       ]));
       render(<ConnectionProvider store={store}><Connections serviceOnline={true}/></ConnectionProvider>);
 
@@ -409,7 +409,7 @@ describe('Connections', () => {
         createHandlerMiddleware({name: 'Player', createPeerConnection: factory.createPeerConnection}),
         encodingMiddleware,
         codecMiddleware,
-        () => (action) => dispatched.push(action),
+        () => (next) => (action) => { dispatched.push(action); next(action); },
       ]));
       render(<ConnectionProvider store={store}><Connections serviceOnline={true}/></ConnectionProvider>);
 

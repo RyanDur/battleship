@@ -15,12 +15,13 @@ describe('Connections integration', () => {
     const bob: {store?: ConnectionStore} = {};
 
     const makeRelayMiddleware = (myName: string, mySignalingPeerId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
-      (_deps) => (action) => {
+      (_deps) => (next) => (action) => {
         if (action.type === 'RELAY_OFFER') {
           getOther().dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: mySignalingPeerId, name: myName, sdp: action.sdp});
         } else if (action.type === 'RELAY_ANSWER') {
           getOther().dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: mySignalingPeerId, sdp: action.sdp});
         }
+        next(action);
       };
 
     alice.store = createConnectionStore(applyMiddleware([
@@ -61,12 +62,13 @@ describe('Connections integration', () => {
     const bob: {store?: ConnectionStore} = {};
 
     const makeRelayMiddleware = (myName: string, mySignalingPeerId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
-      (_deps) => (action) => {
+      (_deps) => (next) => (action) => {
         if (action.type === 'RELAY_OFFER') {
           getOther().dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: mySignalingPeerId, name: myName, sdp: action.sdp});
         } else if (action.type === 'RELAY_ANSWER') {
           getOther().dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: mySignalingPeerId, sdp: action.sdp});
         }
+        next(action);
       };
 
     alice.store = createConnectionStore(applyMiddleware([

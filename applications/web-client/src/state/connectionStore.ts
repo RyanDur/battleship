@@ -22,18 +22,18 @@ export type ConnectionStore = {
   addListener: (fn: ListenerFn) => () => void
 }
 
+type Dispatch = (action: ConnectionsAction) => void
+
 type MiddlewareDeps = {
-  dispatch: (action: ConnectionsAction) => void
+  dispatch: Dispatch
   getState: () => ConnectionsState
 }
 
-export type MiddlewareFactory = (deps: MiddlewareDeps) => (action: ConnectionsAction) => void
+export type MiddlewareFactory = (deps: MiddlewareDeps) => (next: Dispatch) => Dispatch
 
 export const applyMiddleware = (factories: MiddlewareFactory[]): MiddlewareFactory =>
-  (deps) => {
-    const middlewares = factories.map(f => f(deps));
-    return (action) => middlewares.forEach(mw => mw(action));
-  };
+  (deps) => (next) =>
+    factories.reduceRight((acc, factory) => factory(deps)(acc), next);
 
 export const createConnectionStore = (middlewareFactory?: MiddlewareFactory): ConnectionStore => {
   let state = initialState;
@@ -44,16 +44,18 @@ export const createConnectionStore = (middlewareFactory?: MiddlewareFactory): Co
     getState: () => state,
     subscribe: (fn) => { subscribers.add(fn); return () => subscribers.delete(fn); },
     addListener: (fn) => { actionListeners.add(fn); return () => actionListeners.delete(fn); },
-    dispatch: (action: ConnectionsAction) => {
-      middleware(action);
-      const prevState = state;
-      state = connectionsReducer(state, action);
-      subscribers.forEach(fn => fn());
-      actionListeners.forEach(fn => fn(action, {prevState, state, dispatch: (a) => store.dispatch(a), getState: () => state}));
-    },
+    dispatch: (action: ConnectionsAction) => { /* replaced below */ void action; },
   };
 
-  const middleware = middlewareFactory ? middlewareFactory({dispatch: (action) => store.dispatch(action), getState: () => state}) : () => undefined;
+  const baseDispatch: Dispatch = (action) => {
+    const prevState = state;
+    state = connectionsReducer(state, action);
+    subscribers.forEach(fn => fn());
+    actionListeners.forEach(fn => fn(action, {prevState, state, dispatch: (a) => store.dispatch(a), getState: () => state}));
+  };
+
+  const middlewareAPI: MiddlewareDeps = {dispatch: (action) => store.dispatch(action), getState: () => state};
+  store.dispatch = middlewareFactory ? middlewareFactory(middlewareAPI)(baseDispatch) : baseDispatch;
 
   return store;
 };
@@ -64,7 +66,7 @@ type HandlerMiddlewareConfig = {
 }
 
 export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMiddlewareConfig): MiddlewareFactory =>
-  ({dispatch}) => {
+  ({dispatch}) => (next) => {
     const signalingPeerIds = new Map<string, string>();
 
     const emit = (event: PeerEvent) => {
@@ -113,23 +115,24 @@ export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMid
       else if (action.type === 'SERVER_ANSWER_RECEIVED') handler.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
       else if (action.type === 'ICE_RESTART_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
       else if (action.type === 'ICE_RESTART_ANSWER_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
+      next(action);
     };
   };
 
 export const encodingMiddleware: MiddlewareFactory =
-  ({dispatch, getState}) =>
+  ({dispatch, getState}) => (next) =>
     (action: ConnectionsAction) => {
-      if (action.type !== 'OFFER_SDP_READY' && action.type !== 'ANSWER_SDP_READY') return;
       const {flow} = getState();
       if (action.type === 'OFFER_SDP_READY' && flow.phase === 'creating') {
         encodeConnectionCode(action.sdp, flow.passphrase).onSuccess(code => dispatch({type: 'OFFER_ENCODED', peerId: action.peerId, code}));
       } else if (action.type === 'ANSWER_SDP_READY' && flow.phase === 'joining') {
         encodeConnectionCode(action.sdp, flow.passphrase).onSuccess(code => dispatch({type: 'ANSWER_ENCODED', code}));
       }
+      next(action);
     };
 
 export const codecMiddleware: MiddlewareFactory =
-  ({dispatch, getState}) =>
+  ({dispatch, getState}) => (next) =>
     (action: ConnectionsAction) => {
       if (action.type === 'JOIN_OFFER') {
         decodeConnectionCode(action.code, action.passphrase)
@@ -142,6 +145,7 @@ export const codecMiddleware: MiddlewareFactory =
             .onSuccess(sdp => dispatch({type: 'ACCEPT_ANSWER', peerId: flow.peerId, sdp}));
         }
       }
+      next(action);
     };
 
 type SignalingMiddlewareConfig = {
@@ -149,7 +153,7 @@ type SignalingMiddlewareConfig = {
 }
 
 export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): MiddlewareFactory =>
-  ({dispatch}) => {
+  ({dispatch}) => (next) => {
     let handle: SignalingHandle | null = null;
 
     return (action: ConnectionsAction) => {
@@ -178,5 +182,6 @@ export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): 
       } else if (action.type === 'RELAY_ICE_RESTART_ANSWER') {
         handle?.send({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: action.targetPeerId, sdp: action.sdp});
       }
+      next(action);
     };
   };
