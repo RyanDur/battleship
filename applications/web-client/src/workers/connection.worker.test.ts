@@ -4,6 +4,12 @@ import type {PeerEvent} from '../types/worker-messages';
 import {connectionsReducer, initialState} from '../state/connections';
 import type {ConnectionsAction} from '../state/connections';
 
+const findEvent = <T extends PeerEvent['type']>(events: PeerEvent[], type: T) =>
+  events.find((e): e is Extract<PeerEvent, {type: T}> => e.type === type);
+
+const filterEvents = <T extends PeerEvent['type']>(events: PeerEvent[], type: T) =>
+  events.filter((e): e is Extract<PeerEvent, {type: T}> => e.type === type);
+
 const makeHandler = (name: string, createPeerConnection: () => RTCPeerConnection) => {
   const events: PeerEvent[] = [];
   let state = initialState;
@@ -34,14 +40,14 @@ const connectPeers = async (offerer: Handler, answerer: Handler) => {
   await vi.waitFor(() =>
     expect(offerer.events.filter(e => e.type === 'OFFER_CREATED').length).toBeGreaterThan(priorOffers)
   );
-  const offer = offerer.events.filter(e => e.type === 'OFFER_CREATED')[priorOffers] as {peerId: string; sdp: string};
+  const offer = filterEvents(offerer.events, 'OFFER_CREATED')[priorOffers];
 
   answerer.handleCommand({type: 'ACCEPT_OFFER', sdp: offer.sdp});
 
   await vi.waitFor(() =>
     expect(answerer.events.filter(e => e.type === 'ANSWER_CREATED').length).toBeGreaterThan(priorAnswers)
   );
-  const answer = answerer.events.filter(e => e.type === 'ANSWER_CREATED')[priorAnswers] as {peerId: string; sdp: string};
+  const answer = filterEvents(answerer.events, 'ANSWER_CREATED')[priorAnswers];
 
   offerer.handleCommand({type: 'ACCEPT_ANSWER', peerId: offer.peerId, sdp: answer.sdp});
 
@@ -66,7 +72,7 @@ describe('Peer Handler', () => {
           expect.objectContaining({type: 'OFFER_CREATED', sdp: expect.any(String)})
         )
       );
-      const event = alice.events.find(e => e.type === 'OFFER_CREATED') as {peerId: string};
+      const event = findEvent(alice.events, 'OFFER_CREATED')!;
       expect(typeof event.peerId).toBe('string');
     });
 
@@ -81,7 +87,7 @@ describe('Peer Handler', () => {
         expect(alice.events.filter(e => e.type === 'OFFER_CREATED')).toHaveLength(2)
       );
 
-      const [first, second] = alice.events.filter(e => e.type === 'OFFER_CREATED') as Array<{peerId: string}>;
+      const [first, second] = filterEvents(alice.events, 'OFFER_CREATED');
       expect(first.peerId).not.toBe(second.peerId);
     });
   });
@@ -117,7 +123,7 @@ describe('Peer Handler', () => {
       const bob = makeHandler('Bob', factory.createPeerConnection);
 
       const {offererPeerId} = await connectPeers(alice, bob);
-      const aliceViewedByBob = (bob.events.find(e => e.type === 'PEER_CONNECTED') as {peerId: string}).peerId;
+      const aliceViewedByBob = findEvent(bob.events, 'PEER_CONNECTED')!.peerId;
 
       bob.handleCommand({type: 'DISCONNECT', peerId: aliceViewedByBob});
 
@@ -169,7 +175,7 @@ describe('Peer Handler', () => {
       const bob = makeHandler('Bob', factory.createPeerConnection);
 
       const {offererPeerId} = await connectPeers(alice, bob);
-      const aliceViewedByBob = (bob.events.find(e => e.type === 'PEER_CONNECTED') as {peerId: string}).peerId;
+      const aliceViewedByBob = findEvent(bob.events, 'PEER_CONNECTED')!.peerId;
 
       alice.handleCommand({type: 'GRANT_TRUST', peerId: offererPeerId});
 
@@ -184,7 +190,7 @@ describe('Peer Handler', () => {
       const bob = makeHandler('Bob', factory.createPeerConnection);
 
       const {offererPeerId} = await connectPeers(alice, bob);
-      const aliceViewedByBob = (bob.events.find(e => e.type === 'PEER_CONNECTED') as {peerId: string}).peerId;
+      const aliceViewedByBob = findEvent(bob.events, 'PEER_CONNECTED')!.peerId;
 
       alice.handleCommand({type: 'REVOKE_TRUST', peerId: offererPeerId});
 
@@ -234,7 +240,7 @@ describe('Peer Handler', () => {
       await vi.waitFor(() =>
         expect(bob.events).toContainEqual(expect.objectContaining({type: 'INTRODUCTION_RECEIVED'}))
       );
-      const introId = (bob.events.find(e => e.type === 'INTRODUCTION_RECEIVED') as {introId: string}).introId;
+      const introId = findEvent(bob.events, 'INTRODUCTION_RECEIVED')!.introId;
 
       bob.handleCommand({type: 'DECLINE_INTRODUCTION', introId});
 
@@ -251,7 +257,7 @@ describe('Peer Handler', () => {
       alice.handleCommand({type: 'INTRODUCE_PEERS', peerId1: aliceBobPeerId, peerId2: aliceCarolPeerId});
       await Promise.resolve();  // flush INTRODUCTION delivery microtasks
 
-      const introId = (bob.events.find(e => e.type === 'INTRODUCTION_RECEIVED') as {introId: string}).introId;
+      const introId = findEvent(bob.events, 'INTRODUCTION_RECEIVED')!.introId;
 
       vi.advanceTimersByTime(60000);
       await Promise.resolve();  // flush INTRODUCTION_EXPIRED delivery microtasks
@@ -270,7 +276,7 @@ describe('Peer Handler', () => {
         expect(bob.events).toContainEqual(expect.objectContaining({type: 'INTRODUCTION_RECEIVED'}))
       );
 
-      const bobAlicePeerId = (bob.events.find(e => e.type === 'PEER_CONNECTED') as {peerId: string}).peerId;
+      const bobAlicePeerId = findEvent(bob.events, 'PEER_CONNECTED')!.peerId;
       bob.handleCommand({type: 'DISCONNECT', peerId: bobAlicePeerId});
 
       await vi.waitFor(() =>
@@ -301,7 +307,7 @@ describe('Peer Handler', () => {
         expect(bob.events).toContainEqual(expect.objectContaining({type: 'INTRODUCTION_RECEIVED'}));
         expect(carol.events).toContainEqual(expect.objectContaining({type: 'INTRODUCTION_RECEIVED'}));
       });
-      const introId = (bob.events.find(e => e.type === 'INTRODUCTION_RECEIVED') as {introId: string}).introId;
+      const introId = findEvent(bob.events, 'INTRODUCTION_RECEIVED')!.introId;
 
       bob.handleCommand({type: 'ACCEPT_INTRODUCTION', introId});
       carol.handleCommand({type: 'ACCEPT_INTRODUCTION', introId});
@@ -320,14 +326,14 @@ describe('Peer Handler', () => {
       await vi.waitFor(() => expect(alice.events).toContainEqual(
         expect.objectContaining({type: 'SERVER_OFFER_CREATED', signalingPeerId: bobSigId})
       ));
-      const offerEvent = alice.events.find(e => e.type === 'SERVER_OFFER_CREATED' && (e as {signalingPeerId: string}).signalingPeerId === bobSigId) as {sdp: string};
+      const offerEvent = filterEvents(alice.events, 'SERVER_OFFER_CREATED').find(e => e.signalingPeerId === bobSigId)!;
 
       bob.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: aliceSigId, name: 'Alice', sdp: offerEvent.sdp});
 
       await vi.waitFor(() => expect(bob.events).toContainEqual(
         expect.objectContaining({type: 'SERVER_ANSWER_CREATED', signalingPeerId: aliceSigId})
       ));
-      const answerEvent = bob.events.find(e => e.type === 'SERVER_ANSWER_CREATED' && (e as {signalingPeerId: string}).signalingPeerId === aliceSigId) as {sdp: string};
+      const answerEvent = filterEvents(bob.events, 'SERVER_ANSWER_CREATED').find(e => e.signalingPeerId === aliceSigId)!;
 
       alice.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: bobSigId, sdp: answerEvent.sdp});
 
@@ -425,7 +431,7 @@ describe('Peer Handler', () => {
       const bob = makeHandler('Bob', factory.createPeerConnection);
 
       const {offerSdp} = await connectPeersViaServer(alice, bob, 'alice-sig', 'bob-sig');
-      const alicePeerId = (alice.events.find(e => e.type === 'PEER_CONNECTED') as {peerId: string}).peerId;
+      const alicePeerId = findEvent(alice.events, 'PEER_CONNECTED')!.peerId;
 
       // Trigger more disconnections than allowed retries
       for (let i = 0; i <= 3; i++) {
@@ -451,7 +457,7 @@ describe('Peer Handler', () => {
       await vi.waitFor(() =>
         expect(alice.events).toContainEqual(expect.objectContaining({type: 'SERVER_OFFER_CREATED', signalingPeerId: 'bob-sig-id', sdp: expect.any(String)}))
       );
-      const event = alice.events.find(e => e.type === 'SERVER_OFFER_CREATED') as {localPeerId: string};
+      const event = findEvent(alice.events, 'SERVER_OFFER_CREATED')!;
       expect(typeof event.localPeerId).toBe('string');
     });
 
@@ -465,7 +471,7 @@ describe('Peer Handler', () => {
       await vi.waitFor(() =>
         expect(alice.events).toContainEqual(expect.objectContaining({type: 'SERVER_OFFER_CREATED'}))
       );
-      const offerEvent = alice.events.find(e => e.type === 'SERVER_OFFER_CREATED') as {sdp: string};
+      const offerEvent = findEvent(alice.events, 'SERVER_OFFER_CREATED')!;
 
       bob.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: 'alice-sig-id', name: 'Alice', sdp: offerEvent.sdp});
 
@@ -484,14 +490,14 @@ describe('Peer Handler', () => {
       await vi.waitFor(() =>
         expect(alice.events).toContainEqual(expect.objectContaining({type: 'SERVER_OFFER_CREATED'}))
       );
-      const offerEvent = alice.events.find(e => e.type === 'SERVER_OFFER_CREATED') as {sdp: string};
+      const offerEvent = findEvent(alice.events, 'SERVER_OFFER_CREATED')!;
 
       bob.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: 'alice-sig-id', name: 'Alice', sdp: offerEvent.sdp});
 
       await vi.waitFor(() =>
         expect(bob.events).toContainEqual(expect.objectContaining({type: 'SERVER_ANSWER_CREATED'}))
       );
-      const answerEvent = bob.events.find(e => e.type === 'SERVER_ANSWER_CREATED') as {sdp: string};
+      const answerEvent = findEvent(bob.events, 'SERVER_ANSWER_CREATED')!;
 
       alice.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: 'bob-sig-id', sdp: answerEvent.sdp});
 
