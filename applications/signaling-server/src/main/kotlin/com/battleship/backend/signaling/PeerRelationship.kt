@@ -69,12 +69,27 @@ interface SharedEmailPermissionJpaRepository : JpaRepository<SharedEmailPermissi
     fun findBySharerPeerIdAndReceiverPeerId(sharerPeerId: String, receiverPeerId: String): SharedEmailPermission?
 }
 
+@Entity
+class SavedPeerEmail(
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Long = 0,
+    var saverId: String = "",
+    var targetPeerId: String = "",
+    var email: String = "",
+)
+
+@Repository
+interface SavedPeerEmailJpaRepository : JpaRepository<SavedPeerEmail, Long> {
+    fun findBySaverIdAndTargetPeerId(saverId: String, targetPeerId: String): SavedPeerEmail?
+}
+
 class JpaPeerRelationshipGateway(
     private val jpaRepo: PeerRelationshipJpaRepository,
     private val nameRepo: PeerNameJpaRepository,
     private val forgottenRepo: ForgottenPairJpaRepository,
     private val emailRepo: PeerEmailJpaRepository,
     private val sharingRepo: SharedEmailPermissionJpaRepository,
+    private val savedPeerEmailRepo: SavedPeerEmailJpaRepository,
 ) : PeerRelationshipGateway {
 
     override fun save(peerId1: String, peerId2: String) {
@@ -128,4 +143,17 @@ class JpaPeerRelationshipGateway(
 
     override fun hasSharing(sharerPeerId: String, receiverPeerId: String): Boolean =
         sharingRepo.findBySharerPeerIdAndReceiverPeerId(sharerPeerId, receiverPeerId) != null
+
+    override fun savePeerEmail(saverId: String, targetPeerId: String, email: String) {
+        val existing = savedPeerEmailRepo.findBySaverIdAndTargetPeerId(saverId, targetPeerId)
+        if (existing != null) {
+            existing.email = email
+            savedPeerEmailRepo.save(existing)
+        } else {
+            savedPeerEmailRepo.save(SavedPeerEmail(saverId = saverId, targetPeerId = targetPeerId, email = email))
+        }
+    }
+
+    override fun findPeerEmail(saverId: String, targetPeerId: String): String? =
+        savedPeerEmailRepo.findBySaverIdAndTargetPeerId(saverId, targetPeerId)?.email
 }

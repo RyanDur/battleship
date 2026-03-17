@@ -35,6 +35,7 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
             "SHARE_EMAIL" -> handleShareEmail(session, payload)
             "STOP_SHARING_EMAIL" -> handleStopSharingEmail(session, payload)
             "UPDATE_EMAIL" -> handleUpdateEmail(session, payload)
+            "SAVE_PEER_EMAIL" -> handleSavePeerEmail(session, payload)
         }
     }
 
@@ -126,6 +127,13 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         val peerId = sessionToPeer[session.id] ?: return
         val email = payload["email"] as? String ?: return
         registry.saveEmail(peerId, email)
+    }
+
+    private fun handleSavePeerEmail(session: WebSocketSession, payload: Map<String, Any>) {
+        val peerId = sessionToPeer[session.id] ?: return
+        val targetPeerId = payload["targetPeerId"] as? String ?: return
+        val email = payload["email"] as? String ?: return
+        registry.savePeerEmail(peerId, targetPeerId, email)
     }
 
     private fun send(session: WebSocketSession, payload: Map<String, Any>) {

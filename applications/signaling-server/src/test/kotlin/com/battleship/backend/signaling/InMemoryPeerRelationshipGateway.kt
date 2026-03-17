@@ -8,6 +8,7 @@ class InMemoryPeerRelationshipGateway : PeerRelationshipGateway {
     private val forgotten = mutableSetOf<Pair<String, String>>()
     private val emails = ConcurrentHashMap<String, String>()
     private val sharing = mutableSetOf<Pair<String, String>>()
+    private val savedPeerEmails = ConcurrentHashMap<Pair<String, String>, String>()
 
     override fun save(peerId1: String, peerId2: String) {
         relationships.getOrPut(peerId1) { mutableSetOf() }.add(peerId2)
@@ -45,4 +46,11 @@ class InMemoryPeerRelationshipGateway : PeerRelationshipGateway {
 
     override fun hasSharing(sharerPeerId: String, receiverPeerId: String): Boolean =
         sharing.contains(sharerPeerId to receiverPeerId)
+
+    override fun savePeerEmail(saverId: String, targetPeerId: String, email: String) {
+        savedPeerEmails[saverId to targetPeerId] = email
+    }
+
+    override fun findPeerEmail(saverId: String, targetPeerId: String): String? =
+        savedPeerEmails[saverId to targetPeerId]
 }

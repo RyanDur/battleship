@@ -18,6 +18,8 @@ interface PeerRelationshipGateway {
     fun addSharing(sharerPeerId: String, receiverPeerId: String)
     fun removeSharing(sharerPeerId: String, receiverPeerId: String)
     fun hasSharing(sharerPeerId: String, receiverPeerId: String): Boolean
+    fun savePeerEmail(saverId: String, targetPeerId: String, email: String)
+    fun findPeerEmail(saverId: String, targetPeerId: String): String?
 }
 
 @Component
@@ -56,10 +58,15 @@ class PeerRegistry(private val relationships: PeerRelationshipGateway) {
     fun getSharedEmail(fromPeerId: String, toPeerId: String): String? =
         if (relationships.hasSharing(fromPeerId, toPeerId)) relationships.findEmail(fromPeerId) else null
 
+    fun savePeerEmail(saverId: String, targetPeerId: String, email: String) {
+        relationships.savePeerEmail(saverId, targetPeerId, email)
+    }
+
     fun getPreviousPeers(peerId: String): List<PreviousPeerInfo> =
         relationships.findRelated(peerId).mapNotNull { relatedId ->
             val name = relationships.findName(relatedId) ?: return@mapNotNull null
-            val email = if (relationships.hasSharing(relatedId, peerId)) relationships.findEmail(relatedId) else null
+            val email = if (relationships.hasSharing(relatedId, peerId)) relationships.findEmail(relatedId)
+                        else relationships.findPeerEmail(peerId, relatedId)
             PreviousPeerInfo(peerId = relatedId, name = name, online = peers.containsKey(relatedId), email = email)
         }
 

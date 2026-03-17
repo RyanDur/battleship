@@ -25,9 +25,12 @@ class JpaPeerRelationshipGatewayTest {
     @Autowired
     lateinit var sharingRepo: SharedEmailPermissionJpaRepository
 
+    @Autowired
+    lateinit var savedPeerEmailRepo: SavedPeerEmailJpaRepository
+
     @Test
     fun `saved relationship is findable from either peer's perspective`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         gateway.save("alice", "bob")
 
@@ -37,7 +40,7 @@ class JpaPeerRelationshipGatewayTest {
 
     @Test
     fun `saving the same relationship twice does not create duplicates`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         gateway.save("alice", "bob")
         gateway.save("alice", "bob")
@@ -47,7 +50,7 @@ class JpaPeerRelationshipGatewayTest {
 
     @Test
     fun `saving reverse order does not create duplicate`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         gateway.save("alice", "bob")
         gateway.save("bob", "alice")
@@ -58,7 +61,7 @@ class JpaPeerRelationshipGatewayTest {
 
     @Test
     fun `findRelated returns empty when no relationships`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         val result = gateway.findRelated("alice")
 
@@ -67,7 +70,7 @@ class JpaPeerRelationshipGatewayTest {
 
     @Test
     fun `saved name is findable`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         gateway.saveName("alice", "Alice")
 
@@ -76,14 +79,14 @@ class JpaPeerRelationshipGatewayTest {
 
     @Test
     fun `findName returns null when name not saved`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         assertNull(gateway.findName("unknown"))
     }
 
     @Test
     fun `saveName overwrites previous name`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         gateway.saveName("alice", "Alice")
         gateway.saveName("alice", "Alicia")
@@ -93,7 +96,7 @@ class JpaPeerRelationshipGatewayTest {
 
     @Test
     fun `forget removes peer from findRelated results`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         gateway.save("alice", "bob")
         gateway.forget("alice", "bob")
@@ -103,7 +106,7 @@ class JpaPeerRelationshipGatewayTest {
 
     @Test
     fun `forget is symmetric - forgotten peer also cannot find forgetful peer`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         gateway.save("alice", "bob")
         gateway.forget("alice", "bob")
@@ -113,7 +116,7 @@ class JpaPeerRelationshipGatewayTest {
 
     @Test
     fun `saved email is findable`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         gateway.saveEmail("alice", "alice@example.com")
 
@@ -122,14 +125,14 @@ class JpaPeerRelationshipGatewayTest {
 
     @Test
     fun `findEmail returns null when not saved`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         assertNull(gateway.findEmail("unknown"))
     }
 
     @Test
     fun `saveEmail overwrites previous email`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         gateway.saveEmail("alice", "old@example.com")
         gateway.saveEmail("alice", "new@example.com")
@@ -139,7 +142,7 @@ class JpaPeerRelationshipGatewayTest {
 
     @Test
     fun `addSharing makes hasSharing return true`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         gateway.addSharing("alice", "bob")
 
@@ -148,14 +151,14 @@ class JpaPeerRelationshipGatewayTest {
 
     @Test
     fun `hasSharing returns false when not added`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         assertTrue(!gateway.hasSharing("alice", "bob"))
     }
 
     @Test
     fun `removeSharing makes hasSharing return false`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         gateway.addSharing("alice", "bob")
         gateway.removeSharing("alice", "bob")
@@ -165,10 +168,45 @@ class JpaPeerRelationshipGatewayTest {
 
     @Test
     fun `sharing is directional - alice sharing with bob does not mean bob sharing with alice`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 
         gateway.addSharing("alice", "bob")
 
         assertTrue(!gateway.hasSharing("bob", "alice"))
+    }
+
+    @Test
+    fun `savePeerEmail makes findPeerEmail return the saved email`() {
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
+
+        gateway.savePeerEmail("alice", "bob", "bob@example.com")
+
+        assertEquals("bob@example.com", gateway.findPeerEmail("alice", "bob"))
+    }
+
+    @Test
+    fun `findPeerEmail returns null when not saved`() {
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
+
+        assertNull(gateway.findPeerEmail("alice", "bob"))
+    }
+
+    @Test
+    fun `savePeerEmail overwrites previous saved email`() {
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
+
+        gateway.savePeerEmail("alice", "bob", "old@example.com")
+        gateway.savePeerEmail("alice", "bob", "new@example.com")
+
+        assertEquals("new@example.com", gateway.findPeerEmail("alice", "bob"))
+    }
+
+    @Test
+    fun `savePeerEmail is directional - alice saving bob's email does not affect bob's view of alice`() {
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
+
+        gateway.savePeerEmail("alice", "bob", "bob@example.com")
+
+        assertNull(gateway.findPeerEmail("bob", "alice"))
     }
 }

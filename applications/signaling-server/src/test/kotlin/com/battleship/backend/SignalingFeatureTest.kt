@@ -516,4 +516,86 @@ class SignalingFeatureTest {
         sessionA.close()
         sessionB.close()
     }
+
+    @Test
+    fun `SAVE_PEER_EMAIL persists so it appears in PREVIOUS_PEERS on next connect`() {
+        val (sessionA, messagesA) = connect("save-peer-email-a")
+        val (sessionB, messagesB) = connect("save-peer-email-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice"))
+        messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED
+        messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        // Establish relationship via SDP relay
+        send(sessionA, mapOf("type" to "RELAY_OFFER", "targetPeerId" to "save-peer-email-b", "sdp" to "v=offer"))
+        messagesB.poll(2, TimeUnit.SECONDS) // OFFER_RECEIVED
+        send(sessionB, mapOf("type" to "RELAY_ANSWER", "targetPeerId" to "save-peer-email-a", "sdp" to "v=answer"))
+        messagesA.poll(2, TimeUnit.SECONDS) // ANSWER_RECEIVED
+
+        // Alice manually saves Bob's email
+        send(sessionA, mapOf("type" to "SAVE_PEER_EMAIL", "targetPeerId" to "save-peer-email-b", "email" to "bob@example.com"))
+
+        // Alice reconnects — PREVIOUS_PEERS should show Bob with the saved email
+        sessionA.close()
+        val (sessionA2, messagesA2) = connect("save-peer-email-a")
+        send(sessionA2, mapOf("type" to "REGISTER", "name" to "Alice"))
+        messagesA2.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesA2.poll(2, TimeUnit.SECONDS) // PEERS
+        val previousPeers = messagesA2.poll(2, TimeUnit.SECONDS)
+
+        @Suppress("UNCHECKED_CAST")
+        val peers = previousPeers?.get("peers") as? List<Map<String, Any>> ?: emptyList()
+        assertEquals(1, peers.size)
+        assertEquals("bob@example.com", peers[0]["email"])
+
+        sessionA2.close()
+        sessionB.close()
+    }
+
+    @Test
+    fun `SAVE_PEER_EMAIL does not appear in the target peer's PREVIOUS_PEERS`() {
+        val (sessionA, messagesA) = connect("save-peer-private-a")
+        val (sessionB, messagesB) = connect("save-peer-private-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice"))
+        messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED
+        messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        send(sessionA, mapOf("type" to "RELAY_OFFER", "targetPeerId" to "save-peer-private-b", "sdp" to "v=offer"))
+        messagesB.poll(2, TimeUnit.SECONDS) // OFFER_RECEIVED
+        send(sessionB, mapOf("type" to "RELAY_ANSWER", "targetPeerId" to "save-peer-private-a", "sdp" to "v=answer"))
+        messagesA.poll(2, TimeUnit.SECONDS) // ANSWER_RECEIVED
+
+        // Alice saves Bob's email — Bob should NOT see Alice's email in HIS previous peers
+        send(sessionA, mapOf("type" to "SAVE_PEER_EMAIL", "targetPeerId" to "save-peer-private-b", "email" to "bob@example.com"))
+
+        sessionB.close()
+        val (sessionB2, messagesB2) = connect("save-peer-private-b")
+        send(sessionB2, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesB2.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB2.poll(2, TimeUnit.SECONDS) // PEERS
+        val previousPeers = messagesB2.poll(2, TimeUnit.SECONDS)
+
+        @Suppress("UNCHECKED_CAST")
+        val peers = previousPeers?.get("peers") as? List<Map<String, Any>> ?: emptyList()
+        assertEquals(1, peers.size)
+        assertNull(peers[0]["email"])
+
+        sessionA.close()
+        sessionB2.close()
+    }
 }

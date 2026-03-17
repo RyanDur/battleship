@@ -7,6 +7,6 @@ import org.springframework.context.annotation.Configuration
 class RelationshipConfig {
 
     @Bean
-    fun peerRelationshipGateway(jpaRepo: PeerRelationshipJpaRepository, nameRepo: PeerNameJpaRepository, forgottenRepo: ForgottenPairJpaRepository, emailRepo: PeerEmailJpaRepository, sharingRepo: SharedEmailPermissionJpaRepository): PeerRelationshipGateway =
-        JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo)
+    fun peerRelationshipGateway(jpaRepo: PeerRelationshipJpaRepository, nameRepo: PeerNameJpaRepository, forgottenRepo: ForgottenPairJpaRepository, emailRepo: PeerEmailJpaRepository, sharingRepo: SharedEmailPermissionJpaRepository, savedPeerEmailRepo: SavedPeerEmailJpaRepository): PeerRelationshipGateway =
+        JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
 }

@@ -182,6 +182,46 @@ class PeerRegistryTest {
     }
 
     @Test
+    fun `email from savePeerEmail appears in previous peers`() {
+        registry.register("peer-1", "Alice")
+        registry.register("peer-2", "Bob")
+        registry.recordRelationship("peer-1", "peer-2")
+        registry.savePeerEmail("peer-1", "peer-2", "bob@example.com")
+
+        val prev = registry.getPreviousPeers("peer-1")
+
+        assertEquals("bob@example.com", prev[0].email)
+    }
+
+    @Test
+    fun `savePeerEmail does not expose email to the target peer`() {
+        registry.register("peer-1", "Alice")
+        registry.register("peer-2", "Bob")
+        registry.recordRelationship("peer-1", "peer-2")
+        registry.savePeerEmail("peer-1", "peer-2", "bob@example.com")
+
+        val prev = registry.getPreviousPeers("peer-2")
+
+        assertNull(prev[0].email)
+    }
+
+    @Test
+    fun `shared email takes precedence over manually saved email in previous peers`() {
+        registry.register("peer-1", "Alice")
+        registry.register("peer-2", "Bob")
+        registry.recordRelationship("peer-1", "peer-2")
+        // Bob shares his own email with Alice
+        registry.saveEmail("peer-2", "bob-shared@example.com")
+        registry.shareEmail("peer-2", "peer-1")
+        // Alice also manually saved Bob's email
+        registry.savePeerEmail("peer-1", "peer-2", "bob-manual@example.com")
+
+        val prev = registry.getPreviousPeers("peer-1")
+
+        assertEquals("bob-shared@example.com", prev[0].email)
+    }
+
+    @Test
     fun `getPreviousPeers resolves names from repository even when peer was never registered in this session`() {
         val repo = InMemoryPeerRelationshipGateway()
         // Simulate a previous session: Bob and Alice were connected
