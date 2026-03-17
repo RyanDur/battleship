@@ -3,6 +3,7 @@ import { maybe } from '../lib/maybe';
 import { tryCatch } from '../lib/result';
 import { asyncResult, asyncTryCatch } from '../lib/asyncResult';
 import type { PeerCommand, PeerEvent } from '../types/worker-messages';
+import type { ConnectionsState, ConnectionsAction } from '../state/connections';
 
 const introduceDecoder = Decoder.object({
   required: { type: Decoder.literal('INTRODUCE'), name: Decoder.string },
@@ -52,10 +53,13 @@ type Deps = {
   name: string
   emit: (event: PeerEvent) => void
   createPeerConnection: () => RTCPeerConnection
+  getState: () => ConnectionsState
+  dispatch: (action: ConnectionsAction) => void
 }
 
 type Handler = {
   handleCommand: (command: PeerCommand) => void
+  cleanup: (peerId: string) => void
 }
 
 const generatePeerId = (): string => crypto.randomUUID();
@@ -147,12 +151,6 @@ const acceptIceRestartOffer = (pc: RTCPeerConnection, signalingPeerId: string, r
 export const createPeerHandler = (deps: Deps): Handler => {
   const connections = new Map<string, RTCPeerConnection>();
   const dataChannels = new Map<string, RTCDataChannel>();
-  const peerNames = new Map<string, string>();
-  const signalingToPeer = new Map<string, string>();
-  const peerToSignaling = new Map<string, string>();
-  const offererPeerIds = new Set<string>();
-  const unstablePeerIds = new Set<string>();
-  const iceRestartAttempts = new Map<string, number>();
 
   type PendingIntro = {
     peerId1: string
@@ -179,25 +177,22 @@ export const createPeerHandler = (deps: Deps): Handler => {
 
   const wireIceRestart = (pc: RTCPeerConnection, peerId: string) => {
     pc.oniceconnectionstatechange = () => {
-      const state = pc.iceConnectionState;
-      if (state === 'disconnected' || state === 'failed') {
-        unstablePeerIds.add(peerId);
+      const iceState = pc.iceConnectionState;
+      if (iceState === 'disconnected' || iceState === 'failed') {
         deps.emit({type: 'PEER_CONNECTION_UNSTABLE', peerId});
-        if (offererPeerIds.has(peerId)) {
-          const signalingPeerId = peerToSignaling.get(peerId);
+        if (deps.getState().handlerState.offererPeerIds.includes(peerId)) {
+          const signalingPeerId = deps.getState().handlerState.peerToSignaling[peerId];
           if (!signalingPeerId) return;
-          const attempts = (iceRestartAttempts.get(peerId) ?? 0) + 1;
+          const attempts = (deps.getState().handlerState.iceRestartAttempts[peerId] ?? 0) + 1;
           if (attempts > MAX_ICE_RESTART_ATTEMPTS) {
             deps.emit({type: 'PEER_DISCONNECTED', peerId});
           } else {
-            iceRestartAttempts.set(peerId, attempts);
+            deps.dispatch({type: 'ICE_RESTART_ATTEMPTED', peerId});
             createIceRestartOffer(pc, signalingPeerId, deps.emit);
           }
         }
-      } else if (state === 'connected' || state === 'completed') {
-        if (unstablePeerIds.has(peerId)) {
-          unstablePeerIds.delete(peerId);
-          iceRestartAttempts.delete(peerId);
+      } else if (iceState === 'connected' || iceState === 'completed') {
+        if (deps.getState().peerConnectionHealth[peerId] === 'unstable') {
           deps.emit({type: 'PEER_CONNECTION_RESTORED', peerId});
         }
       }
@@ -228,7 +223,6 @@ export const createPeerHandler = (deps: Deps): Handler => {
     onMessage: (peerId, parsed) => {
       maybe(introduceDecoder.decode(parsed))
         .map(msg => {
-          peerNames.set(peerId, msg.name);
           deps.emit({ type: 'PEER_NAMED', peerId, name: msg.name });
         })
         .or(() => maybe(trustDecoder.decode(parsed))
@@ -349,8 +343,8 @@ export const createPeerHandler = (deps: Deps): Handler => {
       case 'INTRODUCE_PEERS': {
         const ch1 = dataChannels.get(command.peerId1);
         const ch2 = dataChannels.get(command.peerId2);
-        const name1 = peerNames.get(command.peerId1);
-        const name2 = peerNames.get(command.peerId2);
+        const name1 = deps.getState().peers.find(p => p.id === command.peerId1)?.name;
+        const name2 = deps.getState().peers.find(p => p.id === command.peerId2)?.name;
         if (!ch1 || !ch2 || !name1 || !name2) break;
         const introId = generatePeerId();
         const timer = setTimeout(() => {
@@ -385,10 +379,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const localPeerId = generatePeerId();
         const pc = deps.createPeerConnection();
         connections.set(localPeerId, pc);
-        signalingToPeer.set(command.signalingPeerId, localPeerId);
-        peerToSignaling.set(localPeerId, command.signalingPeerId);
-        offererPeerIds.add(localPeerId);
-        peerNames.set(localPeerId, command.name);
+        deps.dispatch({type: 'SIGNALING_PEER_REGISTERED', localPeerId, signalingPeerId: command.signalingPeerId, isOfferer: true});
         wireIceRestart(pc, localPeerId);
         negotiateServerOffer(pc, localPeerId, command.signalingPeerId, deps.name, deps.emit, cbs);
         break;
@@ -397,29 +388,27 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const localPeerId = generatePeerId();
         const pc = deps.createPeerConnection();
         connections.set(localPeerId, pc);
-        signalingToPeer.set(command.signalingPeerId, localPeerId);
-        peerToSignaling.set(localPeerId, command.signalingPeerId);
-        peerNames.set(localPeerId, command.name);
+        deps.dispatch({type: 'SIGNALING_PEER_REGISTERED', localPeerId, signalingPeerId: command.signalingPeerId, isOfferer: false});
         wireIceRestart(pc, localPeerId);
         negotiateServerAnswer(pc, localPeerId, command.signalingPeerId, deps.name, deps.emit, command.sdp, cbs);
         break;
       }
       case 'SERVER_ANSWER_RECEIVED': {
-        const localPeerId = signalingToPeer.get(command.signalingPeerId);
+        const localPeerId = deps.getState().handlerState.signalingToPeer[command.signalingPeerId];
         if (!localPeerId) break;
         const pc = connections.get(localPeerId);
         if (pc) asyncTryCatch(() => pc.setRemoteDescription({ type: 'answer', sdp: command.sdp }));
         break;
       }
       case 'ICE_RESTART_RECEIVED': {
-        const localPeerId = signalingToPeer.get(command.signalingPeerId);
+        const localPeerId = deps.getState().handlerState.signalingToPeer[command.signalingPeerId];
         if (!localPeerId) break;
         const pc = connections.get(localPeerId);
         if (pc) acceptIceRestartOffer(pc, command.signalingPeerId, command.sdp, deps.emit);
         break;
       }
       case 'ICE_RESTART_ANSWER_RECEIVED': {
-        const localPeerId = signalingToPeer.get(command.signalingPeerId);
+        const localPeerId = deps.getState().handlerState.signalingToPeer[command.signalingPeerId];
         if (!localPeerId) break;
         const pc = connections.get(localPeerId);
         if (pc) asyncTryCatch(() => pc.setRemoteDescription({type: 'answer', sdp: command.sdp}));
@@ -428,5 +417,11 @@ export const createPeerHandler = (deps: Deps): Handler => {
     }
   };
 
-  return { handleCommand };
+  const cleanup = (peerId: string) => {
+    dataChannels.delete(peerId);
+    const pc = connections.get(peerId);
+    if (pc) { connections.delete(peerId); pc.close(); }
+  };
+
+  return { handleCommand, cleanup };
 };

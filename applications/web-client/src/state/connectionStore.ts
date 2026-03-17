@@ -27,6 +27,7 @@ type Dispatch = (action: ConnectionsAction) => void
 type MiddlewareDeps = {
   dispatch: Dispatch
   getState: () => ConnectionsState
+  addListener: (fn: ListenerFn) => () => void
 }
 
 export type MiddlewareFactory = (deps: MiddlewareDeps) => (next: Dispatch) => Dispatch
@@ -54,7 +55,7 @@ export const createConnectionStore = (middlewareFactory?: MiddlewareFactory): Co
     actionListeners.forEach(fn => fn(action, {prevState, state, dispatch: (a) => store.dispatch(a), getState: () => state}));
   };
 
-  const middlewareAPI: MiddlewareDeps = {dispatch: (action) => store.dispatch(action), getState: () => state};
+  const middlewareAPI: MiddlewareDeps = {dispatch: (action) => store.dispatch(action), getState: () => state, addListener: (fn) => store.addListener(fn)};
   store.dispatch = middlewareFactory ? middlewareFactory(middlewareAPI)(baseDispatch) : baseDispatch;
 
   return store;
@@ -66,7 +67,7 @@ type HandlerMiddlewareConfig = {
 }
 
 export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMiddlewareConfig): MiddlewareFactory =>
-  ({dispatch}) => (next) => {
+  ({dispatch, getState, addListener}) => (next) => {
     const signalingPeerIds = new Map<string, string>();
 
     const emit = (event: PeerEvent) => {
@@ -97,7 +98,11 @@ export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMid
       else if (event.type === 'ICE_RESTART_ANSWER_CREATED') dispatch({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
     };
 
-    const handler = createPeerHandler({name, createPeerConnection, emit});
+    const handler = createPeerHandler({name, createPeerConnection, emit, dispatch, getState});
+
+    addListener((action) => {
+      if (action.type === 'PEER_DISCONNECTED') handler.cleanup(action.peerId);
+    });
 
     return (action: ConnectionsAction) => {
       if (action.type === 'CREATE_OFFER') handler.handleCommand({type: 'CREATE_OFFER'});

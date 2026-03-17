@@ -1,11 +1,24 @@
 import {createPeerHandler} from './connection.handler';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {PeerEvent} from '../types/worker-messages';
+import {connectionsReducer, initialState} from '../state/connections';
+import type {ConnectionsAction} from '../state/connections';
 
 const makeHandler = (name: string, createPeerConnection: () => RTCPeerConnection) => {
   const events: PeerEvent[] = [];
-  const {handleCommand} = createPeerHandler({name, emit: e => events.push(e), createPeerConnection});
-  return {handleCommand, events};
+  let state = initialState;
+  const dispatch = (action: ConnectionsAction) => { state = connectionsReducer(state, action); };
+  const getState = () => state;
+  const emit = (e: PeerEvent) => {
+    events.push(e);
+    if (e.type === 'PEER_CONNECTED') dispatch({type: 'PEER_CONNECTED', peerId: e.peerId});
+    else if (e.type === 'PEER_NAMED') dispatch({type: 'PEER_NAMED', peerId: e.peerId, name: e.name});
+    else if (e.type === 'PEER_DISCONNECTED') dispatch({type: 'PEER_DISCONNECTED', peerId: e.peerId});
+    else if (e.type === 'PEER_CONNECTION_UNSTABLE') dispatch({type: 'PEER_CONNECTION_UNSTABLE', peerId: e.peerId});
+    else if (e.type === 'PEER_CONNECTION_RESTORED') dispatch({type: 'PEER_CONNECTION_RESTORED', peerId: e.peerId});
+  };
+  const {handleCommand, cleanup} = createPeerHandler({name, emit, createPeerConnection, getState, dispatch});
+  return {handleCommand, cleanup, events};
 };
 
 type Handler = ReturnType<typeof makeHandler>
