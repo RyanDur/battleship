@@ -170,6 +170,8 @@ export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): 
           else if (event.type === 'PREVIOUS_PEERS') dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: event.peers});
           else if (event.type === 'ICE_RESTART_RECEIVED') dispatch({type: 'ICE_RESTART_RECEIVED', signalingPeerId: event.fromPeerId, sdp: event.sdp});
           else if (event.type === 'ICE_RESTART_ANSWER_RECEIVED') dispatch({type: 'ICE_RESTART_ANSWER_RECEIVED', signalingPeerId: event.fromPeerId, sdp: event.sdp});
+          else if (event.type === 'EMAIL_SHARED') dispatch({type: 'EMAIL_SHARED_RECEIVED', fromPeerId: event.fromPeerId, email: event.email});
+          else if (event.type === 'EMAIL_REVOKED') dispatch({type: 'EMAIL_REVOKED_RECEIVED', fromPeerId: event.fromPeerId});
         });
       } else if (action.type === 'STOP_SIGNALING') {
         handle?.stop();
@@ -184,6 +186,12 @@ export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): 
         handle?.send({type: 'RELAY_ICE_RESTART', targetPeerId: action.targetPeerId, sdp: action.sdp});
       } else if (action.type === 'RELAY_ICE_RESTART_ANSWER') {
         handle?.send({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: action.targetPeerId, sdp: action.sdp});
+      } else if (action.type === 'SHARE_EMAIL') {
+        handle?.send({type: 'SHARE_EMAIL', targetPeerId: action.targetPeerId});
+      } else if (action.type === 'STOP_SHARING_EMAIL') {
+        handle?.send({type: 'STOP_SHARING_EMAIL', targetPeerId: action.targetPeerId});
+      } else if (action.type === 'UPDATE_EMAIL') {
+        handle?.send({type: 'UPDATE_EMAIL', email: action.email});
       }
     });
 

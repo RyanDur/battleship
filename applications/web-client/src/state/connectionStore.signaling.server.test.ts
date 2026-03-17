@@ -160,6 +160,66 @@ describe('createSignalingMiddleware (server)', () => {
     await cleanup();
   });
 
+  it('EMAIL_SHARED message updates email on matching previous peer', async () => {
+    const {store, getConn, cleanup} = await connectStore();
+
+    getConn().send(JSON.stringify({type: 'PREVIOUS_PEERS', peers: [{peerId: 'p1', name: 'Alice', online: false}]}));
+    await vi.waitFor(() => expect(store.getState().previousPeers).toHaveLength(1));
+
+    getConn().send(JSON.stringify({type: 'EMAIL_SHARED', fromPeerId: 'p1', email: 'alice@example.com'}));
+
+    await vi.waitFor(() => expect(store.getState().previousPeers[0]).toEqual({peerId: 'p1', name: 'Alice', online: false, email: 'alice@example.com'}));
+    await cleanup();
+  });
+
+  it('EMAIL_REVOKED message clears email from matching previous peer', async () => {
+    const {store, getConn, cleanup} = await connectStore();
+
+    getConn().send(JSON.stringify({type: 'PREVIOUS_PEERS', peers: [{peerId: 'p1', name: 'Alice', online: false, email: 'alice@example.com'}]}));
+    await vi.waitFor(() => expect(store.getState().previousPeers[0]?.email).toBe('alice@example.com'));
+
+    getConn().send(JSON.stringify({type: 'EMAIL_REVOKED', fromPeerId: 'p1'}));
+
+    await vi.waitFor(() => expect(store.getState().previousPeers[0]?.email).toBeUndefined());
+    await cleanup();
+  });
+
+  it('SHARE_EMAIL dispatch sends SHARE_EMAIL message to server', async () => {
+    const received: string[] = [];
+    const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
+
+    store.dispatch({type: 'SHARE_EMAIL', targetPeerId: 'p1'});
+
+    await vi.waitFor(() =>
+      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'SHARE_EMAIL', targetPeerId: 'p1'})
+    );
+    await cleanup();
+  });
+
+  it('STOP_SHARING_EMAIL dispatch sends STOP_SHARING_EMAIL message to server', async () => {
+    const received: string[] = [];
+    const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
+
+    store.dispatch({type: 'STOP_SHARING_EMAIL', targetPeerId: 'p1'});
+
+    await vi.waitFor(() =>
+      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'STOP_SHARING_EMAIL', targetPeerId: 'p1'})
+    );
+    await cleanup();
+  });
+
+  it('UPDATE_EMAIL dispatch sends UPDATE_EMAIL message to server', async () => {
+    const received: string[] = [];
+    const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
+
+    store.dispatch({type: 'UPDATE_EMAIL', email: 'new@example.com'});
+
+    await vi.waitFor(() =>
+      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'UPDATE_EMAIL', email: 'new@example.com'})
+    );
+    await cleanup();
+  });
+
   it('STOP_SIGNALING prevents further server events from updating state', async () => {
     const {store, getConn, cleanup} = await connectStore();
 

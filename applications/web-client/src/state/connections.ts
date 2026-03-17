@@ -79,6 +79,9 @@ export type ConnectionsAction =
   | {type: 'ICE_RESTART_ATTEMPTED'; peerId: string}
   | {type: 'EMAIL_SHARED_RECEIVED'; fromPeerId: string; email: string}
   | {type: 'EMAIL_REVOKED_RECEIVED'; fromPeerId: string}
+  | {type: 'SHARE_EMAIL'; targetPeerId: string}
+  | {type: 'STOP_SHARING_EMAIL'; targetPeerId: string}
+  | {type: 'UPDATE_EMAIL'; email: string}
 
 const handlerInitialState: HandlerState = {
   signalingToPeer: {},
