@@ -38,6 +38,51 @@ const makePair = () => {
   return {alice: stores.alice!, bob: stores.bob!, connect};
 };
 
+const makeRelayForAll = (myName: string, myId: string, registry: Record<string, () => ConnectionStore | undefined>): MiddlewareFactory =>
+  (_deps) => (next) => (action) => {
+    if (action.type === 'RELAY_OFFER') {
+      registry[action.targetPeerId]?.()?.dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: myId, name: myName, sdp: action.sdp});
+    } else if (action.type === 'RELAY_ANSWER') {
+      registry[action.targetPeerId]?.()?.dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: myId, sdp: action.sdp});
+    }
+    next(action);
+  };
+
+const makeTriple = () => {
+  const factory = createFakePeerConnectionFactory();
+  const stores: {alice?: ConnectionStore; bob?: ConnectionStore; carol?: ConnectionStore} = {};
+  const registry: Record<string, () => ConnectionStore | undefined> = {};
+
+  stores.alice = createConnectionStore(applyMiddleware([
+    createHandlerMiddleware({name: 'Alice', createPeerConnection: factory.createPeerConnection}),
+    makeRelayForAll('Alice', 'alice-sig', registry),
+  ]));
+  stores.bob = createConnectionStore(applyMiddleware([
+    createHandlerMiddleware({name: 'Bob', createPeerConnection: factory.createPeerConnection}),
+    makeRelayForAll('Bob', 'bob-sig', registry),
+  ]));
+  stores.carol = createConnectionStore(applyMiddleware([
+    createHandlerMiddleware({name: 'Carol', createPeerConnection: factory.createPeerConnection}),
+    makeRelayForAll('Carol', 'carol-sig', registry),
+  ]));
+  registry['alice-sig'] = () => stores.alice;
+  registry['bob-sig'] = () => stores.bob;
+  registry['carol-sig'] = () => stores.carol;
+
+  const connect = async () => {
+    stores.alice!.dispatch({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'bob-sig', name: 'Bob'});
+    stores.alice!.dispatch({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'carol-sig', name: 'Carol'});
+    await vi.waitFor(() => {
+      expect(stores.alice!.getState().peers).toHaveLength(2);
+      expect(stores.bob!.getState().peers).toHaveLength(1);
+      expect(stores.carol!.getState().peers).toHaveLength(1);
+    });
+    await vi.waitFor(() => expect(stores.alice!.getState().peers.every(p => p.name)).toBe(true));
+  };
+
+  return {alice: stores.alice!, bob: stores.bob!, carol: stores.carol!, connect};
+};
+
 describe('createHandlerMiddleware (store)', () => {
   it('CONNECT_VIA_SERVER connects both stores via server relay', async () => {
     const {alice, bob, connect} = makePair();
@@ -88,6 +133,36 @@ describe('createHandlerMiddleware (store)', () => {
     await connect();
 
     await vi.waitFor(() => expect(alice.getState().previousPeers).toHaveLength(0));
+  });
+
+  it('receiving an INTRODUCTION records the relay peer in handlerState.introChannels', async () => {
+    const {alice, bob, connect} = makeTriple();
+    await connect();
+
+    const bobPeerId = alice.getState().peers.find(p => p.name === 'Bob')!.id;
+    const carolPeerId = alice.getState().peers.find(p => p.name === 'Carol')!.id;
+    alice.dispatch({type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId});
+
+    await vi.waitFor(() => expect(bob.getState().pendingIntroductions).toHaveLength(1));
+    const introId = bob.getState().pendingIntroductions[0].introId;
+
+    expect(bob.getState().handlerState.introChannels).toHaveProperty(introId);
+  });
+
+  it('ACCEPT_INTRODUCTION removes the intro from handlerState.introChannels', async () => {
+    const {alice, bob, connect} = makeTriple();
+    await connect();
+
+    const bobPeerId = alice.getState().peers.find(p => p.name === 'Bob')!.id;
+    const carolPeerId = alice.getState().peers.find(p => p.name === 'Carol')!.id;
+    alice.dispatch({type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId});
+
+    await vi.waitFor(() => expect(bob.getState().pendingIntroductions).toHaveLength(1));
+    const introId = bob.getState().pendingIntroductions[0].introId;
+
+    bob.dispatch({type: 'ACCEPT_INTRODUCTION', introId});
+
+    expect(bob.getState().handlerState.introChannels).not.toHaveProperty(introId);
   });
 
   it('full offer/answer handshake connects both stores', async () => {

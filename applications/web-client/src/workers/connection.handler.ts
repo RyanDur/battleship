@@ -160,11 +160,9 @@ export const createPeerHandler = (deps: Deps): Handler => {
     timer: ReturnType<typeof setTimeout>
   }
   const pendingIntros = new Map<string, PendingIntro>();
-  const introChannels = new Map<string, string>();
   const introConnections = new Map<string, string>(); // introId → newPeerId for intro-created PCs
 
   const cleanupIntro = (introId: string, type: 'INTRODUCTION_DECLINED' | 'INTRODUCTION_EXPIRED') => {
-    introChannels.delete(introId);
     const introPeerId = introConnections.get(introId);
     if (introPeerId) {
       introConnections.delete(introId);
@@ -271,7 +269,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
           }))
         .or(() => maybe(introductionDecoder.decode(parsed))
           .map(msg => {
-            introChannels.set(msg.introId, peerId);
+            deps.dispatch({type: 'INTRO_CHANNEL_REGISTERED', introId: msg.introId, relayPeerId: peerId});
             deps.emit({ type: 'INTRODUCTION_RECEIVED', introId: msg.introId, from: msg.from, peer: msg.peer });
           }))
         .or(() => maybe(createOfferForDecoder.decode(parsed))
@@ -360,17 +358,15 @@ export const createPeerHandler = (deps: Deps): Handler => {
         break;
       }
       case 'ACCEPT_INTRODUCTION': {
-        const introducerPeerId = introChannels.get(command.introId);
+        const introducerPeerId = command.relayPeerId ?? deps.getState().handlerState.introChannels[command.introId];
         if (introducerPeerId) {
-          introChannels.delete(command.introId);
           dataChannels.get(introducerPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: command.introId, accepted: true }));
         }
         break;
       }
       case 'DECLINE_INTRODUCTION': {
-        const introducerPeerId = introChannels.get(command.introId);
+        const introducerPeerId = command.relayPeerId ?? deps.getState().handlerState.introChannels[command.introId];
         if (introducerPeerId) {
-          introChannels.delete(command.introId);
           dataChannels.get(introducerPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: command.introId, accepted: false }));
         }
         break;

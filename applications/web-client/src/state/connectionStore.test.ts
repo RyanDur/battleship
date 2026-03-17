@@ -249,7 +249,7 @@ describe('connectionStore', () => {
         () => (next) => (action) => { received2.push(action); next(action); },
       ]);
       const action: ConnectionsAction = {type: 'CREATE_OFFER', passphrase: 'secret'};
-      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}}}), addListener: () => () => {}})(noop);
+      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}, introChannels: {}}}), addListener: () => () => {}})(noop);
 
       dispatch(action);
 
@@ -264,7 +264,7 @@ describe('connectionStore', () => {
         () => (next) => (action) => { order.push('middleware'); next(action); },
       ]);
       const baseDispatch = () => order.push('base');
-      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}}}), addListener: () => () => {}})(baseDispatch);
+      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}, introChannels: {}}}), addListener: () => () => {}})(baseDispatch);
 
       dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
 
@@ -274,7 +274,7 @@ describe('connectionStore', () => {
     it('is a no-op for an empty list', () => {
       const noop = () => {};
       const composed = applyMiddleware([]);
-      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}}}), addListener: () => () => {}})(noop);
+      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}, introChannels: {}}}), addListener: () => () => {}})(noop);
       expect(() => dispatch({type: 'CREATE_OFFER', passphrase: 'secret'})).not.toThrow();
     });
   });

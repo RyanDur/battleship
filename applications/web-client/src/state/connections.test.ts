@@ -294,6 +294,7 @@ describe('connectionsReducer', () => {
         peerToSignaling: {},
         offererPeerIds: [],
         iceRestartAttempts: {},
+        introChannels: {},
       });
     });
 

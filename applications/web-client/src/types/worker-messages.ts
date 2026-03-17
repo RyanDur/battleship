@@ -6,8 +6,8 @@ export type PeerCommand =
   | { type: 'GRANT_TRUST'; peerId: string }
   | { type: 'REVOKE_TRUST'; peerId: string }
   | { type: 'INTRODUCE_PEERS'; peerId1: string; peerId2: string }
-  | { type: 'ACCEPT_INTRODUCTION'; introId: string }
-  | { type: 'DECLINE_INTRODUCTION'; introId: string }
+  | { type: 'ACCEPT_INTRODUCTION'; introId: string; relayPeerId?: string }
+  | { type: 'DECLINE_INTRODUCTION'; introId: string; relayPeerId?: string }
   | { type: 'CONNECT_VIA_SERVER'; signalingPeerId: string; name: string }
   | { type: 'SERVER_OFFER_RECEIVED'; signalingPeerId: string; name: string; sdp: string }
   | { type: 'SERVER_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string }

@@ -20,6 +20,7 @@ export type HandlerState = {
   peerToSignaling: Record<string, string>
   offererPeerIds: string[]
   iceRestartAttempts: Record<string, number>
+  introChannels: Record<string, string>
 }
 
 export type ConnectionsState = {
@@ -77,6 +78,7 @@ export type ConnectionsAction =
   | {type: 'ICE_RESTART_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string}
   | {type: 'SIGNALING_PEER_REGISTERED'; localPeerId: string; signalingPeerId: string; isOfferer: boolean}
   | {type: 'ICE_RESTART_ATTEMPTED'; peerId: string}
+  | {type: 'INTRO_CHANNEL_REGISTERED'; introId: string; relayPeerId: string}
   | {type: 'EMAIL_SHARED_RECEIVED'; fromPeerId: string; email: string}
   | {type: 'EMAIL_REVOKED_RECEIVED'; fromPeerId: string}
   | {type: 'SHARE_EMAIL'; targetPeerId: string}
@@ -89,6 +91,7 @@ const handlerInitialState: HandlerState = {
   peerToSignaling: {},
   offererPeerIds: [],
   iceRestartAttempts: {},
+  introChannels: {},
 };
 
 export const initialState: ConnectionsState = {
@@ -120,8 +123,19 @@ const handlerReducer = (state: HandlerState, action: ConnectionsAction): Handler
         ...state,
         iceRestartAttempts: Object.fromEntries(Object.entries(state.iceRestartAttempts).filter(([k]) => k !== action.peerId)),
       };
+    case 'INTRO_CHANNEL_REGISTERED':
+      return {...state, introChannels: {...state.introChannels, [action.introId]: action.relayPeerId}};
+    case 'ACCEPT_INTRODUCTION':
+    case 'DECLINE_INTRODUCTION':
+      return {
+        ...state,
+        introChannels: Object.fromEntries(Object.entries(state.introChannels).filter(([k]) => k !== action.introId)),
+      };
     case 'PEER_DISCONNECTED': {
       const signalingPeerId = state.peerToSignaling[action.peerId];
+      const clearedIntroChannels = Object.fromEntries(
+        Object.entries(state.introChannels).filter(([, v]) => v !== action.peerId)
+      );
       return {
         ...state,
         signalingToPeer: signalingPeerId
@@ -130,6 +144,7 @@ const handlerReducer = (state: HandlerState, action: ConnectionsAction): Handler
         peerToSignaling: Object.fromEntries(Object.entries(state.peerToSignaling).filter(([k]) => k !== action.peerId)),
         offererPeerIds: state.offererPeerIds.filter(id => id !== action.peerId),
         iceRestartAttempts: Object.fromEntries(Object.entries(state.iceRestartAttempts).filter(([k]) => k !== action.peerId)),
+        introChannels: clearedIntroChannels,
       };
     }
     default:
