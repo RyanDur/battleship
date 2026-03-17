@@ -298,6 +298,22 @@ describe('connectionsReducer', () => {
     expect(next.previousPeers).toEqual([{peerId: 'p1', name: 'Alice', online: false, email: 'alice@example.com'}]);
   });
 
+  it('SAVE_PEER_EMAIL sets email on matching previous peer', () => {
+    const state = {...initialState, previousPeers: [{peerId: 'p1', name: 'Alice', online: false}]};
+
+    const next = connectionsReducer(state, {type: 'SAVE_PEER_EMAIL', peerId: 'p1', email: 'alice@example.com'});
+
+    expect(next.previousPeers).toEqual([{peerId: 'p1', name: 'Alice', online: false, email: 'alice@example.com'}]);
+  });
+
+  it('SAVE_PEER_EMAIL leaves previousPeers unchanged when peer not found', () => {
+    const state = {...initialState, previousPeers: [{peerId: 'p1', name: 'Alice', online: false}]};
+
+    const next = connectionsReducer(state, {type: 'SAVE_PEER_EMAIL', peerId: 'unknown', email: 'x@example.com'});
+
+    expect(next.previousPeers).toEqual([{peerId: 'p1', name: 'Alice', online: false}]);
+  });
+
   it('FORGET_PEER removes peer from previousPeers', () => {
     const state = {...initialState, previousPeers: [{peerId: 'p1', name: 'Alice', online: false}]};
 

@@ -82,6 +82,7 @@ export type ConnectionsAction =
   | {type: 'SHARE_EMAIL'; targetPeerId: string}
   | {type: 'STOP_SHARING_EMAIL'; targetPeerId: string}
   | {type: 'UPDATE_EMAIL'; email: string}
+  | {type: 'SAVE_PEER_EMAIL'; peerId: string; email: string}
 
 const handlerInitialState: HandlerState = {
   signalingToPeer: {},
@@ -225,6 +226,9 @@ const coreConnectionsReducer = (state: ConnectionsState, action: ConnectionsActi
       return {...state, previousPeers: state.previousPeers.map(p =>
         p.peerId !== action.fromPeerId ? p : {peerId: p.peerId, name: p.name, online: p.online}
       )};
+
+    case 'SAVE_PEER_EMAIL':
+      return {...state, previousPeers: state.previousPeers.map(p => p.peerId === action.peerId ? {...p, email: action.email} : p)};
 
     case 'PEER_CONNECTION_UNSTABLE':
       return {...state, peerConnectionHealth: {...state.peerConnectionHealth, [action.peerId]: 'unstable'}};
