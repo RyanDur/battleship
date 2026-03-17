@@ -101,10 +101,6 @@ export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMid
     const handler = createPeerHandler({name, createPeerConnection, emit, dispatch, getState});
 
     addListener((action) => {
-      if (action.type === 'PEER_DISCONNECTED') handler.cleanup(action.peerId);
-    });
-
-    return (action: ConnectionsAction) => {
       if (action.type === 'CREATE_OFFER') handler.handleCommand({type: 'CREATE_OFFER'});
       else if (action.type === 'ACCEPT_OFFER') handler.handleCommand({type: 'ACCEPT_OFFER', sdp: action.sdp});
       else if (action.type === 'ACCEPT_ANSWER') handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: action.peerId, sdp: action.sdp});
@@ -120,8 +116,10 @@ export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMid
       else if (action.type === 'SERVER_ANSWER_RECEIVED') handler.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
       else if (action.type === 'ICE_RESTART_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
       else if (action.type === 'ICE_RESTART_ANSWER_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
-      next(action);
-    };
+      else if (action.type === 'PEER_DISCONNECTED') handler.cleanup(action.peerId);
+    });
+
+    return (action: ConnectionsAction) => next(action);
   };
 
 export const encodingMiddleware: MiddlewareFactory =
