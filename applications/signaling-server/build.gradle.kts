@@ -17,6 +17,10 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+tasks.named<Jar>("jar") {
+    enabled = false
+}
+
 tasks.test {
     useJUnitPlatform()
     systemProperty("APP_VERSION", project.version.toString())
