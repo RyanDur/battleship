@@ -7,7 +7,7 @@ import {fetchDownloadUrl} from './protocol/download';
 import type {HeartbeatState} from './protocol/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
 import {detectPlatform} from './protocol/platform';
-import {createConnectionStore, createHandlerMiddleware, encodingMiddleware, codecMiddleware, createSignalingMiddleware, applyMiddleware} from './state/connectionStore';
+import {createConnectionStore, createHandlerListener, createSignalingListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './state/connectionStore';
 import {ConnectionProvider} from './state/ConnectionProvider';
 
 const platform = detectPlatform(navigator.userAgent);
@@ -29,19 +29,13 @@ const App = () => {
   const store = useMemo(() => {
     if (!config) return null;
     const signalingUrl = `${config.serviceUrl.replace(/^http/, 'ws')}/ws/signaling`;
-    return createConnectionStore(applyMiddleware([
-      createHandlerMiddleware({name: 'Player', createPeerConnection: () => new RTCPeerConnection()}),
-      encodingMiddleware,
-      codecMiddleware,
-      createSignalingMiddleware({
-        config: {
-          createWebSocket: (url) => new WebSocket(url),
-          sessionUrl: `${config.serviceUrl}/session`,
-          url: signalingUrl,
-          name: 'Player',
-        },
-      }),
-    ]));
+    return createConnectionStore(
+      applyMiddleware([encodingMiddleware, codecMiddleware]),
+      [
+        createHandlerListener({name: 'Player', createPeerConnection: () => new RTCPeerConnection()}),
+        createSignalingListener({config: {createWebSocket: (url) => new WebSocket(url), sessionUrl: `${config.serviceUrl}/session`, url: signalingUrl, name: 'Player'}}),
+      ],
+    );
   }, [config]);
 
   useEffect(() => {

@@ -2,17 +2,16 @@ import {render, screen, act, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Connections} from './Connections';
 import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore, createHandlerMiddleware, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
+import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
 import type {ConnectionsAction} from '../state/connections';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();
-  const store = createConnectionStore(applyMiddleware([
-    createHandlerMiddleware({name: 'Player', createPeerConnection: factory.createPeerConnection}),
-    encodingMiddleware,
-    codecMiddleware,
-  ]));
+  const store = createConnectionStore(
+    applyMiddleware([encodingMiddleware, codecMiddleware]),
+    [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
+  );
   return {store};
 };
 
@@ -386,12 +385,10 @@ describe('Connections', () => {
       const user = userEvent.setup();
       const factory = createFakePeerConnectionFactory();
       const dispatched: ConnectionsAction[] = [];
-      const store = createConnectionStore(applyMiddleware([
-        createHandlerMiddleware({name: 'Player', createPeerConnection: factory.createPeerConnection}),
-        encodingMiddleware,
-        codecMiddleware,
-        () => (next) => (action) => { dispatched.push(action); next(action); },
-      ]));
+      const store = createConnectionStore(
+        applyMiddleware([encodingMiddleware, codecMiddleware, () => (next) => (action) => { dispatched.push(action); next(action); }]),
+        [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
+      );
       render(<ConnectionProvider store={store}><Connections serviceOnline={true}/></ConnectionProvider>);
 
       await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
@@ -405,12 +402,10 @@ describe('Connections', () => {
       const user = userEvent.setup();
       const factory = createFakePeerConnectionFactory();
       const dispatched: ConnectionsAction[] = [];
-      const store = createConnectionStore(applyMiddleware([
-        createHandlerMiddleware({name: 'Player', createPeerConnection: factory.createPeerConnection}),
-        encodingMiddleware,
-        codecMiddleware,
-        () => (next) => (action) => { dispatched.push(action); next(action); },
-      ]));
+      const store = createConnectionStore(
+        applyMiddleware([encodingMiddleware, codecMiddleware, () => (next) => (action) => { dispatched.push(action); next(action); }]),
+        [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
+      );
       render(<ConnectionProvider store={store}><Connections serviceOnline={true}/></ConnectionProvider>);
 
       await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true}]}));
@@ -474,12 +469,10 @@ describe('Connections', () => {
       const user = userEvent.setup();
       const factory = createFakePeerConnectionFactory();
       const dispatched: ConnectionsAction[] = [];
-      const store = createConnectionStore(applyMiddleware([
-        createHandlerMiddleware({name: 'Player', createPeerConnection: factory.createPeerConnection}),
-        encodingMiddleware,
-        codecMiddleware,
-        () => (next) => (action) => { dispatched.push(action); next(action); },
-      ]));
+      const store = createConnectionStore(
+        applyMiddleware([encodingMiddleware, codecMiddleware, () => (next) => (action) => { dispatched.push(action); next(action); }]),
+        [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
+      );
       render(<ConnectionProvider store={store}><Connections serviceOnline={true}/></ConnectionProvider>);
 
       await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));

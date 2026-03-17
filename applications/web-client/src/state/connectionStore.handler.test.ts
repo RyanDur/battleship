@@ -1,4 +1,4 @@
-import {createConnectionStore, createHandlerMiddleware, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
+import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
 import type {ConnectionFlow} from './connections';
@@ -17,15 +17,15 @@ const makePair = () => {
   const factory = createFakePeerConnectionFactory();
   const stores: {alice?: ConnectionStore; bob?: ConnectionStore} = {};
 
-  stores.alice = createConnectionStore(applyMiddleware([
-    createHandlerMiddleware({name: 'Alice', createPeerConnection: factory.createPeerConnection}),
-    makeRelayMiddleware('Alice', 'alice-sig', () => stores.bob!),
-  ]));
+  stores.alice = createConnectionStore(
+    applyMiddleware([makeRelayMiddleware('Alice', 'alice-sig', () => stores.bob!)]),
+    [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection})],
+  );
 
-  stores.bob = createConnectionStore(applyMiddleware([
-    createHandlerMiddleware({name: 'Bob', createPeerConnection: factory.createPeerConnection}),
-    makeRelayMiddleware('Bob', 'bob-sig', () => stores.alice!),
-  ]));
+  stores.bob = createConnectionStore(
+    applyMiddleware([makeRelayMiddleware('Bob', 'bob-sig', () => stores.alice!)]),
+    [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection})],
+  );
 
   const connect = async () => {
     stores.alice!.dispatch({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'bob-sig', name: 'Bob'});
@@ -53,18 +53,18 @@ const makeTriple = () => {
   const stores: {alice?: ConnectionStore; bob?: ConnectionStore; carol?: ConnectionStore} = {};
   const registry: Record<string, () => ConnectionStore | undefined> = {};
 
-  stores.alice = createConnectionStore(applyMiddleware([
-    createHandlerMiddleware({name: 'Alice', createPeerConnection: factory.createPeerConnection}),
-    makeRelayForAll('Alice', 'alice-sig', registry),
-  ]));
-  stores.bob = createConnectionStore(applyMiddleware([
-    createHandlerMiddleware({name: 'Bob', createPeerConnection: factory.createPeerConnection}),
-    makeRelayForAll('Bob', 'bob-sig', registry),
-  ]));
-  stores.carol = createConnectionStore(applyMiddleware([
-    createHandlerMiddleware({name: 'Carol', createPeerConnection: factory.createPeerConnection}),
-    makeRelayForAll('Carol', 'carol-sig', registry),
-  ]));
+  stores.alice = createConnectionStore(
+    applyMiddleware([makeRelayForAll('Alice', 'alice-sig', registry)]),
+    [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection})],
+  );
+  stores.bob = createConnectionStore(
+    applyMiddleware([makeRelayForAll('Bob', 'bob-sig', registry)]),
+    [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection})],
+  );
+  stores.carol = createConnectionStore(
+    applyMiddleware([makeRelayForAll('Carol', 'carol-sig', registry)]),
+    [createHandlerListener({name: 'Carol', createPeerConnection: factory.createPeerConnection})],
+  );
   registry['alice-sig'] = () => stores.alice;
   registry['bob-sig'] = () => stores.bob;
   registry['carol-sig'] = () => stores.carol;
@@ -192,17 +192,15 @@ describe('createHandlerMiddleware (store)', () => {
   it('full offer/answer handshake connects both stores', async () => {
     const factory = createFakePeerConnectionFactory();
 
-    const alice = createConnectionStore(applyMiddleware([
-      createHandlerMiddleware({name: 'Alice', createPeerConnection: factory.createPeerConnection}),
-      encodingMiddleware,
-      codecMiddleware,
-    ]));
+    const alice = createConnectionStore(
+      applyMiddleware([encodingMiddleware, codecMiddleware]),
+      [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection})],
+    );
 
-    const bob = createConnectionStore(applyMiddleware([
-      createHandlerMiddleware({name: 'Bob', createPeerConnection: factory.createPeerConnection}),
-      encodingMiddleware,
-      codecMiddleware,
-    ]));
+    const bob = createConnectionStore(
+      applyMiddleware([encodingMiddleware, codecMiddleware]),
+      [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection})],
+    );
 
     alice.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
     await vi.waitFor(() => expect(alice.getState().flow.phase).toBe('offer-ready'));

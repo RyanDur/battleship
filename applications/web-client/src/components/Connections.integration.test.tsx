@@ -2,7 +2,7 @@ import {render, screen, within, waitFor, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Connections} from './Connections';
 import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore, createHandlerMiddleware, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
+import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from '../state/connectionStore';
 import type {ConnectionFlow} from '../state/connections';
@@ -24,19 +24,15 @@ describe('Connections integration', () => {
         next(action);
       };
 
-    alice.store = createConnectionStore(applyMiddleware([
-      createHandlerMiddleware({name: 'Alice', createPeerConnection: factory.createPeerConnection}),
-      encodingMiddleware,
-      codecMiddleware,
-      makeRelayMiddleware('Alice', 'alice-sig', () => bob.store!),
-    ]));
+    alice.store = createConnectionStore(
+      applyMiddleware([encodingMiddleware, codecMiddleware, makeRelayMiddleware('Alice', 'alice-sig', () => bob.store!)]),
+      [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection})],
+    );
 
-    bob.store = createConnectionStore(applyMiddleware([
-      createHandlerMiddleware({name: 'Bob', createPeerConnection: factory.createPeerConnection}),
-      encodingMiddleware,
-      codecMiddleware,
-      makeRelayMiddleware('Bob', 'bob-sig', () => alice.store!),
-    ]));
+    bob.store = createConnectionStore(
+      applyMiddleware([encodingMiddleware, codecMiddleware, makeRelayMiddleware('Bob', 'bob-sig', () => alice.store!)]),
+      [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection})],
+    );
 
     const aliceStore = alice.store;
 
@@ -71,19 +67,15 @@ describe('Connections integration', () => {
         next(action);
       };
 
-    alice.store = createConnectionStore(applyMiddleware([
-      createHandlerMiddleware({name: 'Alice', createPeerConnection: factory.createPeerConnection}),
-      encodingMiddleware,
-      codecMiddleware,
-      makeRelayMiddleware('Alice', 'alice-sig', () => bob.store!),
-    ]));
+    alice.store = createConnectionStore(
+      applyMiddleware([encodingMiddleware, codecMiddleware, makeRelayMiddleware('Alice', 'alice-sig', () => bob.store!)]),
+      [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection})],
+    );
 
-    bob.store = createConnectionStore(applyMiddleware([
-      createHandlerMiddleware({name: 'Bob', createPeerConnection: factory.createPeerConnection}),
-      encodingMiddleware,
-      codecMiddleware,
-      makeRelayMiddleware('Bob', 'bob-sig', () => alice.store!),
-    ]));
+    bob.store = createConnectionStore(
+      applyMiddleware([encodingMiddleware, codecMiddleware, makeRelayMiddleware('Bob', 'bob-sig', () => alice.store!)]),
+      [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection})],
+    );
 
     const aliceStore = alice.store;
     const bobStore = bob.store;
@@ -116,11 +108,10 @@ describe('Connections integration', () => {
     const user = userEvent.setup();
 
     const makeStore = (name: string) =>
-      createConnectionStore(applyMiddleware([
-        createHandlerMiddleware({name, createPeerConnection: factory.createPeerConnection}),
-        encodingMiddleware,
-        codecMiddleware,
-      ]));
+      createConnectionStore(
+        applyMiddleware([encodingMiddleware, codecMiddleware]),
+        [createHandlerListener({name, createPeerConnection: factory.createPeerConnection})],
+      );
 
     const aliceStore = makeStore('Alice');
     const bobStore = makeStore('Bob');

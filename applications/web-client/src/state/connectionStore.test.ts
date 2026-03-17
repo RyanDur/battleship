@@ -1,16 +1,14 @@
-import {createConnectionStore, createHandlerMiddleware, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
+import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionsAction, ConnectionsState} from './connections';
-import type {MiddlewareFactory} from './connectionStore';
+import type {MiddlewareFactory, ListenerFactory} from './connectionStore';
 
 const makeStore = (extra: MiddlewareFactory[] = []) => {
   const factory = createFakePeerConnectionFactory();
-  const store = createConnectionStore(applyMiddleware([
-    createHandlerMiddleware({name: 'Player', createPeerConnection: factory.createPeerConnection}),
-    encodingMiddleware,
-    codecMiddleware,
-    ...extra,
-  ]));
+  const store = createConnectionStore(
+    applyMiddleware([encodingMiddleware, codecMiddleware, ...extra]),
+    [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
+  );
   return {store, factory};
 };
 
@@ -249,7 +247,7 @@ describe('connectionStore', () => {
         () => (next) => (action) => { received2.push(action); next(action); },
       ]);
       const action: ConnectionsAction = {type: 'CREATE_OFFER', passphrase: 'secret'};
-      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}, introChannels: {}, introConnections: {}}}), addListener: () => () => {}})(noop);
+      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}, introChannels: {}, introConnections: {}}})})(noop);
 
       dispatch(action);
 
@@ -264,7 +262,7 @@ describe('connectionStore', () => {
         () => (next) => (action) => { order.push('middleware'); next(action); },
       ]);
       const baseDispatch = () => order.push('base');
-      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}, introChannels: {}, introConnections: {}}}), addListener: () => () => {}})(baseDispatch);
+      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}, introChannels: {}, introConnections: {}}})})(baseDispatch);
 
       dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
 
@@ -274,7 +272,7 @@ describe('connectionStore', () => {
     it('is a no-op for an empty list', () => {
       const noop = () => {};
       const composed = applyMiddleware([]);
-      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}, introChannels: {}, introConnections: {}}}), addListener: () => () => {}})(noop);
+      const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}, introChannels: {}, introConnections: {}}})})(noop);
       expect(() => dispatch({type: 'CREATE_OFFER', passphrase: 'secret'})).not.toThrow();
     });
   });
@@ -361,6 +359,32 @@ describe('connectionStore', () => {
       store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
 
       expect(received).toHaveLength(0);
+    });
+  });
+
+  describe('listenerFactories', () => {
+    it('listener factory receives dispatch and getState and its returned listener fires on every action', () => {
+      const received: ConnectionsAction[] = [];
+      const factory: ListenerFactory = ({dispatch: _dispatch, getState: _getState}) =>
+        (action) => received.push(action);
+
+      const store = createConnectionStore(undefined, [factory]);
+      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+
+      expect(received).toContainEqual({type: 'CREATE_OFFER', passphrase: 'secret'});
+    });
+
+    it('listener factory receives prevState and state on each action', () => {
+      const entries: Array<{prevPhase: string; phase: string}> = [];
+      const factory: ListenerFactory = () =>
+        (_action, {prevState, state}) =>
+          entries.push({prevPhase: prevState.flow.phase, phase: state.flow.phase});
+
+      const store = createConnectionStore(undefined, [factory]);
+      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+
+      const entry = entries.find(e => e.phase === 'creating');
+      expect(entry?.prevPhase).toBe('idle');
     });
   });
 });

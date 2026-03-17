@@ -1,5 +1,5 @@
 // @vitest-environment node
-import {createConnectionStore, createSignalingMiddleware, applyMiddleware} from './connectionStore';
+import {createConnectionStore, createSignalingListener} from './connectionStore';
 import {createStubServer} from '../test/stubServer';
 import {makeWebSocket} from '../test/makeWebSocket';
 import type {WsConnection} from '../test/stubServer';
@@ -11,8 +11,8 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
     ws: {'/ws/signaling': conn => { wsConn = conn; serverSetup(conn); }},
   });
 
-  const store = createConnectionStore(applyMiddleware([
-    createSignalingMiddleware({
+  const store = createConnectionStore(undefined, [
+    createSignalingListener({
       config: {
         createWebSocket: makeWebSocket,
         sessionUrl: `${server.url}/session`,
@@ -20,7 +20,7 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
         name: 'Player',
       },
     }),
-  ]));
+  ]);
 
   store.dispatch({type: 'START_SIGNALING'});
   await vi.waitFor(() => expect(wsConn).toBeDefined());

@@ -27,16 +27,22 @@ type Dispatch = (action: ConnectionsAction) => void
 type MiddlewareDeps = {
   dispatch: Dispatch
   getState: () => ConnectionsState
-  addListener: (fn: ListenerFn) => () => void
 }
 
 export type MiddlewareFactory = (deps: MiddlewareDeps) => (next: Dispatch) => Dispatch
+
+type ListenerFactoryDeps = {
+  dispatch: Dispatch
+  getState: () => ConnectionsState
+}
+
+export type ListenerFactory = (deps: ListenerFactoryDeps) => ListenerFn
 
 export const applyMiddleware = (factories: MiddlewareFactory[]): MiddlewareFactory =>
   (deps) => (next) =>
     factories.reduceRight((acc, factory) => factory(deps)(acc), next);
 
-export const createConnectionStore = (middlewareFactory?: MiddlewareFactory): ConnectionStore => {
+export const createConnectionStore = (middlewareFactory?: MiddlewareFactory, listenerFactories?: ListenerFactory[]): ConnectionStore => {
   let state = initialState;
   const subscribers = new Set<() => void>();
   const actionListeners = new Set<ListenerFn>();
@@ -55,49 +61,52 @@ export const createConnectionStore = (middlewareFactory?: MiddlewareFactory): Co
     actionListeners.forEach(fn => fn(action, {prevState, state, dispatch: (a) => store.dispatch(a), getState: () => state}));
   };
 
-  const middlewareAPI: MiddlewareDeps = {dispatch: (action) => store.dispatch(action), getState: () => state, addListener: (fn) => store.addListener(fn)};
+  const middlewareAPI: MiddlewareDeps = {dispatch: (action) => store.dispatch(action), getState: () => state};
   store.dispatch = middlewareFactory ? middlewareFactory(middlewareAPI)(baseDispatch) : baseDispatch;
+
+  const listenerDeps: ListenerFactoryDeps = {dispatch: (action) => store.dispatch(action), getState: () => state};
+  listenerFactories?.forEach(factory => store.addListener(factory(listenerDeps)));
 
   return store;
 };
 
-type HandlerMiddlewareConfig = {
+type HandlerListenerConfig = {
   name: string
   createPeerConnection: () => RTCPeerConnection
 }
 
-export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMiddlewareConfig): MiddlewareFactory =>
-  ({dispatch, getState, addListener}) => (next) => {
-    const emit = (event: PeerEvent) => {
-      if (event.type === 'PEER_CONNECTED') {
-        dispatch({type: 'PEER_CONNECTED', peerId: event.peerId});
-        const {peerToSignaling, offererPeerIds} = getState().handlerState;
-        if (offererPeerIds.includes(event.peerId)) {
-          const signalingPeerId = peerToSignaling[event.peerId];
-          if (signalingPeerId) dispatch({type: 'PREVIOUS_PEER_CONNECTED', signalingPeerId});
-        }
+const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState) =>
+  (event: PeerEvent) => {
+    if (event.type === 'PEER_CONNECTED') {
+      dispatch({type: 'PEER_CONNECTED', peerId: event.peerId});
+      const {peerToSignaling, offererPeerIds} = getState().handlerState;
+      if (offererPeerIds.includes(event.peerId)) {
+        const signalingPeerId = peerToSignaling[event.peerId];
+        if (signalingPeerId) dispatch({type: 'PREVIOUS_PEER_CONNECTED', signalingPeerId});
       }
-      else if (event.type === 'PEER_NAMED') dispatch({type: 'PEER_NAMED', peerId: event.peerId, name: event.name});
-      else if (event.type === 'PEER_DISCONNECTED') dispatch({type: 'PEER_DISCONNECTED', peerId: event.peerId});
-      else if (event.type === 'PEER_TRUST_UPDATED') dispatch({type: 'PEER_TRUST_UPDATED', peerId: event.peerId, trusts: event.trusts});
-      else if (event.type === 'OFFER_CREATED') dispatch({type: 'OFFER_SDP_READY', peerId: event.peerId, sdp: event.sdp});
-      else if (event.type === 'ANSWER_CREATED') dispatch({type: 'ANSWER_SDP_READY', sdp: event.sdp});
-      else if (event.type === 'INTRODUCTION_RECEIVED') dispatch({type: 'INTRODUCTION_RECEIVED', introId: event.introId, from: event.from, peer: event.peer});
-      else if (event.type === 'INTRODUCTION_DECLINED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
-      else if (event.type === 'INTRODUCTION_EXPIRED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
-      else if (event.type === 'SERVER_OFFER_CREATED') {
-        dispatch({type: 'RELAY_OFFER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
-      }
-      else if (event.type === 'SERVER_ANSWER_CREATED') dispatch({type: 'RELAY_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
-      else if (event.type === 'PEER_CONNECTION_UNSTABLE') dispatch({type: 'PEER_CONNECTION_UNSTABLE', peerId: event.peerId});
-      else if (event.type === 'PEER_CONNECTION_RESTORED') dispatch({type: 'PEER_CONNECTION_RESTORED', peerId: event.peerId});
-      else if (event.type === 'ICE_RESTART_OFFER_CREATED') dispatch({type: 'RELAY_ICE_RESTART', targetPeerId: event.signalingPeerId, sdp: event.sdp});
-      else if (event.type === 'ICE_RESTART_ANSWER_CREATED') dispatch({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
-    };
+    }
+    else if (event.type === 'PEER_NAMED') dispatch({type: 'PEER_NAMED', peerId: event.peerId, name: event.name});
+    else if (event.type === 'PEER_DISCONNECTED') dispatch({type: 'PEER_DISCONNECTED', peerId: event.peerId});
+    else if (event.type === 'PEER_TRUST_UPDATED') dispatch({type: 'PEER_TRUST_UPDATED', peerId: event.peerId, trusts: event.trusts});
+    else if (event.type === 'OFFER_CREATED') dispatch({type: 'OFFER_SDP_READY', peerId: event.peerId, sdp: event.sdp});
+    else if (event.type === 'ANSWER_CREATED') dispatch({type: 'ANSWER_SDP_READY', sdp: event.sdp});
+    else if (event.type === 'INTRODUCTION_RECEIVED') dispatch({type: 'INTRODUCTION_RECEIVED', introId: event.introId, from: event.from, peer: event.peer});
+    else if (event.type === 'INTRODUCTION_DECLINED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
+    else if (event.type === 'INTRODUCTION_EXPIRED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
+    else if (event.type === 'SERVER_OFFER_CREATED') dispatch({type: 'RELAY_OFFER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
+    else if (event.type === 'SERVER_ANSWER_CREATED') dispatch({type: 'RELAY_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
+    else if (event.type === 'PEER_CONNECTION_UNSTABLE') dispatch({type: 'PEER_CONNECTION_UNSTABLE', peerId: event.peerId});
+    else if (event.type === 'PEER_CONNECTION_RESTORED') dispatch({type: 'PEER_CONNECTION_RESTORED', peerId: event.peerId});
+    else if (event.type === 'ICE_RESTART_OFFER_CREATED') dispatch({type: 'RELAY_ICE_RESTART', targetPeerId: event.signalingPeerId, sdp: event.sdp});
+    else if (event.type === 'ICE_RESTART_ANSWER_CREATED') dispatch({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
+  };
 
+export const createHandlerListener = ({name, createPeerConnection}: HandlerListenerConfig): ListenerFactory =>
+  ({dispatch, getState}) => {
+    const emit = makeHandlerEmit(dispatch, getState);
     const handler = createPeerHandler({name, createPeerConnection, emit, dispatch, getState});
 
-    addListener((action, {prevState}) => {
+    return (action, {prevState}) => {
       if (action.type === 'CREATE_OFFER') handler.handleCommand({type: 'CREATE_OFFER'});
       else if (action.type === 'ACCEPT_OFFER') handler.handleCommand({type: 'ACCEPT_OFFER', sdp: action.sdp});
       else if (action.type === 'ACCEPT_ANSWER') handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: action.peerId, sdp: action.sdp});
@@ -114,9 +123,7 @@ export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMid
       else if (action.type === 'ICE_RESTART_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
       else if (action.type === 'ICE_RESTART_ANSWER_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
       else if (action.type === 'PEER_DISCONNECTED') handler.cleanup(action.peerId);
-    });
-
-    return (action: ConnectionsAction) => next(action);
+    };
   };
 
 export const encodingMiddleware: MiddlewareFactory =
@@ -148,15 +155,15 @@ export const codecMiddleware: MiddlewareFactory =
       next(action);
     };
 
-type SignalingMiddlewareConfig = {
+type SignalingListenerConfig = {
   config: SignalingConfig
 }
 
-export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): MiddlewareFactory =>
-  ({dispatch, addListener}) => (next) => {
+export const createSignalingListener = ({config}: SignalingListenerConfig): ListenerFactory =>
+  ({dispatch}) => {
     let handle: SignalingHandle | null = null;
 
-    addListener((action) => {
+    return (action) => {
       if (action.type === 'START_SIGNALING') {
         handle = startSignaling(config, (event: SignalingEvent) => {
           if (event.type === 'PEERS') dispatch({type: 'ONLINE_PEERS_UPDATED', peers: event.peers});
@@ -192,7 +199,5 @@ export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): 
       } else if (action.type === 'SAVE_PEER_EMAIL') {
         handle?.send({type: 'SAVE_PEER_EMAIL', targetPeerId: action.peerId, email: action.email});
       }
-    });
-
-    return (action: ConnectionsAction) => next(action);
+    };
   };
