@@ -46,7 +46,6 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         registry.register(peerId, name)
         (payload["email"] as? String)?.let { registry.saveEmail(peerId, it) }
         sessionToPeer[session.id] = peerId
-        peerToSession[peerId] = session
 
         send(session, mapOf("type" to "REGISTERED", "peerId" to peerId, "name" to name))
 
@@ -63,6 +62,7 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         }
         send(session, mapOf("type" to "PREVIOUS_PEERS", "peers" to previousPeers))
 
+        peerToSession[peerId] = session
         broadcast(mapOf("type" to "PEER_JOINED", "peerId" to peerId, "name" to name), excludePeerId = peerId)
     }
 

@@ -83,6 +83,46 @@ class SignalingFeatureTest {
     }
 
     @Test
+    fun `registration messages arrive before PEER_JOINED when two peers register concurrently`() {
+        repeat(10) { i ->
+            val (sessionA, messagesA) = connect("conc-$i-a")
+            val (sessionB, messagesB) = connect("conc-$i-b")
+
+            // Register both without waiting between — creates a race on the server
+            send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice-$i"))
+            send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob-$i"))
+
+            fun collectMessages(queue: ArrayBlockingQueue<Map<String, Any>>): List<String> {
+                val types = mutableListOf<String>()
+                repeat(3) { types.add(queue.poll(2, TimeUnit.SECONDS)?.get("type") as? String ?: "MISSING") }
+                queue.poll(500, TimeUnit.MILLISECONDS)?.let { types.add(it["type"] as? String ?: "UNKNOWN") }
+                return types
+            }
+
+            val aliceTypes = collectMessages(messagesA)
+            val bobTypes = collectMessages(messagesB)
+
+            fun assertRegistrationBeforePeerJoined(types: List<String>, peer: String) {
+                val peerJoinedIdx = types.indexOf("PEER_JOINED")
+                val previousPeersIdx = types.indexOf("PREVIOUS_PEERS")
+                assertEquals("REGISTERED", types.firstOrNull(), "$peer iteration $i: expected REGISTERED first but got $types")
+                if (peerJoinedIdx >= 0) {
+                    assertTrue(
+                        peerJoinedIdx > previousPeersIdx,
+                        "$peer iteration $i: PEER_JOINED (idx=$peerJoinedIdx) arrived before PREVIOUS_PEERS (idx=$previousPeersIdx): $types"
+                    )
+                }
+            }
+
+            assertRegistrationBeforePeerJoined(aliceTypes, "Alice")
+            assertRegistrationBeforePeerJoined(bobTypes, "Bob")
+
+            sessionA.close()
+            sessionB.close()
+        }
+    }
+
+    @Test
     fun `second peer registering triggers PEER_JOINED for first peer`() {
         val (sessionA, messagesA) = connect("test-joined-a")
         val (sessionB, _) = connect("test-joined-b")
