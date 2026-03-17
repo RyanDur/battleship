@@ -77,6 +77,8 @@ export type ConnectionsAction =
   | {type: 'ICE_RESTART_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string}
   | {type: 'SIGNALING_PEER_REGISTERED'; localPeerId: string; signalingPeerId: string; isOfferer: boolean}
   | {type: 'ICE_RESTART_ATTEMPTED'; peerId: string}
+  | {type: 'EMAIL_SHARED_RECEIVED'; fromPeerId: string; email: string}
+  | {type: 'EMAIL_REVOKED_RECEIVED'; fromPeerId: string}
 
 const handlerInitialState: HandlerState = {
   signalingToPeer: {},
@@ -212,6 +214,14 @@ const coreConnectionsReducer = (state: ConnectionsState, action: ConnectionsActi
 
     case 'FORGET_PEER':
       return {...state, previousPeers: state.previousPeers.filter(p => p.peerId !== action.peerId)};
+
+    case 'EMAIL_SHARED_RECEIVED':
+      return {...state, previousPeers: state.previousPeers.map(p => p.peerId === action.fromPeerId ? {...p, email: action.email} : p)};
+
+    case 'EMAIL_REVOKED_RECEIVED':
+      return {...state, previousPeers: state.previousPeers.map(p =>
+        p.peerId !== action.fromPeerId ? p : {peerId: p.peerId, name: p.name, online: p.online}
+      )};
 
     case 'PEER_CONNECTION_UNSTABLE':
       return {...state, peerConnectionHealth: {...state.peerConnectionHealth, [action.peerId]: 'unstable'}};
