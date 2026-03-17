@@ -81,7 +81,7 @@ describe('createHandlerMiddleware (store)', () => {
     await vi.waitFor(() => expect(alice.getState().peers[0].trustsMe).toBe(false));
   });
 
-  it('full offer/answer handshake connects both stores and resets flow to idle', async () => {
+  it('full offer/answer handshake connects both stores', async () => {
     const factory = createFakePeerConnectionFactory();
 
     const alice = createConnectionStore(applyMiddleware([
