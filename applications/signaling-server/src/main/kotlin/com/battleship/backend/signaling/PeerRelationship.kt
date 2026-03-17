@@ -67,16 +67,15 @@ class SharedEmailPermission(
 @Repository
 interface SharedEmailPermissionJpaRepository : JpaRepository<SharedEmailPermission, Long> {
     fun findBySharerPeerIdAndReceiverPeerId(sharerPeerId: String, receiverPeerId: String): SharedEmailPermission?
-    fun findBySharerPeerId(sharerPeerId: String): List<SharedEmailPermission>
 }
 
-class JpaPeerRelationshipRepository(
+class JpaPeerRelationshipGateway(
     private val jpaRepo: PeerRelationshipJpaRepository,
     private val nameRepo: PeerNameJpaRepository,
     private val forgottenRepo: ForgottenPairJpaRepository,
     private val emailRepo: PeerEmailJpaRepository,
     private val sharingRepo: SharedEmailPermissionJpaRepository,
-) : RelationshipRepository {
+) : PeerRelationshipGateway {
 
     override fun save(peerId1: String, peerId2: String) {
         val exists = jpaRepo.findAllByPeerId(peerId1).any {

@@ -191,7 +191,7 @@ export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): 
       } else if (action.type === 'STOP_SHARING_EMAIL') {
         handle?.send({type: 'STOP_SHARING_EMAIL', targetPeerId: action.targetPeerId});
       } else if (action.type === 'UPDATE_EMAIL') {
-        handle?.send({type: 'UPDATE_EMAIL', email: action.email});
+        handle?.send({type: 'UPDATE_EMAIL', email: action.email})
       }
     });
 

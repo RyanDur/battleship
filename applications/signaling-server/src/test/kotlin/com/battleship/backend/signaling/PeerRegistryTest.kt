@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 
 class PeerRegistryTest {
 
-    private val registry = PeerRegistry(InMemoryRelationshipRepository())
+    private val registry = PeerRegistry(InMemoryPeerRelationshipGateway())
 
     @Test
     fun `registered peer appears in peer list`() {
@@ -183,7 +183,7 @@ class PeerRegistryTest {
 
     @Test
     fun `getPreviousPeers resolves names from repository even when peer was never registered in this session`() {
-        val repo = InMemoryRelationshipRepository()
+        val repo = InMemoryPeerRelationshipGateway()
         // Simulate a previous session: Bob and Alice were connected
         repo.save("peer-1", "peer-2")
         repo.saveName("peer-1", "Alice")

@@ -7,7 +7,7 @@ data class PeerInfo(val peerId: String, val name: String)
 
 data class PreviousPeerInfo(val peerId: String, val name: String, val online: Boolean, val email: String? = null)
 
-interface RelationshipRepository {
+interface PeerRelationshipGateway {
     fun save(peerId1: String, peerId2: String)
     fun findRelated(peerId: String): Set<String>
     fun saveName(peerId: String, name: String)
@@ -21,7 +21,7 @@ interface RelationshipRepository {
 }
 
 @Component
-class PeerRegistry(private val relationships: RelationshipRepository) {
+class PeerRegistry(private val relationships: PeerRelationshipGateway) {
     private val peers = ConcurrentHashMap<String, String>()
 
     fun register(peerId: String, name: String) {

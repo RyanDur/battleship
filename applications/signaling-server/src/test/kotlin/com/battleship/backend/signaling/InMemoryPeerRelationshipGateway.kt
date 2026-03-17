@@ -2,7 +2,7 @@ package com.battleship.backend.signaling
 
 import java.util.concurrent.ConcurrentHashMap
 
-class InMemoryRelationshipRepository : RelationshipRepository {
+class InMemoryPeerRelationshipGateway : PeerRelationshipGateway {
     private val relationships = ConcurrentHashMap<String, MutableSet<String>>()
     private val names = ConcurrentHashMap<String, String>()
     private val forgotten = mutableSetOf<Pair<String, String>>()
