@@ -4,6 +4,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
@@ -333,6 +334,161 @@ class SignalingFeatureTest {
         assertEquals(0, peers.size)
 
         sessionA2.close()
+        sessionB.close()
+    }
+
+    @Test
+    fun `SHARE_EMAIL sends EMAIL_SHARED with email to the target peer`() {
+        val (sessionA, _) = connect("share-email-a")
+        val (sessionB, messagesB) = connect("share-email-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice", "email" to "alice@example.com"))
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Alice
+
+        send(sessionA, mapOf("type" to "SHARE_EMAIL", "targetPeerId" to "share-email-b"))
+
+        val received = messagesB.poll(2, TimeUnit.SECONDS)
+        assertEquals("EMAIL_SHARED", received?.get("type"))
+        assertEquals("share-email-a", received?.get("fromPeerId"))
+        assertEquals("alice@example.com", received?.get("email"))
+
+        sessionA.close()
+        sessionB.close()
+    }
+
+    @Test
+    fun `STOP_SHARING_EMAIL sends EMAIL_REVOKED to the target peer`() {
+        val (sessionA, _) = connect("stop-share-a")
+        val (sessionB, messagesB) = connect("stop-share-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice", "email" to "alice@example.com"))
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Alice
+
+        send(sessionA, mapOf("type" to "SHARE_EMAIL", "targetPeerId" to "stop-share-b"))
+        messagesB.poll(2, TimeUnit.SECONDS) // EMAIL_SHARED
+
+        send(sessionA, mapOf("type" to "STOP_SHARING_EMAIL", "targetPeerId" to "stop-share-b"))
+
+        val received = messagesB.poll(2, TimeUnit.SECONDS)
+        assertEquals("EMAIL_REVOKED", received?.get("type"))
+        assertEquals("stop-share-a", received?.get("fromPeerId"))
+
+        sessionA.close()
+        sessionB.close()
+    }
+
+    @Test
+    fun `PREVIOUS_PEERS includes email when peer had shared their email`() {
+        val (sessionA, messagesA) = connect("prev-email-a")
+        val (sessionB, messagesB) = connect("prev-email-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice", "email" to "alice@example.com"))
+        messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED
+        messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        // SDP relay to record relationship
+        send(sessionA, mapOf("type" to "RELAY_OFFER", "targetPeerId" to "prev-email-b", "sdp" to "v=offer"))
+        messagesB.poll(2, TimeUnit.SECONDS) // OFFER_RECEIVED
+        send(sessionB, mapOf("type" to "RELAY_ANSWER", "targetPeerId" to "prev-email-a", "sdp" to "v=answer"))
+        messagesA.poll(2, TimeUnit.SECONDS) // ANSWER_RECEIVED
+
+        // Alice shares email with Bob
+        send(sessionA, mapOf("type" to "SHARE_EMAIL", "targetPeerId" to "prev-email-b"))
+        messagesB.poll(2, TimeUnit.SECONDS) // EMAIL_SHARED
+
+        // Alice disconnects; Bob reconnects and sees Alice in PREVIOUS_PEERS with email
+        sessionA.close()
+        messagesB.poll(2, TimeUnit.SECONDS) // PEER_LEFT
+
+        val (sessionB2, messagesB2) = connect("prev-email-b")
+        send(sessionB2, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesB2.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB2.poll(2, TimeUnit.SECONDS) // PEERS
+        val previousPeers = messagesB2.poll(2, TimeUnit.SECONDS)
+
+        @Suppress("UNCHECKED_CAST")
+        val peers = previousPeers?.get("peers") as? List<Map<String, Any>> ?: emptyList()
+        assertEquals(1, peers.size)
+        assertEquals("alice@example.com", peers[0]["email"])
+
+        sessionB2.close()
+        sessionB.close()
+    }
+
+    @Test
+    fun `PREVIOUS_PEERS does not include email when peer has not shared`() {
+        val (sessionA, messagesA) = connect("no-share-a")
+        val (sessionB, messagesB) = connect("no-share-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice", "email" to "alice@example.com"))
+        messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED
+        messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        send(sessionA, mapOf("type" to "RELAY_OFFER", "targetPeerId" to "no-share-b", "sdp" to "v=offer"))
+        messagesB.poll(2, TimeUnit.SECONDS) // OFFER_RECEIVED
+        send(sessionB, mapOf("type" to "RELAY_ANSWER", "targetPeerId" to "no-share-a", "sdp" to "v=answer"))
+        messagesA.poll(2, TimeUnit.SECONDS) // ANSWER_RECEIVED
+
+        sessionA.close()
+        messagesB.poll(2, TimeUnit.SECONDS) // PEER_LEFT
+
+        val (sessionB2, messagesB2) = connect("no-share-b")
+        send(sessionB2, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesB2.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB2.poll(2, TimeUnit.SECONDS) // PEERS
+        val previousPeers = messagesB2.poll(2, TimeUnit.SECONDS)
+
+        @Suppress("UNCHECKED_CAST")
+        val peers = previousPeers?.get("peers") as? List<Map<String, Any>> ?: emptyList()
+        assertEquals(1, peers.size)
+        assertNull(peers[0]["email"])
+
+        sessionB2.close()
+        sessionB.close()
+    }
+
+    @Test
+    fun `UPDATE_EMAIL changes the email sent in subsequent SHARE_EMAIL`() {
+        val (sessionA, _) = connect("update-email-a")
+        val (sessionB, messagesB) = connect("update-email-b")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice", "email" to "old@example.com"))
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Alice
+
+        send(sessionA, mapOf("type" to "UPDATE_EMAIL", "email" to "new@example.com"))
+        send(sessionA, mapOf("type" to "SHARE_EMAIL", "targetPeerId" to "update-email-b"))
+
+        val received = messagesB.poll(2, TimeUnit.SECONDS)
+        assertEquals("EMAIL_SHARED", received?.get("type"))
+        assertEquals("new@example.com", received?.get("email"))
+
+        sessionA.close()
         sessionB.close()
     }
 }

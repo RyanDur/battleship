@@ -46,10 +46,36 @@ interface ForgottenPairJpaRepository : JpaRepository<ForgottenPair, Long> {
     fun findByEitherPeer(peerId1: String, peerId2: String): List<ForgottenPair>
 }
 
+@Entity
+class PeerEmail(
+    @Id
+    var peerId: String = "",
+    var email: String = "",
+)
+
+@Repository
+interface PeerEmailJpaRepository : JpaRepository<PeerEmail, String>
+
+@Entity
+class SharedEmailPermission(
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Long = 0,
+    var sharerPeerId: String = "",
+    var receiverPeerId: String = "",
+)
+
+@Repository
+interface SharedEmailPermissionJpaRepository : JpaRepository<SharedEmailPermission, Long> {
+    fun findBySharerPeerIdAndReceiverPeerId(sharerPeerId: String, receiverPeerId: String): SharedEmailPermission?
+    fun findBySharerPeerId(sharerPeerId: String): List<SharedEmailPermission>
+}
+
 class JpaPeerRelationshipRepository(
     private val jpaRepo: PeerRelationshipJpaRepository,
     private val nameRepo: PeerNameJpaRepository,
     private val forgottenRepo: ForgottenPairJpaRepository,
+    private val emailRepo: PeerEmailJpaRepository,
+    private val sharingRepo: SharedEmailPermissionJpaRepository,
 ) : RelationshipRepository {
 
     override fun save(peerId1: String, peerId2: String) {
@@ -81,4 +107,26 @@ class JpaPeerRelationshipRepository(
             forgottenRepo.save(ForgottenPair(forgetter = peerId, forgotten = targetPeerId))
         }
     }
+
+    override fun saveEmail(peerId: String, email: String) {
+        emailRepo.save(PeerEmail(peerId = peerId, email = email))
+    }
+
+    override fun findEmail(peerId: String): String? =
+        emailRepo.findById(peerId).orElse(null)?.email
+
+    override fun addSharing(sharerPeerId: String, receiverPeerId: String) {
+        if (sharingRepo.findBySharerPeerIdAndReceiverPeerId(sharerPeerId, receiverPeerId) == null) {
+            sharingRepo.save(SharedEmailPermission(sharerPeerId = sharerPeerId, receiverPeerId = receiverPeerId))
+        }
+    }
+
+    override fun removeSharing(sharerPeerId: String, receiverPeerId: String) {
+        sharingRepo.findBySharerPeerIdAndReceiverPeerId(sharerPeerId, receiverPeerId)?.let {
+            sharingRepo.delete(it)
+        }
+    }
+
+    override fun hasSharing(sharerPeerId: String, receiverPeerId: String): Boolean =
+        sharingRepo.findBySharerPeerIdAndReceiverPeerId(sharerPeerId, receiverPeerId) != null
 }

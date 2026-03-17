@@ -32,6 +32,9 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
             "FORGET_PEER" -> handleForgetPeer(session, payload)
             "RELAY_ICE_RESTART" -> handleRelayIceRestart(session, payload)
             "RELAY_ICE_RESTART_ANSWER" -> handleRelayIceRestartAnswer(session, payload)
+            "SHARE_EMAIL" -> handleShareEmail(session, payload)
+            "STOP_SHARING_EMAIL" -> handleStopSharingEmail(session, payload)
+            "UPDATE_EMAIL" -> handleUpdateEmail(session, payload)
         }
     }
 
@@ -40,6 +43,7 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         val name = payload["name"] as? String ?: return
 
         registry.register(peerId, name)
+        (payload["email"] as? String)?.let { registry.saveEmail(peerId, it) }
         sessionToPeer[session.id] = peerId
         peerToSession[peerId] = session
 
@@ -49,7 +53,12 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         send(session, mapOf("type" to "PEERS", "peers" to peers))
 
         val previousPeers = registry.getPreviousPeers(peerId).map {
-            mapOf("peerId" to it.peerId, "name" to it.name, "online" to it.online)
+            buildMap {
+                put("peerId", it.peerId)
+                put("name", it.name)
+                put("online", it.online)
+                if (it.email != null) put("email", it.email)
+            }
         }
         send(session, mapOf("type" to "PREVIOUS_PEERS", "peers" to previousPeers))
 
@@ -94,6 +103,29 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         val peerId = sessionToPeer[session.id] ?: return
         val targetPeerId = payload["targetPeerId"] as? String ?: return
         registry.forgetRelationship(peerId, targetPeerId)
+    }
+
+    private fun handleShareEmail(session: WebSocketSession, payload: Map<String, Any>) {
+        val peerId = sessionToPeer[session.id] ?: return
+        val targetPeerId = payload["targetPeerId"] as? String ?: return
+        registry.shareEmail(peerId, targetPeerId)
+        val email = registry.getSharedEmail(peerId, targetPeerId) ?: return
+        val target = peerToSession[targetPeerId] ?: return
+        send(target, mapOf("type" to "EMAIL_SHARED", "fromPeerId" to peerId, "email" to email))
+    }
+
+    private fun handleStopSharingEmail(session: WebSocketSession, payload: Map<String, Any>) {
+        val peerId = sessionToPeer[session.id] ?: return
+        val targetPeerId = payload["targetPeerId"] as? String ?: return
+        registry.stopSharingEmail(peerId, targetPeerId)
+        val target = peerToSession[targetPeerId] ?: return
+        send(target, mapOf("type" to "EMAIL_REVOKED", "fromPeerId" to peerId))
+    }
+
+    private fun handleUpdateEmail(session: WebSocketSession, payload: Map<String, Any>) {
+        val peerId = sessionToPeer[session.id] ?: return
+        val email = payload["email"] as? String ?: return
+        registry.saveEmail(peerId, email)
     }
 
     private fun send(session: WebSocketSession, payload: Map<String, Any>) {

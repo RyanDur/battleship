@@ -2,6 +2,7 @@ package com.battleship.backend.signaling
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 
 class PeerRegistryTest {
@@ -108,6 +109,76 @@ class PeerRegistryTest {
         registry.forgetRelationship("peer-1", "peer-2")
 
         assertTrue(registry.getPreviousPeers("peer-2").isEmpty())
+    }
+
+    @Test
+    fun `email appears in previous peers when sharer had shared with that peer`() {
+        registry.register("peer-1", "Alice")
+        registry.register("peer-2", "Bob")
+        registry.recordRelationship("peer-1", "peer-2")
+        registry.saveEmail("peer-1", "alice@example.com")
+        registry.shareEmail("peer-1", "peer-2")
+
+        val prev = registry.getPreviousPeers("peer-2")
+
+        assertEquals("alice@example.com", prev[0].email)
+    }
+
+    @Test
+    fun `email is null in previous peers when sharer has not shared`() {
+        registry.register("peer-1", "Alice")
+        registry.register("peer-2", "Bob")
+        registry.recordRelationship("peer-1", "peer-2")
+        registry.saveEmail("peer-1", "alice@example.com")
+
+        val prev = registry.getPreviousPeers("peer-2")
+
+        assertNull(prev[0].email)
+    }
+
+    @Test
+    fun `sharing is directional - peer-2 sharing does not expose peer-1's email to peer-2`() {
+        registry.register("peer-1", "Alice")
+        registry.register("peer-2", "Bob")
+        registry.recordRelationship("peer-1", "peer-2")
+        registry.saveEmail("peer-1", "alice@example.com")
+        registry.shareEmail("peer-1", "peer-2")
+
+        // peer-1 shares with peer-2, so peer-2 sees peer-1's email
+        // peer-1 should NOT see peer-2's email (no sharing in that direction)
+        val prev1 = registry.getPreviousPeers("peer-1")
+        assertNull(prev1[0].email)
+    }
+
+    @Test
+    fun `stopSharingEmail removes email from previous peers`() {
+        registry.register("peer-1", "Alice")
+        registry.register("peer-2", "Bob")
+        registry.recordRelationship("peer-1", "peer-2")
+        registry.saveEmail("peer-1", "alice@example.com")
+        registry.shareEmail("peer-1", "peer-2")
+        registry.stopSharingEmail("peer-1", "peer-2")
+
+        val prev = registry.getPreviousPeers("peer-2")
+
+        assertNull(prev[0].email)
+    }
+
+    @Test
+    fun `getSharedEmail returns email when sharing is active`() {
+        registry.register("peer-1", "Alice")
+        registry.saveEmail("peer-1", "alice@example.com")
+        registry.shareEmail("peer-1", "peer-2")
+
+        assertEquals("alice@example.com", registry.getSharedEmail("peer-1", "peer-2"))
+    }
+
+    @Test
+    fun `getSharedEmail returns null when not sharing`() {
+        registry.register("peer-1", "Alice")
+        registry.saveEmail("peer-1", "alice@example.com")
+
+        assertNull(registry.getSharedEmail("peer-1", "peer-2"))
     }
 
     @Test
