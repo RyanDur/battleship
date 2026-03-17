@@ -220,6 +220,18 @@ describe('createSignalingMiddleware (server)', () => {
     await cleanup();
   });
 
+  it('SAVE_PEER_EMAIL dispatch sends SAVE_PEER_EMAIL message to server', async () => {
+    const received: string[] = [];
+    const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
+
+    store.dispatch({type: 'SAVE_PEER_EMAIL', peerId: 'p1', email: 'bob@example.com'});
+
+    await vi.waitFor(() =>
+      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'SAVE_PEER_EMAIL', targetPeerId: 'p1', email: 'bob@example.com'})
+    );
+    await cleanup();
+  });
+
   it('STOP_SIGNALING prevents further server events from updating state', async () => {
     const {store, getConn, cleanup} = await connectStore();
 
