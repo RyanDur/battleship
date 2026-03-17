@@ -160,12 +160,11 @@ export const createPeerHandler = (deps: Deps): Handler => {
     timer: ReturnType<typeof setTimeout>
   }
   const pendingIntros = new Map<string, PendingIntro>();
-  const introConnections = new Map<string, string>(); // introId → newPeerId for intro-created PCs
 
   const cleanupIntro = (introId: string, type: 'INTRODUCTION_DECLINED' | 'INTRODUCTION_EXPIRED') => {
-    const introPeerId = introConnections.get(introId);
+    const introPeerId = deps.getState().handlerState.introConnections[introId];
     if (introPeerId) {
-      introConnections.delete(introId);
+      deps.dispatch({type: 'INTRO_CONNECTION_CLEARED', introId});
       const pc = connections.get(introPeerId);
       connections.delete(introPeerId);
       pc?.close();
@@ -200,8 +199,8 @@ export const createPeerHandler = (deps: Deps): Handler => {
   const cbs: ChannelCallbacks = {
     onOpen: (peerId, channel) => {
       dataChannels.set(peerId, channel);
-      const entry = [...introConnections].find(([, pid]) => pid === peerId);
-      if (entry) introConnections.delete(entry[0]);
+      const introEntry = Object.entries(deps.getState().handlerState.introConnections).find(([, pid]) => pid === peerId);
+      if (introEntry) deps.dispatch({type: 'INTRO_CONNECTION_CLEARED', introId: introEntry[0]});
     },
     onClose: (peerId) => {
       const wasConnected = dataChannels.has(peerId);
@@ -279,7 +278,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
             const newPeerId = generatePeerId();
             const pc = deps.createPeerConnection();
             connections.set(newPeerId, pc);
-            introConnections.set(msg.introId, newPeerId);
+            deps.dispatch({type: 'INTRO_CONNECTION_REGISTERED', introId: msg.introId, newPeerId});
             negotiateIntroOffer(pc, newPeerId, deps.name, deps.emit, cbs, relayChannel, msg.introId);
           }))
         .or(() => maybe(introductionSdpAnswerDecoder.decode(parsed))
@@ -294,7 +293,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
             const newPeerId = generatePeerId();
             const pc = deps.createPeerConnection();
             connections.set(newPeerId, pc);
-            introConnections.set(msg.introId, newPeerId);
+            deps.dispatch({type: 'INTRO_CONNECTION_REGISTERED', introId: msg.introId, newPeerId});
             negotiateIntroAnswer(pc, newPeerId, deps.name, deps.emit, msg.sdp, cbs, relayChannel, msg.introId);
           }))
         .or(() => maybe(introductionDeclinedDecoder.decode(parsed))

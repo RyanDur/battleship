@@ -295,6 +295,7 @@ describe('connectionsReducer', () => {
         offererPeerIds: [],
         iceRestartAttempts: {},
         introChannels: {},
+        introConnections: {},
       });
     });
 

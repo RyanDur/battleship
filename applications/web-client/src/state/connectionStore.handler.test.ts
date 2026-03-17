@@ -165,6 +165,30 @@ describe('createHandlerMiddleware (store)', () => {
     expect(bob.getState().handlerState.introChannels).not.toHaveProperty(introId);
   });
 
+  it('introduction flow connects Bob and Carol directly when both accept', async () => {
+    const {alice, bob, carol, connect} = makeTriple();
+    await connect();
+
+    const bobPeerId = alice.getState().peers.find(p => p.name === 'Bob')!.id;
+    const carolPeerId = alice.getState().peers.find(p => p.name === 'Carol')!.id;
+    alice.dispatch({type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId});
+
+    await vi.waitFor(() => expect(bob.getState().pendingIntroductions).toHaveLength(1));
+    const introId = bob.getState().pendingIntroductions[0].introId;
+    bob.dispatch({type: 'ACCEPT_INTRODUCTION', introId});
+
+    await vi.waitFor(() => expect(carol.getState().pendingIntroductions).toHaveLength(1));
+    carol.dispatch({type: 'ACCEPT_INTRODUCTION', introId: carol.getState().pendingIntroductions[0].introId});
+
+    await vi.waitFor(() => {
+      expect(bob.getState().peers).toHaveLength(2);
+      expect(carol.getState().peers).toHaveLength(2);
+    });
+    // introConnections cleared after channel opens — state is clean
+    expect(Object.keys(bob.getState().handlerState.introConnections)).toHaveLength(0);
+    expect(Object.keys(carol.getState().handlerState.introConnections)).toHaveLength(0);
+  });
+
   it('full offer/answer handshake connects both stores', async () => {
     const factory = createFakePeerConnectionFactory();
 

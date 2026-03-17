@@ -21,6 +21,7 @@ export type HandlerState = {
   offererPeerIds: string[]
   iceRestartAttempts: Record<string, number>
   introChannels: Record<string, string>
+  introConnections: Record<string, string>
 }
 
 export type ConnectionsState = {
@@ -79,6 +80,8 @@ export type ConnectionsAction =
   | {type: 'SIGNALING_PEER_REGISTERED'; localPeerId: string; signalingPeerId: string; isOfferer: boolean}
   | {type: 'ICE_RESTART_ATTEMPTED'; peerId: string}
   | {type: 'INTRO_CHANNEL_REGISTERED'; introId: string; relayPeerId: string}
+  | {type: 'INTRO_CONNECTION_REGISTERED'; introId: string; newPeerId: string}
+  | {type: 'INTRO_CONNECTION_CLEARED'; introId: string}
   | {type: 'EMAIL_SHARED_RECEIVED'; fromPeerId: string; email: string}
   | {type: 'EMAIL_REVOKED_RECEIVED'; fromPeerId: string}
   | {type: 'SHARE_EMAIL'; targetPeerId: string}
@@ -92,6 +95,7 @@ const handlerInitialState: HandlerState = {
   offererPeerIds: [],
   iceRestartAttempts: {},
   introChannels: {},
+  introConnections: {},
 };
 
 export const initialState: ConnectionsState = {
@@ -125,6 +129,13 @@ const handlerReducer = (state: HandlerState, action: ConnectionsAction): Handler
       };
     case 'INTRO_CHANNEL_REGISTERED':
       return {...state, introChannels: {...state.introChannels, [action.introId]: action.relayPeerId}};
+    case 'INTRO_CONNECTION_REGISTERED':
+      return {...state, introConnections: {...state.introConnections, [action.introId]: action.newPeerId}};
+    case 'INTRO_CONNECTION_CLEARED':
+      return {
+        ...state,
+        introConnections: Object.fromEntries(Object.entries(state.introConnections).filter(([k]) => k !== action.introId)),
+      };
     case 'ACCEPT_INTRODUCTION':
     case 'DECLINE_INTRODUCTION':
       return {
@@ -136,6 +147,9 @@ const handlerReducer = (state: HandlerState, action: ConnectionsAction): Handler
       const clearedIntroChannels = Object.fromEntries(
         Object.entries(state.introChannels).filter(([, v]) => v !== action.peerId)
       );
+      const clearedIntroConnections = Object.fromEntries(
+        Object.entries(state.introConnections).filter(([, v]) => v !== action.peerId)
+      );
       return {
         ...state,
         signalingToPeer: signalingPeerId
@@ -145,6 +159,7 @@ const handlerReducer = (state: HandlerState, action: ConnectionsAction): Handler
         offererPeerIds: state.offererPeerIds.filter(id => id !== action.peerId),
         iceRestartAttempts: Object.fromEntries(Object.entries(state.iceRestartAttempts).filter(([k]) => k !== action.peerId)),
         introChannels: clearedIntroChannels,
+        introConnections: clearedIntroConnections,
       };
     }
     default:
