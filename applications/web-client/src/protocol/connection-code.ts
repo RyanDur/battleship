@@ -90,7 +90,7 @@ export const decodeConnectionCode = (code: string, passphrase: string): AsyncRes
         return deriveKey(passphrase, salt)
           .andThen(key => asyncResult(crypto.subtle.decrypt({name: 'AES-GCM', iv}, key, ciphertext)))
           .andThen(compressed => decompress(new Uint8Array(compressed)))
-          .or(() => asyncFailure('DECRYPT_FAILED' as CodecError));
+          .or(() => asyncFailure('DECRYPT_FAILED'));
       },
       asyncFailure,
     );

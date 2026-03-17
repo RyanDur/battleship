@@ -96,8 +96,8 @@ const createOfferSdp = (pc: RTCPeerConnection, peerId: string, name: string, emi
 };
 
 const acceptOfferSdp = (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void, remoteSdp: string, cbs: ChannelCallbacks) => {
-  pc.ondatachannel = ({ channel }) => wireChannel(channel as RTCDataChannel, peerId, name, emit, cbs);
-  return asyncTryCatch(() => pc.setRemoteDescription({ type: 'offer', sdp: remoteSdp } as RTCSessionDescriptionInit))
+  pc.ondatachannel = ({ channel }) => wireChannel(channel, peerId, name, emit, cbs);
+  return asyncTryCatch(() => pc.setRemoteDescription({ type: 'offer', sdp: remoteSdp }))
     .andThen(() => asyncTryCatch(() => pc.createAnswer()))
     .andThen(answer => asyncTryCatch(() => pc.setLocalDescription(answer)))
     .andThen(() => asyncResult<string | undefined, Error>(gatherIceCandidates(pc)));
@@ -130,7 +130,7 @@ const negotiateIntroAnswer = (pc: RTCPeerConnection, peerId: string, name: strin
 const MAX_ICE_RESTART_ATTEMPTS = 3;
 
 const createIceRestartOffer = (pc: RTCPeerConnection, signalingPeerId: string, emit: (event: PeerEvent) => void) => {
-  (pc as unknown as {restartIce?: () => void}).restartIce?.();
+  pc.restartIce();
   return asyncTryCatch(() => pc.createOffer({iceRestart: true}))
     .andThen(offer => asyncTryCatch(() => pc.setLocalDescription(offer)))
     .andThen(() => asyncResult<string | undefined, Error>(gatherIceCandidates(pc)))
@@ -138,7 +138,7 @@ const createIceRestartOffer = (pc: RTCPeerConnection, signalingPeerId: string, e
 };
 
 const acceptIceRestartOffer = (pc: RTCPeerConnection, signalingPeerId: string, remoteSdp: string, emit: (event: PeerEvent) => void) =>
-  asyncTryCatch(() => pc.setRemoteDescription({type: 'offer', sdp: remoteSdp} as RTCSessionDescriptionInit))
+  asyncTryCatch(() => pc.setRemoteDescription({type: 'offer', sdp: remoteSdp}))
     .andThen(() => asyncTryCatch(() => pc.createAnswer()))
     .andThen(answer => asyncTryCatch(() => pc.setLocalDescription(answer)))
     .andThen(() => asyncResult<string | undefined, Error>(gatherIceCandidates(pc)))
@@ -293,7 +293,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         .or(() => maybe(introductionSdpAnswerDecoder.decode(parsed))
           .map(msg => {
             const pc = connections.get(msg.peerId);
-            if (pc) asyncTryCatch(() => pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp } as RTCSessionDescriptionInit));
+            if (pc) asyncTryCatch(() => pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp }));
           }))
         .or(() => maybe(introductionSdpDecoder.decode(parsed))
           .map(msg => {
@@ -330,7 +330,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
       }
       case 'ACCEPT_ANSWER': {
         const pc = connections.get(command.peerId);
-        if (pc) asyncTryCatch(() => pc.setRemoteDescription({ type: 'answer', sdp: command.sdp } as RTCSessionDescriptionInit));
+        if (pc) asyncTryCatch(() => pc.setRemoteDescription({ type: 'answer', sdp: command.sdp }));
         break;
       }
       case 'DISCONNECT': {
@@ -408,7 +408,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const localPeerId = signalingToPeer.get(command.signalingPeerId);
         if (!localPeerId) break;
         const pc = connections.get(localPeerId);
-        if (pc) asyncTryCatch(() => pc.setRemoteDescription({ type: 'answer', sdp: command.sdp } as RTCSessionDescriptionInit));
+        if (pc) asyncTryCatch(() => pc.setRemoteDescription({ type: 'answer', sdp: command.sdp }));
         break;
       }
       case 'ICE_RESTART_RECEIVED': {
@@ -422,7 +422,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const localPeerId = signalingToPeer.get(command.signalingPeerId);
         if (!localPeerId) break;
         const pc = connections.get(localPeerId);
-        if (pc) asyncTryCatch(() => pc.setRemoteDescription({type: 'answer', sdp: command.sdp} as RTCSessionDescriptionInit));
+        if (pc) asyncTryCatch(() => pc.setRemoteDescription({type: 'answer', sdp: command.sdp}));
         break;
       }
     }
