@@ -53,12 +53,34 @@ const PeerRow = ({peer, otherTrustingPeers, unstable}: {peer: Peer; otherTrustin
 
 const PreviousPeerRow = ({peer}: {peer: PreviousPeer}) => {
   const store = useConnectionStore();
+  const [emailInput, setEmailInput] = useState('');
+
+  const handleEmailSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (emailInput.trim()) {
+      store.dispatch({type: 'SAVE_PEER_EMAIL', peerId: peer.peerId, email: emailInput.trim()});
+      setEmailInput('');
+    }
+  };
+
   return (
     <li>
       {peer.name}
       <span>{peer.online ? 'Online' : 'Offline'}</span>
       {peer.online && (
         <button onClick={() => store.dispatch({type: 'RECONNECT_VIA_SERVER', signalingPeerId: peer.peerId, name: peer.name})}>Reconnect</button>
+      )}
+      {!peer.online && peer.email && (
+        <a href={`mailto:${peer.email}`}>Invite</a>
+      )}
+      {!peer.online && !peer.email && (
+        <form onSubmit={handleEmailSubmit}>
+          <input
+            value={emailInput}
+            onChange={e => setEmailInput(e.target.value)}
+            placeholder="Enter email"
+          />
+        </form>
       )}
       <button onClick={() => store.dispatch({type: 'FORGET_PEER', peerId: peer.peerId})}>Forget</button>
     </li>

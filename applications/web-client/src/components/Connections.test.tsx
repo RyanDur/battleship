@@ -421,6 +421,75 @@ describe('Connections', () => {
     });
   });
 
+  describe('offline peer invitation', () => {
+    it('shows Invite link for offline previous peer with known email', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false, email: 'bob@example.com'}]}));
+
+      expect(screen.getByRole('link', {name: /invite/i})).toBeInTheDocument();
+    });
+
+    it('Invite link has mailto href with the peer email', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false, email: 'bob@example.com'}]}));
+
+      expect(screen.getByRole('link', {name: /invite/i})).toHaveAttribute('href', 'mailto:bob@example.com');
+    });
+
+    it('does not show Invite link for offline previous peer without email', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+
+      expect(screen.queryByRole('link', {name: /invite/i})).not.toBeInTheDocument();
+    });
+
+    it('does not show Invite link for online previous peer', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true, email: 'bob@example.com'}]}));
+
+      expect(screen.queryByRole('link', {name: /invite/i})).not.toBeInTheDocument();
+    });
+
+    it('shows email input for offline previous peer without email', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+
+      expect(screen.getByPlaceholderText(/enter email/i)).toBeInTheDocument();
+    });
+
+    it('does not show email input for offline previous peer with email', async () => {
+      const {store} = renderConnections();
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false, email: 'bob@example.com'}]}));
+
+      expect(screen.queryByPlaceholderText(/enter email/i)).not.toBeInTheDocument();
+    });
+
+    it('submitting the email input dispatches SAVE_PEER_EMAIL', async () => {
+      const user = userEvent.setup();
+      const factory = createFakePeerConnectionFactory();
+      const dispatched: ConnectionsAction[] = [];
+      const store = createConnectionStore(applyMiddleware([
+        createHandlerMiddleware({name: 'Player', createPeerConnection: factory.createPeerConnection}),
+        encodingMiddleware,
+        codecMiddleware,
+        () => (next) => (action) => { dispatched.push(action); next(action); },
+      ]));
+      render(<ConnectionProvider store={store}><Connections serviceOnline={true}/></ConnectionProvider>);
+
+      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+      await user.type(screen.getByPlaceholderText(/enter email/i), 'bob@example.com');
+      await user.keyboard('{Enter}');
+
+      expect(dispatched).toContainEqual({type: 'SAVE_PEER_EMAIL', peerId: 'p1', email: 'bob@example.com'});
+    });
+  });
+
   describe('online peers', () => {
     it('shows online peer names from signaling', async () => {
       const {store} = renderConnections();
