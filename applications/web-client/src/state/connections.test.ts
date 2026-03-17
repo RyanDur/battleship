@@ -1,5 +1,5 @@
 import {connectionsReducer, initialState} from './connections';
-import type {ConnectionsState} from './connections';
+import type {ConnectionsState, HandlerState} from './connections';
 
 const withFlow = (flow: ConnectionsState['flow']): ConnectionsState => ({...initialState, flow});
 const withPeers = (peers: ConnectionsState['peers']): ConnectionsState => ({...initialState, peers});
@@ -280,5 +280,94 @@ describe('connectionsReducer', () => {
     const next = connectionsReducer(state, {type: 'FORGET_PEER', peerId: 'unknown'});
 
     expect(next.previousPeers).toEqual([{peerId: 'p1', name: 'Alice', online: false}]);
+  });
+
+  describe('handlerState', () => {
+    const withHandlerState = (hs: Partial<HandlerState>): ConnectionsState => ({
+      ...initialState,
+      handlerState: {...initialState.handlerState, ...hs},
+    });
+
+    it('initial state has empty handler maps', () => {
+      expect(initialState.handlerState).toEqual({
+        signalingToPeer: {},
+        peerToSignaling: {},
+        offererPeerIds: [],
+        iceRestartAttempts: {},
+      });
+    });
+
+    it('SIGNALING_PEER_REGISTERED records bidirectional mapping', () => {
+      const next = connectionsReducer(initialState, {type: 'SIGNALING_PEER_REGISTERED', localPeerId: 'p1', signalingPeerId: 'sig1', isOfferer: false});
+
+      expect(next.handlerState.signalingToPeer).toEqual({'sig1': 'p1'});
+      expect(next.handlerState.peerToSignaling).toEqual({'p1': 'sig1'});
+    });
+
+    it('SIGNALING_PEER_REGISTERED with isOfferer adds to offererPeerIds', () => {
+      const next = connectionsReducer(initialState, {type: 'SIGNALING_PEER_REGISTERED', localPeerId: 'p1', signalingPeerId: 'sig1', isOfferer: true});
+
+      expect(next.handlerState.offererPeerIds).toContain('p1');
+    });
+
+    it('SIGNALING_PEER_REGISTERED without isOfferer does not add to offererPeerIds', () => {
+      const next = connectionsReducer(initialState, {type: 'SIGNALING_PEER_REGISTERED', localPeerId: 'p1', signalingPeerId: 'sig1', isOfferer: false});
+
+      expect(next.handlerState.offererPeerIds).not.toContain('p1');
+    });
+
+    it('ICE_RESTART_ATTEMPTED sets attempt count to 1 initially', () => {
+      const next = connectionsReducer(initialState, {type: 'ICE_RESTART_ATTEMPTED', peerId: 'p1'});
+
+      expect(next.handlerState.iceRestartAttempts).toEqual({'p1': 1});
+    });
+
+    it('ICE_RESTART_ATTEMPTED increments existing count', () => {
+      const state = withHandlerState({iceRestartAttempts: {'p1': 2}});
+
+      const next = connectionsReducer(state, {type: 'ICE_RESTART_ATTEMPTED', peerId: 'p1'});
+
+      expect(next.handlerState.iceRestartAttempts).toEqual({'p1': 3});
+    });
+
+    it('PEER_CONNECTION_RESTORED removes peer from iceRestartAttempts', () => {
+      const state = withHandlerState({iceRestartAttempts: {'p1': 2}});
+
+      const next = connectionsReducer(state, {type: 'PEER_CONNECTION_RESTORED', peerId: 'p1'});
+
+      expect(next.handlerState.iceRestartAttempts).toEqual({});
+    });
+
+    it('PEER_DISCONNECTED removes peer from all handler maps', () => {
+      const state = withHandlerState({
+        signalingToPeer: {'sig1': 'p1'},
+        peerToSignaling: {'p1': 'sig1'},
+        offererPeerIds: ['p1'],
+        iceRestartAttempts: {'p1': 1},
+      });
+
+      const next = connectionsReducer(state, {type: 'PEER_DISCONNECTED', peerId: 'p1'});
+
+      expect(next.handlerState.signalingToPeer).toEqual({});
+      expect(next.handlerState.peerToSignaling).toEqual({});
+      expect(next.handlerState.offererPeerIds).not.toContain('p1');
+      expect(next.handlerState.iceRestartAttempts).toEqual({});
+    });
+
+    it('PEER_DISCONNECTED leaves other peers in handler maps untouched', () => {
+      const state = withHandlerState({
+        signalingToPeer: {'sig1': 'p1', 'sig2': 'p2'},
+        peerToSignaling: {'p1': 'sig1', 'p2': 'sig2'},
+        offererPeerIds: ['p1', 'p2'],
+        iceRestartAttempts: {'p1': 1, 'p2': 2},
+      });
+
+      const next = connectionsReducer(state, {type: 'PEER_DISCONNECTED', peerId: 'p1'});
+
+      expect(next.handlerState.signalingToPeer).toEqual({'sig2': 'p2'});
+      expect(next.handlerState.peerToSignaling).toEqual({'p2': 'sig2'});
+      expect(next.handlerState.offererPeerIds).toEqual(['p2']);
+      expect(next.handlerState.iceRestartAttempts).toEqual({'p2': 2});
+    });
   });
 });

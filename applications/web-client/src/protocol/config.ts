@@ -21,6 +21,6 @@ const DEFAULT_CONFIG: Config = {
 export const loadConfig = (url = `${import.meta.env.BASE_URL}config.json`): AsyncResult<Config, never> =>
   asyncTryCatch(() => fetch(url))
     .andThen(response => response.ok
-      ? asyncTryCatch(() => response.json() as Promise<unknown>).map(json => configDecoder.decode(json) ?? DEFAULT_CONFIG)
+      ? asyncTryCatch<unknown>(() => response.json()).map(json => configDecoder.decode(json) ?? DEFAULT_CONFIG)
       : asyncSuccess<Config, Error>(DEFAULT_CONFIG))
     .or(() => asyncSuccess(DEFAULT_CONFIG));

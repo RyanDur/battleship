@@ -15,6 +15,13 @@ export type ConnectionFlow =
   | {phase: 'encoding-answer'; sdp: string; passphrase: string}
   | {phase: 'answer-ready'; code: string}
 
+export type HandlerState = {
+  signalingToPeer: Record<string, string>
+  peerToSignaling: Record<string, string>
+  offererPeerIds: string[]
+  iceRestartAttempts: Record<string, number>
+}
+
 export type ConnectionsState = {
   flow: ConnectionFlow
   peers: Peer[]
@@ -22,6 +29,7 @@ export type ConnectionsState = {
   onlinePeers: OnlinePeer[]
   previousPeers: PreviousPeer[]
   peerConnectionHealth: Record<string, 'stable' | 'unstable'>
+  handlerState: HandlerState
 }
 
 export type ConnectionsAction =
@@ -67,6 +75,15 @@ export type ConnectionsAction =
   | {type: 'RELAY_ICE_RESTART_ANSWER'; targetPeerId: string; sdp: string}
   | {type: 'ICE_RESTART_RECEIVED'; signalingPeerId: string; sdp: string}
   | {type: 'ICE_RESTART_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string}
+  | {type: 'SIGNALING_PEER_REGISTERED'; localPeerId: string; signalingPeerId: string; isOfferer: boolean}
+  | {type: 'ICE_RESTART_ATTEMPTED'; peerId: string}
+
+const handlerInitialState: HandlerState = {
+  signalingToPeer: {},
+  peerToSignaling: {},
+  offererPeerIds: [],
+  iceRestartAttempts: {},
+};
 
 export const initialState: ConnectionsState = {
   flow: {phase: 'idle'},
@@ -75,9 +92,46 @@ export const initialState: ConnectionsState = {
   onlinePeers: [],
   previousPeers: [],
   peerConnectionHealth: {},
+  handlerState: handlerInitialState,
 };
 
-export const connectionsReducer = (state: ConnectionsState, action: ConnectionsAction): ConnectionsState => {
+const handlerReducer = (state: HandlerState, action: ConnectionsAction): HandlerState => {
+  switch (action.type) {
+    case 'SIGNALING_PEER_REGISTERED':
+      return {
+        ...state,
+        signalingToPeer: {...state.signalingToPeer, [action.signalingPeerId]: action.localPeerId},
+        peerToSignaling: {...state.peerToSignaling, [action.localPeerId]: action.signalingPeerId},
+        offererPeerIds: action.isOfferer ? [...state.offererPeerIds, action.localPeerId] : state.offererPeerIds,
+      };
+    case 'ICE_RESTART_ATTEMPTED':
+      return {
+        ...state,
+        iceRestartAttempts: {...state.iceRestartAttempts, [action.peerId]: (state.iceRestartAttempts[action.peerId] ?? 0) + 1},
+      };
+    case 'PEER_CONNECTION_RESTORED':
+      return {
+        ...state,
+        iceRestartAttempts: Object.fromEntries(Object.entries(state.iceRestartAttempts).filter(([k]) => k !== action.peerId)),
+      };
+    case 'PEER_DISCONNECTED': {
+      const signalingPeerId = state.peerToSignaling[action.peerId];
+      return {
+        ...state,
+        signalingToPeer: signalingPeerId
+          ? Object.fromEntries(Object.entries(state.signalingToPeer).filter(([k]) => k !== signalingPeerId))
+          : state.signalingToPeer,
+        peerToSignaling: Object.fromEntries(Object.entries(state.peerToSignaling).filter(([k]) => k !== action.peerId)),
+        offererPeerIds: state.offererPeerIds.filter(id => id !== action.peerId),
+        iceRestartAttempts: Object.fromEntries(Object.entries(state.iceRestartAttempts).filter(([k]) => k !== action.peerId)),
+      };
+    }
+    default:
+      return state;
+  }
+};
+
+const coreConnectionsReducer = (state: ConnectionsState, action: ConnectionsAction): ConnectionsState => {
   switch (action.type) {
     case 'CREATE_OFFER':
       return {...state, flow: {phase: 'creating', passphrase: action.passphrase}};
@@ -169,3 +223,8 @@ export const connectionsReducer = (state: ConnectionsState, action: ConnectionsA
       return state;
   }
 };
+
+export const connectionsReducer = (state: ConnectionsState, action: ConnectionsAction): ConnectionsState => ({
+  ...coreConnectionsReducer(state, action),
+  handlerState: handlerReducer(state.handlerState, action),
+});
