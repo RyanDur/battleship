@@ -156,10 +156,10 @@ type SignalingMiddlewareConfig = {
 }
 
 export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): MiddlewareFactory =>
-  ({dispatch}) => (next) => {
+  ({dispatch, addListener}) => (next) => {
     let handle: SignalingHandle | null = null;
 
-    return (action: ConnectionsAction) => {
+    addListener((action) => {
       if (action.type === 'START_SIGNALING') {
         handle = startSignaling(config, (event: SignalingEvent) => {
           if (event.type === 'PEERS') dispatch({type: 'ONLINE_PEERS_UPDATED', peers: event.peers});
@@ -185,6 +185,7 @@ export const createSignalingMiddleware = ({config}: SignalingMiddlewareConfig): 
       } else if (action.type === 'RELAY_ICE_RESTART_ANSWER') {
         handle?.send({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: action.targetPeerId, sdp: action.sdp});
       }
-      next(action);
-    };
+    });
+
+    return (action: ConnectionsAction) => next(action);
   };
