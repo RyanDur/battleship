@@ -204,10 +204,12 @@ export const createPeerHandler = (deps: Deps): Handler => {
     },
     onClose: (peerId) => {
       const wasConnected = dataChannels.has(peerId);
-      dataChannels.delete(peerId);
-      const pc = connections.get(peerId);
-      if (pc) { pc.close(); connections.delete(peerId); }
-      if (wasConnected) deps.emit({ type: 'PEER_DISCONNECTED', peerId });
+      if (!wasConnected) {
+        const pc = connections.get(peerId);
+        if (pc) { connections.delete(peerId); pc.close(); }
+        return;
+      }
+      deps.emit({ type: 'PEER_DISCONNECTED', peerId });
       for (const [introId, intro] of [...pendingIntros]) {
         if (intro.peerId1 === peerId || intro.peerId2 === peerId) {
           clearTimeout(intro.timer);
@@ -325,8 +327,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         break;
       }
       case 'DISCONNECT': {
-        const pc = connections.get(command.peerId);
-        if (pc) { pc.close(); connections.delete(command.peerId); }
+        connections.get(command.peerId)?.close();
         break;
       }
       case 'GRANT_TRUST': {
