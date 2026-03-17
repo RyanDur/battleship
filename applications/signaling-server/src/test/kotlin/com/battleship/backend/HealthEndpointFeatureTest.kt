@@ -19,7 +19,7 @@ class HealthEndpointFeatureTest {
         mockMvc.get("/health")
             .andExpect {
                 status { isOk() }
-                content { json("""{"status":"up","version":"0.0.0-dev"}""") }
+                content { json("""{"status":"up","version":"${System.getProperty("APP_VERSION")}"}""") }
             }
     }
 }
