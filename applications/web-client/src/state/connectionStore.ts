@@ -68,15 +68,13 @@ type HandlerMiddlewareConfig = {
 
 export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMiddlewareConfig): MiddlewareFactory =>
   ({dispatch, getState, addListener}) => (next) => {
-    const signalingPeerIds = new Map<string, string>();
-
     const emit = (event: PeerEvent) => {
       if (event.type === 'PEER_CONNECTED') {
         dispatch({type: 'PEER_CONNECTED', peerId: event.peerId});
-        const signalingPeerId = signalingPeerIds.get(event.peerId);
-        if (signalingPeerId) {
-          dispatch({type: 'PREVIOUS_PEER_CONNECTED', signalingPeerId});
-          signalingPeerIds.delete(event.peerId);
+        const {peerToSignaling, offererPeerIds} = getState().handlerState;
+        if (offererPeerIds.includes(event.peerId)) {
+          const signalingPeerId = peerToSignaling[event.peerId];
+          if (signalingPeerId) dispatch({type: 'PREVIOUS_PEER_CONNECTED', signalingPeerId});
         }
       }
       else if (event.type === 'PEER_NAMED') dispatch({type: 'PEER_NAMED', peerId: event.peerId, name: event.name});
@@ -88,7 +86,6 @@ export const createHandlerMiddleware = ({name, createPeerConnection}: HandlerMid
       else if (event.type === 'INTRODUCTION_DECLINED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
       else if (event.type === 'INTRODUCTION_EXPIRED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
       else if (event.type === 'SERVER_OFFER_CREATED') {
-        signalingPeerIds.set(event.localPeerId, event.signalingPeerId);
         dispatch({type: 'RELAY_OFFER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
       }
       else if (event.type === 'SERVER_ANSWER_CREATED') dispatch({type: 'RELAY_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});

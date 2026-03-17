@@ -81,6 +81,15 @@ describe('createHandlerMiddleware (store)', () => {
     await vi.waitFor(() => expect(alice.getState().peers[0].trustsMe).toBe(false));
   });
 
+  it('CONNECT_VIA_SERVER to a previous peer removes them from previousPeers', async () => {
+    const {alice, connect} = makePair();
+    alice.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'bob-sig', name: 'Bob', online: false}]});
+
+    await connect();
+
+    await vi.waitFor(() => expect(alice.getState().previousPeers).toHaveLength(0));
+  });
+
   it('full offer/answer handshake connects both stores', async () => {
     const factory = createFakePeerConnectionFactory();
 
