@@ -127,6 +127,10 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         val peerId = sessionToPeer[session.id] ?: return
         val email = payload["email"] as? String ?: return
         registry.saveEmail(peerId, email)
+        registry.getSharingReceivers(peerId).forEach { receiverPeerId ->
+            val target = peerToSession[receiverPeerId] ?: return@forEach
+            send(target, mapOf("type" to "EMAIL_SHARED", "fromPeerId" to peerId, "email" to email))
+        }
     }
 
     private fun handleSavePeerEmail(session: WebSocketSession, payload: Map<String, Any>) {

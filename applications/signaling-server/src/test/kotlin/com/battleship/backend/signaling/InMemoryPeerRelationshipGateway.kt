@@ -47,6 +47,9 @@ class InMemoryPeerRelationshipGateway : PeerRelationshipGateway {
     override fun hasSharing(sharerPeerId: String, receiverPeerId: String): Boolean =
         sharing.contains(sharerPeerId to receiverPeerId)
 
+    override fun findSharingReceivers(sharerPeerId: String): List<String> =
+        sharing.filter { it.first == sharerPeerId }.map { it.second }
+
     override fun savePeerEmail(saverId: String, targetPeerId: String, email: String) {
         savedPeerEmails[saverId to targetPeerId] = email
     }

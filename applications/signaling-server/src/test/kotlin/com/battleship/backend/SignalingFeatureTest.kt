@@ -598,4 +598,72 @@ class SignalingFeatureTest {
         sessionA.close()
         sessionB2.close()
     }
+
+    @Test
+    fun `UPDATE_EMAIL fans out EMAIL_SHARED to all peers currently sharing with`() {
+        val (sessionA, messagesA) = connect("fan-out-a")
+        val (sessionB, messagesB) = connect("fan-out-b")
+        val (sessionC, messagesC) = connect("fan-out-c")
+        val (sessionD, messagesD) = connect("fan-out-d")
+
+        send(sessionA, mapOf("type" to "REGISTER", "name" to "Alice", "email" to "old@example.com"))
+        messagesA.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesA.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+
+        send(sessionB, mapOf("type" to "REGISTER", "name" to "Bob"))
+        messagesB.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesB.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesB.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Bob
+        messagesB.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Alice
+
+        send(sessionC, mapOf("type" to "REGISTER", "name" to "Carol"))
+        messagesC.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesC.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesC.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Carol
+        messagesB.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Carol
+        messagesC.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Alice
+        messagesC.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Bob
+
+        send(sessionD, mapOf("type" to "REGISTER", "name" to "Dave"))
+        messagesD.poll(2, TimeUnit.SECONDS) // REGISTERED
+        messagesD.poll(2, TimeUnit.SECONDS) // PEERS
+        messagesD.poll(2, TimeUnit.SECONDS) // PREVIOUS_PEERS
+        messagesA.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Dave
+        messagesB.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Dave
+        messagesC.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Dave
+        messagesD.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Alice
+        messagesD.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Bob
+        messagesD.poll(2, TimeUnit.SECONDS) // PEER_JOINED for Carol
+
+        // Alice shares with Bob and Carol, but not Dave
+        send(sessionA, mapOf("type" to "SHARE_EMAIL", "targetPeerId" to "fan-out-b"))
+        messagesB.poll(2, TimeUnit.SECONDS) // EMAIL_SHARED
+        send(sessionA, mapOf("type" to "SHARE_EMAIL", "targetPeerId" to "fan-out-c"))
+        messagesC.poll(2, TimeUnit.SECONDS) // EMAIL_SHARED
+
+        // Alice updates her email
+        send(sessionA, mapOf("type" to "UPDATE_EMAIL", "email" to "new@example.com"))
+
+        // Bob and Carol each receive the updated email
+        val bobReceived = messagesB.poll(2, TimeUnit.SECONDS)
+        assertEquals("EMAIL_SHARED", bobReceived?.get("type"))
+        assertEquals("fan-out-a", bobReceived?.get("fromPeerId"))
+        assertEquals("new@example.com", bobReceived?.get("email"))
+
+        val carolReceived = messagesC.poll(2, TimeUnit.SECONDS)
+        assertEquals("EMAIL_SHARED", carolReceived?.get("type"))
+        assertEquals("fan-out-a", carolReceived?.get("fromPeerId"))
+        assertEquals("new@example.com", carolReceived?.get("email"))
+
+        // Dave receives nothing
+        assertNull(messagesD.poll(500, TimeUnit.MILLISECONDS))
+
+        sessionA.close()
+        sessionB.close()
+        sessionC.close()
+        sessionD.close()
+    }
 }

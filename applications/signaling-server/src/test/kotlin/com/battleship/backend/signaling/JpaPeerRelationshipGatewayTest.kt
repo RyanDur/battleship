@@ -209,4 +209,30 @@ class JpaPeerRelationshipGatewayTest {
 
         assertNull(gateway.findPeerEmail("bob", "alice"))
     }
+
+    @Test
+    fun `findSharingReceivers returns all peers the sharer is sharing with`() {
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
+
+        gateway.addSharing("alice", "bob")
+        gateway.addSharing("alice", "carol")
+
+        assertEquals(setOf("bob", "carol"), gateway.findSharingReceivers("alice").toSet())
+    }
+
+    @Test
+    fun `findSharingReceivers returns empty when sharer has no active sharing`() {
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
+
+        assertEquals(emptyList<String>(), gateway.findSharingReceivers("alice"))
+    }
+
+    @Test
+    fun `findSharingReceivers does not include peers who share with the sharer`() {
+        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
+
+        gateway.addSharing("bob", "alice")
+
+        assertEquals(emptyList<String>(), gateway.findSharingReceivers("alice"))
+    }
 }

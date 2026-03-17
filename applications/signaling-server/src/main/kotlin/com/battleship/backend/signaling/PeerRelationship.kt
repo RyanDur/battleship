@@ -67,6 +67,7 @@ class SharedEmailPermission(
 @Repository
 interface SharedEmailPermissionJpaRepository : JpaRepository<SharedEmailPermission, Long> {
     fun findBySharerPeerIdAndReceiverPeerId(sharerPeerId: String, receiverPeerId: String): SharedEmailPermission?
+    fun findBySharerPeerId(sharerPeerId: String): List<SharedEmailPermission>
 }
 
 @Entity
@@ -143,6 +144,9 @@ class JpaPeerRelationshipGateway(
 
     override fun hasSharing(sharerPeerId: String, receiverPeerId: String): Boolean =
         sharingRepo.findBySharerPeerIdAndReceiverPeerId(sharerPeerId, receiverPeerId) != null
+
+    override fun findSharingReceivers(sharerPeerId: String): List<String> =
+        sharingRepo.findBySharerPeerId(sharerPeerId).map { it.receiverPeerId }
 
     override fun savePeerEmail(saverId: String, targetPeerId: String, email: String) {
         val existing = savedPeerEmailRepo.findBySaverIdAndTargetPeerId(saverId, targetPeerId)
