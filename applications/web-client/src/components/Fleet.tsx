@@ -123,7 +123,7 @@ export const Fleet = () => {
 
   return (
     <nav className="hud-fleet" aria-label="Fleet">
-      <details open>
+      <details className="fleet-details" open>
         <summary className="fleet-summary">
           Fleet <output className="fleet-count" aria-live="polite">{summary}</output>
         </summary>
@@ -131,7 +131,7 @@ export const Fleet = () => {
         {peers.length > 0 && (
           <section className="fleet-section" aria-labelledby="fleet-connected">
             <h2 className="fleet-section-heading" id="fleet-connected">Connected</h2>
-            <ul>
+            <ul aria-label="Connected peers">
               {peers.map(peer => (
                 <li key={peer.id}>
                   <PeerCard
@@ -175,7 +175,7 @@ export const Fleet = () => {
         {pendingIntroductions.length > 0 && (
           <section className="fleet-section" aria-labelledby="fleet-introductions">
             <h2 className="fleet-section-heading" id="fleet-introductions">Introductions</h2>
-            <ul>
+            <ul aria-label="Introductions">
               {pendingIntroductions.map(intro => (
                 <li key={intro.introId}>
                   {intro.from} wants to introduce you to {intro.peer}
