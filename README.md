@@ -9,19 +9,18 @@ The project follows the [App Continuum](https://www.appcontinuum.io/) style — 
 ```
 battleship/
 ├── applications/
-│   ├── signaling-server/      # Kotlin Spring Boot — health endpoint only
+│   ├── signaling-server/      # Kotlin Spring Boot — signaling relay + health
 │   └── web-client/            # React + Vite + TypeScript — browser UI
 ├── components/
-│   └── signaling-protocol/    # Kotlin — Result type
-├── databases/                 # (empty — no persistence yet)
+│   └── signaling-protocol/    # Kotlin — Result type (ROP)
 └── docs/                      # Architecture diagrams
 ```
 
-- **signaling-server** — runs locally on each player's machine, provides health/heartbeat endpoint for service status
-- **web-client** — hosted on GitHub Pages, manages direct P2P connections via WebRTC
-- **signaling-protocol** — shared Kotlin Result type
+- **signaling-server** — runs locally on each player's machine. WebSocket signaling relay for peer discovery, SDP exchange, and email sharing. Health/heartbeat endpoint for service status. H2 database for peer relationships and name/email persistence. Packaged as a native installer (dmg, msi, deb) via jpackage.
+- **web-client** — hosted on GitHub Pages. Manages P2P connections via WebRTC, with signaling mediated through the server. Chat, trust, and introductions flow over direct data channels.
+- **signaling-protocol** — shared Kotlin Result type (Railway Oriented Programming)
 
-The web client maintains its own TypeScript types (Result, Maybe, AsyncResult). This is intentional — the browser is a separate bounded context with its own technology stack. No shared code across the Kotlin/TypeScript boundary. P2P connections are established without a signaling server — SDP is exchanged out-of-band via encrypted connection codes.
+The web client maintains its own TypeScript types (Result, Maybe, AsyncResult). This is intentional — the browser is a separate bounded context with its own technology stack. No shared code across the Kotlin/TypeScript boundary.
 
 See [docs/architecture.md](docs/architecture.md) for detailed diagrams and connection flow.
 
@@ -181,7 +180,8 @@ npm run e2e
 | Frontend | React 19, Vite 7, TypeScript 5.9, Vitest 4, Playwright |
 | Backend | Kotlin 2.3.10, Spring Boot 3.4.1, JVM 21 |
 | Decoding | schemawax (TypeScript) |
-| Networking | WebSocket (health), WebRTC (P2P data channels) |
+| Networking | WebSocket (signaling + health), WebRTC (P2P data channels) |
+| Persistence | H2 (peer relationships, names, emails) |
 | Crypto | Web Crypto API (PBKDF2 → AES-GCM), CompressionStream |
 | CI/CD | GitHub Actions, GitHub Pages, GitHub Releases |
 | Build | Gradle 9.4 (Kotlin), npm (TypeScript) |

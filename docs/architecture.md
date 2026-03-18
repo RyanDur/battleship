@@ -6,9 +6,14 @@
 graph TB
     subgraph "applications/signaling-server"
         direction TB
-        WC[WebSocketConfig] --> HH[HealthHandler]
+        SC[SessionController] --> PR[PeerRegistry]
+        WC[WebSocketConfig] --> SH[SignalingHandler]
+        WC --> HH[HealthHandler]
+        SH --> PR
+        SH --> PRG[PeerRelationshipGateway]
         ES["@EnableScheduling"] -.->|drives| HH
-        HC[HealthController]
+        CC[CorsConfig]
+        QH[MacOsQuitHandlerRegistrar]
     end
 
     subgraph "components/signaling-protocol"
@@ -21,7 +26,6 @@ graph TB
             APP[App] --> SHC[ServiceHealth]
             APP --> DL[DownloadLink]
             APP --> CONN[Connections]
-            CS[ConnectionStatus]
         end
         subgraph "State"
             CP[ConnectionProvider]
@@ -30,12 +34,15 @@ graph TB
             UCH[useConnection hooks]
         end
         subgraph "Protocol"
+            SIG[Signaling Client]
             HB[startHeartbeat]
-            PH[PeerHandler]
-            CC[ConnectionCode]
+            COD[ConnectionCode]
             CFG[Config Loader]
             DLProto[Download Protocol]
             WT[PeerCommand / PeerEvent]
+        end
+        subgraph "Handler"
+            PH[connection.handler]
         end
         subgraph "Types"
             RS[Result / Maybe / AsyncResult]
@@ -46,19 +53,26 @@ graph TB
     APP -.->|calls| HB
     HB -.->|connects to| HH
     DL -.->|uses| DLProto
-    HB -.->|uses| RS
     CONN -.->|uses| UCH
     UCH -.->|reads| CP
     CP -.->|wraps| CST
     CST -.->|dispatches to| RED
     CST -.->|delegates to| PH
+    CST -.->|connects to| SIG
+    SIG -.->|WebSocket| SH
     PH -.->|uses| WT
-    PH -.->|encrypts via| CC
+    PH -.->|encrypts via| COD
+    SH -.->|uses| RT
 
-    style HC fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style SC fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style SH fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style PR fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style PRG fill:#2e7d32,stroke:#1b5e20,color:#fff
     style HH fill:#2e7d32,stroke:#1b5e20,color:#fff
     style WC fill:#2e7d32,stroke:#1b5e20,color:#fff
     style ES fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style CC fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style QH fill:#2e7d32,stroke:#1b5e20,color:#fff
     style RT fill:#2e7d32,stroke:#1b5e20,color:#fff
     style APP fill:#2e7d32,stroke:#1b5e20,color:#fff
     style SHC fill:#2e7d32,stroke:#1b5e20,color:#fff
@@ -68,12 +82,12 @@ graph TB
     style CST fill:#2e7d32,stroke:#1b5e20,color:#fff
     style RED fill:#2e7d32,stroke:#1b5e20,color:#fff
     style UCH fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style SIG fill:#2e7d32,stroke:#1b5e20,color:#fff
     style HB fill:#2e7d32,stroke:#1b5e20,color:#fff
     style RS fill:#2e7d32,stroke:#1b5e20,color:#fff
     style PH fill:#2e7d32,stroke:#1b5e20,color:#fff
-    style CC fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style COD fill:#2e7d32,stroke:#1b5e20,color:#fff
     style CFG fill:#2e7d32,stroke:#1b5e20,color:#fff
-    style CS fill:#2e7d32,stroke:#1b5e20,color:#fff
     style WT fill:#2e7d32,stroke:#1b5e20,color:#fff
     style PL fill:#2e7d32,stroke:#1b5e20,color:#fff
     style DLProto fill:#2e7d32,stroke:#1b5e20,color:#fff
@@ -81,34 +95,92 @@ graph TB
 
 | Node | Description |
 |------|-------------|
-| HealthController | `GET /health` — HTTP readiness probe |
-| HealthHandler | `WS /ws/health` — heartbeat every N ms |
-| WebSocketConfig | Origin validation, registers health handler |
-| Result | `map` / `andThen` / `or` / `either` / `mapEither` (Kotlin) |
+| SessionController | `GET /session` — assigns persistent `peerId` cookie |
+| SignalingHandler | `WS /ws/signaling` — routes 10 message types for peer discovery, SDP relay, email sharing |
+| PeerRegistry | In-memory peer-to-session map with relationship persistence |
+| PeerRelationshipGateway | JPA interface — 6 entities: relationships, names, emails, sharing permissions, forgotten pairs, saved emails |
+| HealthHandler | `WS /ws/health` — heartbeat every N ms with version |
+| WebSocketConfig | Origin validation, registers signaling + health handlers, peerId interceptor |
+| CorsConfig | Global CORS — configured origins, credentials enabled |
+| MacOsQuitHandlerRegistrar | Listens for macOS dock quit, gracefully closes Spring context |
+| Result | `map` / `andThen` / `or` / `either` / `mapEither` / `tryCatch` (Kotlin) |
 | App | Loads runtime config, lifts heartbeat state, derives download action |
 | ServiceHealth | Display component — online / reconnecting / offline |
 | DownloadLink | Download / Upgrade / hidden — GitHub API asset lookup |
-| Connections | Create/join offers, peer list with trust/introduce/disconnect, pending introductions |
+| Connections | Peer list with connect, trust, introduce, disconnect, chat |
 | ConnectionProvider | React context provider wrapping connectionStore |
-| connectionStore | Zustand-style store — delegates commands to PeerHandler, exposes state |
-| connections reducer | Pure reducer — peers, flow, pending introductions |
+| connectionStore | Custom store — middleware, listener factories, dispatches to reducer and handler |
+| connections reducer | Pure reducer — peers, flow, messages, introductions, online/previous peers, ICE health |
 | useConnection hooks | `useConnectionStore()` and `useConnectionState(selector)` for components |
+| Signaling Client | WebSocket client for `/ws/signaling` — decodes server events, sends commands |
 | startHeartbeat | WebSocket state machine with reconnect + retry |
-| PeerHandler | Multi-peer WebRTC manager — connections, data channels, trust, introductions with SDP relay |
+| connection.handler | Multi-peer WebRTC manager — RTCPeerConnection, data channels, trust, introductions, chat, ICE restart |
 | ConnectionCode | Compress (deflate-raw) + encrypt (PBKDF2 → AES-GCM) SDP to base64url codes |
 | Config Loader | Fetches `config.json` at runtime (12-factor V) |
-| ConnectionStatus | UI component (not yet wired) |
 | Download Protocol | GitHub API + schemawax decoder |
-| PeerCommand / PeerEvent | Typed message protocol with peer IDs |
+| PeerCommand / PeerEvent | Typed message protocol — 14 commands, 16 events |
 | Result / Maybe / AsyncResult | Frozen immutable types (TypeScript) |
 | Platform Detection | macOS / Windows / Linux |
 
-> **Status (post Iteration 4):** Backend serves health endpoints only — signaling relay removed. Frontend has full P2P connection management: multi-peer WebRTC handler, encrypted connection codes (Web Crypto), trust model (grant/revoke per peer), peer introductions with SDP relay through a mutual trusted peer, resource cleanup on cancel/decline/expire/disconnect. UI includes create/join flow, peer list with trust/introduce/disconnect controls, and pending introduction notifications. State managed via context provider, store, and pure reducer with React hooks.
+> **Status (post Iteration 6):** Backend provides full signaling relay (peer discovery, SDP exchange, ICE restart relay, email sharing) with H2 persistence for peer relationships. Frontend has complete P2P connection management: server-mediated WebRTC negotiation, multi-peer data channels, trust model, peer introductions, real-time chat, and ICE restart resilience. Native installers (dmg, msi, deb) with macOS dock quit support.
 > Green = implemented and tested.
 
 ---
 
-## Connection Flow
+## Server-Mediated Connection Flow
+
+```mermaid
+sequenceDiagram
+    participant A as Alice
+    participant S as Signaling Server
+    participant B as Bob
+
+    Note over A, S: 1. Both peers register with the server
+
+    A->>S: REGISTER {name: "Alice"}
+    S->>A: REGISTERED {peerId}
+    S->>A: PEERS {online peers}
+    S->>A: PREVIOUS_PEERS {known peers from history}
+
+    B->>S: REGISTER {name: "Bob"}
+    S->>B: REGISTERED {peerId}
+    S->>B: PEERS
+    S->>B: PREVIOUS_PEERS
+    S->>A: PEER_JOINED {Bob}
+
+    Note over A, B: 2. Alice initiates a connection to Bob
+
+    A->>A: RTCPeerConnection + createDataChannel
+    A->>A: createOffer, gather ICE, full SDP
+    A->>S: RELAY_OFFER {targetPeerId: Bob, sdp}
+    S->>B: OFFER_RECEIVED {fromPeerId: Alice, sdp}
+
+    Note over A, B: 3. Bob accepts, answers via server
+
+    B->>B: RTCPeerConnection + setRemoteDescription
+    B->>B: createAnswer, gather ICE, full SDP
+    B->>S: RELAY_ANSWER {targetPeerId: Alice, sdp}
+    S->>A: ANSWER_RECEIVED {fromPeerId: Bob, sdp}
+
+    Note over A, B: 4. Direct P2P data channel established
+
+    A->>A: setRemoteDescription
+    A->>B: WebRTC Data Channel open
+    B->>A: WebRTC Data Channel open
+
+    Note over A, B: Chat, trust, and introductions flow over the data channel (P2P)
+```
+
+> **Key design decisions:**
+> - Signaling server relays SDP but never sees the data channel traffic
+> - ICE candidates fully gathered before surfacing SDP (no trickle ICE)
+> - Server persists peer relationships so previously-connected peers appear on reconnect
+> - Data channel `onopen`/`onclose` drives `PEER_CONNECTED`/`PEER_DISCONNECTED` (not ICE state)
+> - Handler supports 0-to-many simultaneous connections, each identified by `peerId`
+
+---
+
+## Direct Connection Flow (Copy/Paste)
 
 ```mermaid
 sequenceDiagram
@@ -150,18 +222,12 @@ sequenceDiagram
 
     A->>B: WebRTC Data Channel established
     B->>A: WebRTC Data Channel established
-
-    A-->>A: PEER_CONNECTED
-    B-->>B: PEER_CONNECTED
 ```
 
 > **Key design decisions:**
-> - No signaling server between peers — SDP exchanged via copy/paste (out-of-band)
-> - ICE candidates fully gathered before surfacing SDP (no trickle ICE)
+> - No signaling server needed — SDP exchanged via copy/paste (out-of-band)
 > - Connection codes compressed + encrypted with shared passphrase (PBKDF2 → AES-GCM)
 > - Wrong passphrase produces a clear `DECRYPT_FAILED` error
-> - Data channel `onopen`/`onclose` drives `PEER_CONNECTED`/`PEER_DISCONNECTED` (not ICE state)
-> - Handler supports 0-to-many simultaneous connections, each identified by `peerId`
 
 ---
 
@@ -207,6 +273,37 @@ sequenceDiagram
 
 ---
 
+## ICE Restart Flow
+
+When an established connection becomes unstable (ICE state `disconnected` or `failed`), the offerer automatically attempts recovery.
+
+```mermaid
+sequenceDiagram
+    participant A as Offerer (Alice)
+    participant S as Signaling Server
+    participant B as Answerer (Bob)
+
+    Note over A: ICE state → disconnected/failed
+
+    A->>A: restartIce() + createOffer({iceRestart: true})
+    A->>S: RELAY_ICE_RESTART {targetPeerId: Bob, sdp}
+    S->>B: ICE_RESTART_RECEIVED {fromPeerId: Alice, sdp}
+    B->>B: setRemoteDescription + createAnswer
+    B->>S: RELAY_ICE_RESTART_ANSWER {targetPeerId: Alice, sdp}
+    S->>A: ICE_RESTART_ANSWER_RECEIVED {fromPeerId: Bob, sdp}
+    A->>A: setRemoteDescription
+
+    Note over A, B: Connection re-established (or retry up to 3 times)
+```
+
+> **Key design decisions:**
+> - Only the offerer initiates ICE restart (avoids glare)
+> - Up to 3 automatic retries before giving up with `PEER_DISCONNECTED`
+> - ICE restart SDP relayed through the signaling server (data channel may be broken)
+> - `peerConnectionHealth` state tracks `stable` / `unstable` per peer
+
+---
+
 ## Security
 
 ```mermaid
@@ -214,10 +311,11 @@ graph TD
     subgraph "Security Layers"
         O[Origin Validation<br/>Only GH Pages + localhost]
         B[Backend binds 127.0.0.1<br/>Not accessible externally]
+        S[Session Cookie<br/>HttpOnly, Secure, SameSite=None]
         E[Connection Codes Encrypted<br/>PBKDF2 + AES-GCM<br/>Wrong passphrase = clear failure]
-        D[Data Channel Only<br/>No server relay<br/>Direct peer-to-peer]
+        D[Data Channel Only<br/>No server relay for chat/trust<br/>Direct peer-to-peer]
         G[Game Integrity<br/>Never send ship positions<br/>Only hit/miss responses]
     end
 
-    O --> B --> E --> D --> G
+    O --> B --> S --> E --> D --> G
 ```
