@@ -3,14 +3,26 @@
 .hud-root {
   display: grid;
   grid-template-rows: auto 1fr auto;
+  grid-template-columns: 280px 1fr;
   grid-template-areas:
-    "header"
-    "main"
-    "footer";
+    "header  header"
+    "fleet   main"
+    "footer  footer";
   min-height: 100dvh;
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
+}
+
+@media (max-width: 767px) {
+  .hud-root {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "fleet"
+      "main"
+      "footer";
+  }
 }
 
 .hud-header {
@@ -46,6 +58,102 @@
   padding: var(--space-xs) var(--space-lg);
   border-top: 1px solid var(--color-border);
   background-color: var(--color-surface);
+}
+
+/* ── Fleet panel ─────────────────────────────────────────────────────────── */
+
+.hud-fleet {
+  grid-area: fleet;
+  border-right: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  overflow-y: auto;
+}
+
+.fleet-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  list-style: none;
+  user-select: none;
+}
+
+.fleet-summary::-webkit-details-marker {
+  display: none;
+}
+
+details[open] .fleet-summary {
+  color: var(--color-accent);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.fleet-count {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.fleet-section {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.fleet-section h2 {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-sm);
+}
+
+.fleet-peer-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  padding: var(--space-xs) 0;
+}
+
+.fleet-peer-name {
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.fleet-peer-trust {
+  color: var(--color-warning);
+  font-style: normal;
+  cursor: default;
+}
+
+.fleet-peer-health {
+  font-size: 0.7rem;
+  color: var(--color-warning);
+  letter-spacing: 0.05em;
+}
+
+.fleet-peer-status {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Direct connect (footer) ─────────────────────────────────────────────── */
+
+.direct-connect {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.direct-connect p {
+  margin: 0;
+  font-size: 0.8rem;
 }
 
 /* ── Service health (live region in header) ─────────────────────────────── */
