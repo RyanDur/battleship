@@ -9,7 +9,7 @@ import type {ConnectionFlow} from '../state/connections';
 import {serverOfferReceived, serverAnswerReceived, previousPeersReceived, reconnectViaServer, onlinePeersUpdated, createOffer, joinOffer, acceptAnswerCode} from '../state/connectionActions';
 import {selectFlow, selectPeers, selectPreviousPeers} from '../state/connectionSelectors';
 
-describe('Connections integration', () => {
+describe('Fleet integration', () => {
   it('reconnecting to a previous peer removes them from previous peers list', async () => {
     const factory = createFakePeerConnectionFactory();
 
