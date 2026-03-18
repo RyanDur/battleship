@@ -1,5 +1,6 @@
 package com.battleship.backend.signaling
 
+import com.battleship.shared.tryCatch
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.springframework.stereotype.Component
@@ -140,16 +141,13 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         registry.savePeerEmail(peerId, targetPeerId, email)
     }
 
-    private fun send(session: WebSocketSession, payload: Map<String, Any>) {
-        if (session.isOpen) {
-            session.sendMessage(TextMessage(mapper.writeValueAsString(payload)))
-        }
-    }
+    private fun send(session: WebSocketSession, payload: Map<String, Any>) =
+        tryCatch({ if (session.isOpen) session.sendMessage(TextMessage(mapper.writeValueAsString(payload))) }) { it }
 
     private fun broadcast(payload: Map<String, Any>, excludePeerId: String) {
         val msg = TextMessage(mapper.writeValueAsString(payload))
         peerToSession.entries
-            .filter { it.key != excludePeerId && it.value.isOpen }
-            .forEach { it.value.sendMessage(msg) }
+            .filter { it.key != excludePeerId }
+            .forEach { tryCatch({ if (it.value.isOpen) it.value.sendMessage(msg) }) { it } }
     }
 }
