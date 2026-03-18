@@ -130,7 +130,7 @@ export const Fleet = () => {
 
         {peers.length > 0 && (
           <section className="fleet-section" aria-labelledby="fleet-connected">
-            <h2 id="fleet-connected">Connected</h2>
+            <h2 className="fleet-section-heading" id="fleet-connected">Connected</h2>
             <ul>
               {peers.map(peer => (
                 <li key={peer.id}>
@@ -147,7 +147,7 @@ export const Fleet = () => {
 
         {onlinePeers.length > 0 && (
           <section className="fleet-section" aria-labelledby="fleet-online">
-            <h2 id="fleet-online">Online</h2>
+            <h2 className="fleet-section-heading" id="fleet-online">Online</h2>
             <ul aria-label="Online peers">
               {onlinePeers.map(peer => (
                 <li key={peer.peerId}>
@@ -161,7 +161,7 @@ export const Fleet = () => {
 
         {previousPeers.length > 0 && (
           <section className="fleet-section" aria-labelledby="fleet-previous">
-            <h2 id="fleet-previous">Previous</h2>
+            <h2 className="fleet-section-heading" id="fleet-previous">Previous</h2>
             <ul aria-label="Previous peers">
               {previousPeers.map(peer => (
                 <li key={peer.peerId}>
@@ -174,7 +174,7 @@ export const Fleet = () => {
 
         {pendingIntroductions.length > 0 && (
           <section className="fleet-section" aria-labelledby="fleet-introductions">
-            <h2 id="fleet-introductions">Introductions</h2>
+            <h2 className="fleet-section-heading" id="fleet-introductions">Introductions</h2>
             <ul>
               {pendingIntroductions.map(intro => (
                 <li key={intro.introId}>

@@ -103,7 +103,7 @@ details[open] .fleet-summary {
   border-bottom: 1px solid var(--color-border);
 }
 
-.fleet-section h2 {
+.fleet-section-heading {
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -151,7 +151,7 @@ details[open] .fleet-summary {
   flex: 1;
 }
 
-.direct-connect p {
+.direct-connect-label {
   margin: 0;
   font-size: 0.8rem;
 }

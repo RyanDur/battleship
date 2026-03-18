@@ -38,7 +38,7 @@ export const DirectConnect = ({serviceOnline}: Props) => {
   if (flow.phase === 'offer-ready') {
     return (
       <section className="direct-connect">
-        <p>Share this code with the other person:</p>
+        <p className="direct-connect-label">Share this code with the other person:</p>
         <code>{flow.code}</code>
         <form onSubmit={e => { e.preventDefault(); store.dispatch(acceptAnswerCode(responseCode)); }}>
           <label htmlFor="response-code">Response code</label>
@@ -57,7 +57,7 @@ export const DirectConnect = ({serviceOnline}: Props) => {
   if (flow.phase === 'answer-ready') {
     return (
       <section className="direct-connect">
-        <p>Share this response code with the other person:</p>
+        <p className="direct-connect-label">Share this response code with the other person:</p>
         <code>{flow.code}</code>
       </section>
     );
@@ -66,7 +66,7 @@ export const DirectConnect = ({serviceOnline}: Props) => {
   if (flow.phase === 'offer-failed') {
     return (
       <section className="direct-connect">
-        <p>Failed to generate a code. Please try again.</p>
+        <p className="direct-connect-label">Failed to generate a code. Please try again.</p>
         <button className="control" onClick={() => store.dispatch(cancelOffer())}>Cancel</button>
       </section>
     );
@@ -75,7 +75,7 @@ export const DirectConnect = ({serviceOnline}: Props) => {
   if (flow.phase === 'creating' || flow.phase === 'joining') {
     return (
       <section className="direct-connect">
-        <p>Generating...</p>
+        <p className="direct-connect-label">Generating...</p>
       </section>
     );
   }
