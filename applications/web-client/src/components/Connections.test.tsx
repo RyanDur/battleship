@@ -76,11 +76,11 @@ describe('Connections', () => {
     await waitFor(() => expect(screen.getByLabelText(/response code/i)).toBeInTheDocument());
 
     await user.type(screen.getByLabelText(/response code/i), 'some-response-code');
-    await user.click(screen.getByRole('button', {name: /connect/i}));
+    await user.click(screen.getByRole('button', {name: /accept/i}));
 
     // acceptAnswer decodes and forwards to handler — flow stays offer-ready at store level
     // verify no errors thrown and the button interaction completed
-    expect(screen.getByRole('button', {name: /connect/i})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: /accept/i})).toBeInTheDocument();
   });
 
   it('clicking Join shows passphrase and offer code inputs', async () => {

@@ -121,7 +121,7 @@ export const Connections = ({serviceOnline}: Props) => {
               value={responseCode}
               onChange={e => setResponseCode(e.target.value)}
             />
-            <button onClick={() => store.dispatch(acceptAnswerCode(responseCode))}>Connect</button>
+            <button onClick={() => store.dispatch(acceptAnswerCode(responseCode))}>Accept</button>
           </div>
         </div>
       );
