@@ -22,7 +22,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-latest
+          - os: macos-14
             artifact: "*.dmg"
             type: dmg
           - os: windows-latest
@@ -84,7 +84,8 @@ jobs:
             --app-version "$APP_VERSION" \
             --type ${{ matrix.type }} \
             --dest build/jpackage \
-            --java-options "-Xmx256m"
+            --java-options "-Xmx256m" \
+            --java-options "-Djava.awt.headless=false"
         env:
           TAG: ${{ github.event.workflow_run.head_branch }}
 
