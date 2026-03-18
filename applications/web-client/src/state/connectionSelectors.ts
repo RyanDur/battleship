@@ -16,3 +16,5 @@ export const selectIntroConnections = (state: ConnectionsState) => state.handler
 
 export const selectIsCreatingOffer = (state: ConnectionsState) =>
   state.flow.phase === 'creating' || state.flow.phase === 'encoding-offer';
+
+export const selectMessages = (state: ConnectionsState) => state.messages;

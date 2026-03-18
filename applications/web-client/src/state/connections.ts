@@ -25,9 +25,12 @@ export type HandlerState = {
   introConnections: Record<string, string>
 }
 
+export type Message = {peerId: string; text: string; fromSelf: boolean}
+
 export type ConnectionsState = {
   flow: ConnectionFlow
   peers: Peer[]
+  messages: Message[]
   pendingIntroductions: PendingIntroduction[]
   onlinePeers: OnlinePeer[]
   previousPeers: PreviousPeer[]
@@ -91,6 +94,8 @@ export type ConnectionsAction =
   | {type: 'STOP_SHARING_EMAIL'; targetPeerId: string}
   | {type: 'UPDATE_EMAIL'; email: string}
   | {type: 'SAVE_PEER_EMAIL'; peerId: string; email: string}
+  | {type: 'MESSAGE_RECEIVED'; peerId: string; text: string}
+  | {type: 'SEND_MESSAGE'; peerId: string; text: string}
 
 const handlerInitialState: HandlerState = {
   signalingToPeer: {},
@@ -104,6 +109,7 @@ const handlerInitialState: HandlerState = {
 export const initialState: ConnectionsState = {
   flow: {phase: 'idle'},
   peers: [],
+  messages: [],
   pendingIntroductions: [],
   onlinePeers: [],
   previousPeers: [],
@@ -266,6 +272,12 @@ const coreConnectionsReducer = (state: ConnectionsState, action: ConnectionsActi
 
     case 'SAVE_PEER_EMAIL':
       return {...state, previousPeers: state.previousPeers.map(p => p.peerId === action.peerId ? {...p, email: action.email} : p)};
+
+    case 'MESSAGE_RECEIVED':
+      return {...state, messages: [...state.messages, {peerId: action.peerId, text: action.text, fromSelf: false}]};
+
+    case 'SEND_MESSAGE':
+      return {...state, messages: [...state.messages, {peerId: action.peerId, text: action.text, fromSelf: true}]};
 
     case 'PEER_CONNECTION_UNSTABLE':
       return {...state, peerConnectionHealth: {...state.peerConnectionHealth, [action.peerId]: 'unstable'}};

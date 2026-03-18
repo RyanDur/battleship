@@ -65,3 +65,6 @@ export const shareEmail = (targetPeerId: string) => ({type: 'SHARE_EMAIL' as con
 export const stopSharingEmail = (targetPeerId: string) => ({type: 'STOP_SHARING_EMAIL' as const, targetPeerId});
 export const updateEmail = (email: string) => ({type: 'UPDATE_EMAIL' as const, email});
 export const savePeerEmail = (peerId: string, email: string) => ({type: 'SAVE_PEER_EMAIL' as const, peerId, email});
+
+export const messageReceived = (peerId: string, text: string) => ({type: 'MESSAGE_RECEIVED' as const, peerId, text});
+export const sendMessage = (peerId: string, text: string) => ({type: 'SEND_MESSAGE' as const, peerId, text});
