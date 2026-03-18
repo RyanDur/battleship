@@ -40,7 +40,7 @@ export const DownloadLink = ({platform, action, fetchDownloadUrl}: DownloadLinkP
 
   return (
     <>
-      <a href={href}>{LABEL[action][platform]}</a>
+      <a className="nav-link" href={href}>{LABEL[action][platform]}</a>
       {platform === 'macos' && (
         <p>macOS will block the app on first launch. Go to System Settings → Privacy & Security and click Open Anyway.</p>
       )}
