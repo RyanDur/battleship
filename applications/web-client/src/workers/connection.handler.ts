@@ -66,11 +66,13 @@ type Handler = {
 
 const generatePeerId = (): string => crypto.randomUUID();
 
+const ICE_GATHER_TIMEOUT_MS = 5000;
+
 const gatherIceCandidates = (pc: RTCPeerConnection): Promise<string | undefined> =>
   new Promise((resolve) => {
     const checkComplete = () => resolve(pc.localDescription?.sdp);
     if (pc.iceGatheringState === 'complete') { checkComplete(); return; }
-    const timeoutId = setTimeout(checkComplete, 5000);
+    const timeoutId = setTimeout(checkComplete, ICE_GATHER_TIMEOUT_MS);
     pc.onicecandidate = ({ candidate }) => {
       if (candidate === null) { clearTimeout(timeoutId); checkComplete(); }
     };
@@ -114,7 +116,10 @@ const acceptOfferSdp = (pc: RTCPeerConnection, peerId: string, name: string, emi
 
 const negotiateOffer = (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void, cbs: ChannelCallbacks) =>
   createOfferSdp(pc, peerId, name, emit, cbs)
-    .onSuccess(sdp => { if (sdp) emit({ type: 'OFFER_CREATED', peerId, sdp }); })
+    .onSuccess(sdp => {
+      if (sdp) emit({ type: 'OFFER_CREATED', peerId, sdp });
+      else emit({ type: 'ERROR', message: 'ICE gathering timed out' });
+    })
     .onFailure(err => emit({ type: 'ERROR', message: err.message }));
 
 const negotiateAnswer = (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void, remoteSdp: string, cbs: ChannelCallbacks) =>

@@ -227,6 +227,38 @@ describe('createHandlerMiddleware (store)', () => {
     await vi.waitFor(() => expect(selectFlow(store.getState()).phase).toBe('offer-failed'));
   });
 
+  it('CREATE_OFFER transitions to offer-failed when ICE gathering times out with no candidates', async () => {
+    vi.useFakeTimers();
+    try {
+      const hangingPc = {
+        iceGatheringState: 'gathering',
+        localDescription: null,
+        onicecandidate: null,
+        ondatachannel: null,
+        createDataChannel: () => ({onopen: null, onclose: null, onmessage: null, send: () => {}, close: () => {}}),
+        createOffer: async () => ({type: 'offer' as const, sdp: 'fake-offer'}),
+        createAnswer: async () => ({type: 'answer' as const, sdp: ''}),
+        setLocalDescription: async () => {
+          // localDescription stays null — never fires onicecandidate
+        },
+        setRemoteDescription: async () => {},
+        close: () => {},
+      } as unknown as RTCPeerConnection;
+
+      const store = createConnectionStore(
+        applyMiddleware([encodingMiddleware, codecMiddleware]),
+        [createHandlerListener({name: 'Player', createPeerConnection: () => hangingPc})],
+      );
+
+      store.dispatch(createOffer('secret'));
+      await vi.advanceTimersByTimeAsync(5001);
+
+      expect(selectFlow(store.getState()).phase).toBe('offer-failed');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('full offer/answer handshake connects both stores', async () => {
     const factory = createFakePeerConnectionFactory();
 
