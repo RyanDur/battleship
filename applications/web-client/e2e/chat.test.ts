@@ -40,7 +40,7 @@ test('connected peers can send and receive chat messages', async ({browser}) => 
   await connectPeers(alice, bob);
 
   // Alice sends a message
-  await alice.getByLabel('Message').fill('Hello Bob!');
+  await alice.getByLabel('Message', {exact: true}).fill('Hello Bob!');
   await alice.getByRole('button', {name: 'Send'}).click();
 
   // Both peers see Alice's message
@@ -48,7 +48,7 @@ test('connected peers can send and receive chat messages', async ({browser}) => 
   await expect(bob.getByText('Hello Bob!')).toBeVisible({timeout: 5_000});
 
   // Bob replies
-  await bob.getByLabel('Message').fill('Hello Alice!');
+  await bob.getByLabel('Message', {exact: true}).fill('Hello Alice!');
   await bob.getByRole('button', {name: 'Send'}).click();
 
   // Both peers see Bob's reply
