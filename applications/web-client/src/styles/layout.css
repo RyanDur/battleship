@@ -123,6 +123,12 @@
 .fleet-peer-name {
   font-size: 0.85rem;
   flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .fleet-peer-trust {
@@ -220,8 +226,13 @@
   font-size: 0.85rem;
 }
 
-.comms-message--sent {
-  color: var(--color-accent);
+.comms-last-message {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .comms-form {

@@ -52,6 +52,14 @@ html {
   letter-spacing: 0.06em;
 }
 
+.sent {
+  color: var(--color-accent);
+}
+
+.received {
+  color: var(--color-text);
+}
+
 /* ── Control (interactive button) ───────────────────────────────────────── */
 
 .control {
