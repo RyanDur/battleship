@@ -55,7 +55,7 @@
   display: block;
 }
 
-.service-health p {
+.service-health-status {
   margin: 0;
   font-size: 0.75rem;
   letter-spacing: 0.08em;
