@@ -47,20 +47,20 @@ const App = () => {
 
   return (
     <>
-      <header>
-        <h1>Battleship</h1>
+      <header className="hud-header">
+        <h1 className="hud-title">Battleship</h1>
         <ServiceHealth state={heartbeat} onRetry={retry}/>
         <DownloadLink platform={platform} action={actionFor(heartbeat)} fetchDownloadUrl={fetchDownloadUrl}/>
       </header>
-      <main>
+      <main className="hud-main">
         {store && (
           <ConnectionProvider store={store}>
             <Connections serviceOnline={heartbeat.status === 'online'}/>
           </ConnectionProvider>
         )}
       </main>
-      <footer>
-        {config && <small>{config.version}</small>}
+      <footer className="hud-footer">
+        {config && <small className="app-version">{config.version}</small>}
       </footer>
     </>
   );
