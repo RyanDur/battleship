@@ -103,6 +103,18 @@ describe('createHandlerMiddleware (store)', () => {
     await vi.waitFor(() => expect(alice.getState().peers).toHaveLength(0));
   });
 
+  it('DISCONNECT only removes the specified peer', async () => {
+    const {alice, connect} = makeTriple();
+    await connect();
+
+    const bobPeerId = alice.getState().peers.find(p => p.name === 'Bob')!.id;
+
+    alice.dispatch({type: 'DISCONNECT', peerId: bobPeerId});
+
+    await vi.waitFor(() => expect(alice.getState().peers.find(p => p.name === 'Bob')).toBeUndefined());
+    expect(alice.getState().peers.find(p => p.name === 'Carol')).toBeDefined();
+  });
+
   it('GRANT_TRUST dispatch updates trustsMe on the remote store', async () => {
     const {alice, bob, connect} = makePair();
     await connect();
