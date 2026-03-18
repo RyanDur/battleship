@@ -5,6 +5,8 @@ import {ConnectionProvider} from '../state/ConnectionProvider';
 import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
 import type {ConnectionsAction} from '../state/connections';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
+import {createOffer, peerConnected, peerNamed, peerDisconnected, grantTrust, peerTrustUpdated, introductionReceived, peerConnectionUnstable, peerConnectionRestored, previousPeersReceived, onlinePeerLeft, onlinePeersUpdated, onlinePeerJoined, reconnectViaServer, forgetPeer, savePeerEmail} from '../state/connectionActions';
+import {selectFlow, selectPeers, selectPendingIntroductions} from '../state/connectionSelectors';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();
@@ -57,7 +59,7 @@ describe('Connections', () => {
     await user.type(screen.getByLabelText(/passphrase/i), 'my-secret');
     await user.click(screen.getByRole('button', {name: /generate/i}));
 
-    await waitFor(() => expect(store.getState().flow.phase).toBe('offer-ready'));
+    await waitFor(() => expect(selectFlow(store.getState()).phase).toBe('offer-ready'));
     expect(screen.getByText(/share this code/i)).toBeInTheDocument();
   });
 
@@ -70,7 +72,7 @@ describe('Connections', () => {
       </ConnectionProvider>
     );
 
-    act(() => store.dispatch({type: 'CREATE_OFFER', passphrase: 'pass'}));
+    act(() => store.dispatch(createOffer('pass')));
     await waitFor(() => expect(screen.getByLabelText(/response code/i)).toBeInTheDocument());
 
     await user.type(screen.getByLabelText(/response code/i), 'some-response-code');
@@ -100,14 +102,14 @@ describe('Connections', () => {
     await user.type(screen.getByLabelText(/offer code/i), 'some-offer-code');
     await user.click(screen.getByRole('button', {name: /join/i}));
 
-    await waitFor(() => expect(store.getState().flow.phase).toBe('joining'));
+    await waitFor(() => expect(selectFlow(store.getState()).phase).toBe('joining'));
   });
 
   it('shows connected peer by name in peers list', async () => {
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
+    await act(async () => store.dispatch(peerConnected('p1')));
+    await act(async () => store.dispatch(peerNamed('p1', 'Alice')));
 
     expect(screen.getByText('Alice')).toBeInTheDocument();
   });
@@ -115,7 +117,7 @@ describe('Connections', () => {
   it('shows peer without name as Unknown', async () => {
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
+    await act(async () => store.dispatch(peerConnected('p1')));
 
     expect(screen.getByText('Unknown')).toBeInTheDocument();
   });
@@ -123,8 +125,8 @@ describe('Connections', () => {
   it('shows a trust button for a connected peer', async () => {
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
+    await act(async () => store.dispatch(peerConnected('p1')));
+    await act(async () => store.dispatch(peerNamed('p1', 'Alice')));
 
     expect(screen.getByRole('button', {name: /trust/i})).toBeInTheDocument();
   });
@@ -133,20 +135,20 @@ describe('Connections', () => {
     const user = userEvent.setup();
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
+    await act(async () => store.dispatch(peerConnected('p1')));
+    await act(async () => store.dispatch(peerNamed('p1', 'Alice')));
 
     await user.click(screen.getByRole('button', {name: /^trust$/i}));
 
-    expect(store.getState().peers[0].trusted).toBe(true);
+    expect(selectPeers(store.getState())[0].trusted).toBe(true);
   });
 
   it('shows a revoke trust button when peer is trusted', async () => {
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
-    await act(async () => store.dispatch({type: 'GRANT_TRUST', peerId: 'p1'}));
+    await act(async () => store.dispatch(peerConnected('p1')));
+    await act(async () => store.dispatch(peerNamed('p1', 'Alice')));
+    await act(async () => store.dispatch(grantTrust('p1')));
 
     expect(screen.getByRole('button', {name: /revoke trust/i})).toBeInTheDocument();
   });
@@ -155,21 +157,21 @@ describe('Connections', () => {
     const user = userEvent.setup();
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
-    await act(async () => store.dispatch({type: 'GRANT_TRUST', peerId: 'p1'}));
+    await act(async () => store.dispatch(peerConnected('p1')));
+    await act(async () => store.dispatch(peerNamed('p1', 'Alice')));
+    await act(async () => store.dispatch(grantTrust('p1')));
 
     await user.click(screen.getByRole('button', {name: /revoke trust/i}));
 
-    expect(store.getState().peers[0].trusted).toBe(false);
+    expect(selectPeers(store.getState())[0].trusted).toBe(false);
   });
 
   it('shows when a peer trusts you to introduce them', async () => {
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
-    await act(async () => store.dispatch({type: 'PEER_TRUST_UPDATED', peerId: 'p1', trusts: true}));
+    await act(async () => store.dispatch(peerConnected('p1')));
+    await act(async () => store.dispatch(peerNamed('p1', 'Alice')));
+    await act(async () => store.dispatch(peerTrustUpdated('p1', true)));
 
     expect(screen.getByText(/trusts you/i)).toBeInTheDocument();
   });
@@ -177,12 +179,12 @@ describe('Connections', () => {
   it('shows an introduce button for each peer that trusts you when multiple trusting peers exist', async () => {
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Bob'}));
-    await act(async () => store.dispatch({type: 'PEER_TRUST_UPDATED', peerId: 'p1', trusts: true}));
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p2'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p2', name: 'Carol'}));
-    await act(async () => store.dispatch({type: 'PEER_TRUST_UPDATED', peerId: 'p2', trusts: true}));
+    await act(async () => store.dispatch(peerConnected('p1')));
+    await act(async () => store.dispatch(peerNamed('p1', 'Bob')));
+    await act(async () => store.dispatch(peerTrustUpdated('p1', true)));
+    await act(async () => store.dispatch(peerConnected('p2')));
+    await act(async () => store.dispatch(peerNamed('p2', 'Carol')));
+    await act(async () => store.dispatch(peerTrustUpdated('p2', true)));
 
     expect(screen.getAllByRole('button', {name: /^introduce$/i})).toHaveLength(2);
   });
@@ -191,12 +193,12 @@ describe('Connections', () => {
     const user = userEvent.setup();
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Bob'}));
-    await act(async () => store.dispatch({type: 'PEER_TRUST_UPDATED', peerId: 'p1', trusts: true}));
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p2'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p2', name: 'Carol'}));
-    await act(async () => store.dispatch({type: 'PEER_TRUST_UPDATED', peerId: 'p2', trusts: true}));
+    await act(async () => store.dispatch(peerConnected('p1')));
+    await act(async () => store.dispatch(peerNamed('p1', 'Bob')));
+    await act(async () => store.dispatch(peerTrustUpdated('p1', true)));
+    await act(async () => store.dispatch(peerConnected('p2')));
+    await act(async () => store.dispatch(peerNamed('p2', 'Carol')));
+    await act(async () => store.dispatch(peerTrustUpdated('p2', true)));
 
     await user.click(screen.getAllByRole('button', {name: /^introduce$/i})[0]);
 
@@ -207,12 +209,12 @@ describe('Connections', () => {
     const user = userEvent.setup();
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Bob'}));
-    await act(async () => store.dispatch({type: 'PEER_TRUST_UPDATED', peerId: 'p1', trusts: true}));
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p2'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p2', name: 'Carol'}));
-    await act(async () => store.dispatch({type: 'PEER_TRUST_UPDATED', peerId: 'p2', trusts: true}));
+    await act(async () => store.dispatch(peerConnected('p1')));
+    await act(async () => store.dispatch(peerNamed('p1', 'Bob')));
+    await act(async () => store.dispatch(peerTrustUpdated('p1', true)));
+    await act(async () => store.dispatch(peerConnected('p2')));
+    await act(async () => store.dispatch(peerNamed('p2', 'Carol')));
+    await act(async () => store.dispatch(peerTrustUpdated('p2', true)));
 
     await user.click(screen.getAllByRole('button', {name: /^introduce$/i})[0]);
     await user.click(screen.getByRole('button', {name: 'Carol'}));
@@ -223,7 +225,7 @@ describe('Connections', () => {
   it('shows a pending introduction with from and peer name', async () => {
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'}));
+    await act(async () => store.dispatch(introductionReceived('i1', 'Alice', 'Carol')));
 
     expect(screen.getByText(/alice wants to introduce you to carol/i)).toBeInTheDocument();
   });
@@ -231,7 +233,7 @@ describe('Connections', () => {
   it('shows accept and decline buttons for a pending introduction', async () => {
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'}));
+    await act(async () => store.dispatch(introductionReceived('i1', 'Alice', 'Carol')));
 
     expect(screen.getByRole('button', {name: /accept/i})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: /decline/i})).toBeInTheDocument();
@@ -241,31 +243,31 @@ describe('Connections', () => {
     const user = userEvent.setup();
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'}));
+    await act(async () => store.dispatch(introductionReceived('i1', 'Alice', 'Carol')));
 
     await user.click(screen.getByRole('button', {name: /accept/i}));
 
-    expect(store.getState().pendingIntroductions).toEqual([]);
+    expect(selectPendingIntroductions(store.getState())).toEqual([]);
   });
 
   it('clicking decline removes the pending introduction', async () => {
     const user = userEvent.setup();
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'}));
+    await act(async () => store.dispatch(introductionReceived('i1', 'Alice', 'Carol')));
 
     await user.click(screen.getByRole('button', {name: /decline/i}));
 
-    expect(store.getState().pendingIntroductions).toEqual([]);
+    expect(selectPendingIntroductions(store.getState())).toEqual([]);
   });
 
   describe('connection health', () => {
     it('shows reconnecting indicator when peer connection is unstable', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
-      await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
-      await act(async () => store.dispatch({type: 'PEER_CONNECTION_UNSTABLE', peerId: 'p1'}));
+      await act(async () => store.dispatch(peerConnected('p1')));
+      await act(async () => store.dispatch(peerNamed('p1', 'Alice')));
+      await act(async () => store.dispatch(peerConnectionUnstable('p1')));
 
       expect(screen.getByText(/reconnecting/i)).toBeInTheDocument();
     });
@@ -273,10 +275,10 @@ describe('Connections', () => {
     it('hides reconnecting indicator when peer connection is restored', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
-      await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
-      await act(async () => store.dispatch({type: 'PEER_CONNECTION_UNSTABLE', peerId: 'p1'}));
-      await act(async () => store.dispatch({type: 'PEER_CONNECTION_RESTORED', peerId: 'p1'}));
+      await act(async () => store.dispatch(peerConnected('p1')));
+      await act(async () => store.dispatch(peerNamed('p1', 'Alice')));
+      await act(async () => store.dispatch(peerConnectionUnstable('p1')));
+      await act(async () => store.dispatch(peerConnectionRestored('p1')));
 
       expect(screen.queryByText(/reconnecting/i)).not.toBeInTheDocument();
     });
@@ -286,14 +288,14 @@ describe('Connections', () => {
     const user = userEvent.setup();
     const {store} = renderConnections();
 
-    await act(async () => store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'}));
-    await act(async () => store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'}));
+    await act(async () => store.dispatch(peerConnected('p1')));
+    await act(async () => store.dispatch(peerNamed('p1', 'Alice')));
     expect(screen.getByText('Alice')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', {name: /disconnect/i}));
-    await act(async () => store.dispatch({type: 'PEER_DISCONNECTED', peerId: 'p1'}));
+    await act(async () => store.dispatch(peerDisconnected('p1')));
 
-    expect(store.getState().peers).toEqual([]);
+    expect(selectPeers(store.getState())).toEqual([]);
     expect(screen.queryByText('Alice')).not.toBeInTheDocument();
   });
 
@@ -301,7 +303,7 @@ describe('Connections', () => {
     it('shows previous peers section with peer names', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false}])));
 
       expect(screen.getByText('Bob')).toBeInTheDocument();
     });
@@ -315,7 +317,7 @@ describe('Connections', () => {
     it('shows offline status for offline previous peer', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false}])));
 
       expect(screen.getByText(/offline/i)).toBeInTheDocument();
     });
@@ -323,7 +325,7 @@ describe('Connections', () => {
     it('shows online status for online previous peer', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: true}])));
 
       expect(screen.getByText(/online/i)).toBeInTheDocument();
     });
@@ -331,8 +333,8 @@ describe('Connections', () => {
     it('marks previous peer as offline when they leave', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true}]}));
-      await act(async () => store.dispatch({type: 'ONLINE_PEER_LEFT', peerId: 'p1'}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: true}])));
+      await act(async () => store.dispatch(onlinePeerLeft('p1')));
 
       expect(screen.getByText(/offline/i)).toBeInTheDocument();
     });
@@ -340,7 +342,7 @@ describe('Connections', () => {
     it('shows Reconnect button for online previous peer', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: true}])));
 
       expect(screen.getByRole('button', {name: /reconnect/i})).toBeInTheDocument();
     });
@@ -348,7 +350,7 @@ describe('Connections', () => {
     it('does not show Reconnect button for offline previous peer', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false}])));
 
       expect(screen.queryByRole('button', {name: /reconnect/i})).not.toBeInTheDocument();
     });
@@ -356,7 +358,7 @@ describe('Connections', () => {
     it('shows Forget button for offline previous peer', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false}])));
 
       expect(screen.getByRole('button', {name: /forget/i})).toBeInTheDocument();
     });
@@ -364,7 +366,7 @@ describe('Connections', () => {
     it('shows Forget button for online previous peer', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: true}])));
 
       expect(screen.getByRole('button', {name: /forget/i})).toBeInTheDocument();
     });
@@ -373,7 +375,7 @@ describe('Connections', () => {
       const user = userEvent.setup();
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false}])));
       expect(screen.getByText('Bob')).toBeInTheDocument();
 
       await user.click(screen.getByRole('button', {name: /forget/i}));
@@ -391,11 +393,11 @@ describe('Connections', () => {
       );
       render(<ConnectionProvider store={store}><Connections serviceOnline={true}/></ConnectionProvider>);
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false}])));
 
       await user.click(screen.getByRole('button', {name: /forget/i}));
 
-      expect(dispatched).toContainEqual({type: 'FORGET_PEER', peerId: 'p1'});
+      expect(dispatched).toContainEqual(forgetPeer('p1'));
     });
 
     it('clicking Reconnect dispatches RECONNECT_VIA_SERVER with correct peer', async () => {
@@ -408,11 +410,11 @@ describe('Connections', () => {
       );
       render(<ConnectionProvider store={store}><Connections serviceOnline={true}/></ConnectionProvider>);
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: true}])));
 
       await user.click(screen.getByRole('button', {name: /reconnect/i}));
 
-      expect(dispatched).toContainEqual({type: 'RECONNECT_VIA_SERVER', signalingPeerId: 'p1', name: 'Bob'});
+      expect(dispatched).toContainEqual(reconnectViaServer('p1', 'Bob'));
     });
   });
 
@@ -420,7 +422,7 @@ describe('Connections', () => {
     it('shows Invite link for offline previous peer with known email', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false, email: 'bob@example.com'}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false, email: 'bob@example.com'}])));
 
       expect(screen.getByRole('link', {name: /invite/i})).toBeInTheDocument();
     });
@@ -428,7 +430,7 @@ describe('Connections', () => {
     it('Invite link has mailto href with the peer email', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false, email: 'bob@example.com'}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false, email: 'bob@example.com'}])));
 
       expect(screen.getByRole('link', {name: /invite/i})).toHaveAttribute('href', 'mailto:bob@example.com');
     });
@@ -436,7 +438,7 @@ describe('Connections', () => {
     it('does not show Invite link for offline previous peer without email', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false}])));
 
       expect(screen.queryByRole('link', {name: /invite/i})).not.toBeInTheDocument();
     });
@@ -444,7 +446,7 @@ describe('Connections', () => {
     it('does not show Invite link for online previous peer', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: true, email: 'bob@example.com'}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: true, email: 'bob@example.com'}])));
 
       expect(screen.queryByRole('link', {name: /invite/i})).not.toBeInTheDocument();
     });
@@ -452,7 +454,7 @@ describe('Connections', () => {
     it('shows email input for offline previous peer without email', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false}])));
 
       expect(screen.getByPlaceholderText(/enter email/i)).toBeInTheDocument();
     });
@@ -460,7 +462,7 @@ describe('Connections', () => {
     it('does not show email input for offline previous peer with email', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false, email: 'bob@example.com'}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false, email: 'bob@example.com'}])));
 
       expect(screen.queryByPlaceholderText(/enter email/i)).not.toBeInTheDocument();
     });
@@ -475,11 +477,11 @@ describe('Connections', () => {
       );
       render(<ConnectionProvider store={store}><Connections serviceOnline={true}/></ConnectionProvider>);
 
-      await act(async () => store.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
+      await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false}])));
       await user.type(screen.getByPlaceholderText(/enter email/i), 'bob@example.com');
       await user.keyboard('{Enter}');
 
-      expect(dispatched).toContainEqual({type: 'SAVE_PEER_EMAIL', peerId: 'p1', email: 'bob@example.com'});
+      expect(dispatched).toContainEqual(savePeerEmail('p1', 'bob@example.com'));
     });
   });
 
@@ -487,7 +489,7 @@ describe('Connections', () => {
     it('shows online peer names from signaling', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'ONLINE_PEERS_UPDATED', peers: [{peerId: 'p1', name: 'Alice'}]}));
+      await act(async () => store.dispatch(onlinePeersUpdated([{peerId: 'p1', name: 'Alice'}])));
 
       expect(screen.getByText('Alice')).toBeInTheDocument();
     });
@@ -501,7 +503,7 @@ describe('Connections', () => {
     it('PEER_JOINED adds to online peers', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'ONLINE_PEER_JOINED', peerId: 'p2', name: 'Bob'}));
+      await act(async () => store.dispatch(onlinePeerJoined('p2', 'Bob')));
 
       expect(screen.getByText('Bob')).toBeInTheDocument();
     });
@@ -509,8 +511,8 @@ describe('Connections', () => {
     it('PEER_LEFT removes from online peers', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'ONLINE_PEERS_UPDATED', peers: [{peerId: 'p1', name: 'Alice'}]}));
-      await act(async () => store.dispatch({type: 'ONLINE_PEER_LEFT', peerId: 'p1'}));
+      await act(async () => store.dispatch(onlinePeersUpdated([{peerId: 'p1', name: 'Alice'}])));
+      await act(async () => store.dispatch(onlinePeerLeft('p1')));
 
       expect(screen.queryByText('Alice')).not.toBeInTheDocument();
     });
@@ -518,7 +520,7 @@ describe('Connections', () => {
     it('shows a Connect button for each online peer', async () => {
       const {store} = renderConnections();
 
-      await act(async () => store.dispatch({type: 'ONLINE_PEERS_UPDATED', peers: [{peerId: 'p1', name: 'Alice'}]}));
+      await act(async () => store.dispatch(onlinePeersUpdated([{peerId: 'p1', name: 'Alice'}])));
 
       expect(screen.getByRole('button', {name: /connect/i})).toBeInTheDocument();
     });

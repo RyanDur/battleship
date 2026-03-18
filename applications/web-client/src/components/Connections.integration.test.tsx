@@ -6,6 +6,8 @@ import {createConnectionStore, createHandlerListener, encodingMiddleware, codecM
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from '../state/connectionStore';
 import type {ConnectionFlow} from '../state/connections';
+import {serverOfferReceived, serverAnswerReceived, previousPeersReceived, reconnectViaServer, onlinePeersUpdated, createOffer, joinOffer, acceptAnswerCode} from '../state/connectionActions';
+import {selectFlow, selectPeers, selectPreviousPeers} from '../state/connectionSelectors';
 
 describe('Connections integration', () => {
   it('reconnecting to a previous peer removes them from previous peers list', async () => {
@@ -17,9 +19,9 @@ describe('Connections integration', () => {
     const makeRelayMiddleware = (myName: string, mySignalingPeerId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
       (_deps) => (next) => (action) => {
         if (action.type === 'RELAY_OFFER') {
-          getOther().dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: mySignalingPeerId, name: myName, sdp: action.sdp});
+          getOther().dispatch(serverOfferReceived(mySignalingPeerId, myName, action.sdp));
         } else if (action.type === 'RELAY_ANSWER') {
-          getOther().dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: mySignalingPeerId, sdp: action.sdp});
+          getOther().dispatch(serverAnswerReceived(mySignalingPeerId, action.sdp));
         }
         next(action);
       };
@@ -37,16 +39,16 @@ describe('Connections integration', () => {
     const aliceStore = alice.store;
 
     // Alice has Bob as a previous peer (e.g. from a prior session)
-    await act(async () => aliceStore.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'bob-sig', name: 'Bob', online: true}]}));
+    await act(async () => aliceStore.dispatch(previousPeersReceived([{peerId: 'bob-sig', name: 'Bob', online: true}])));
 
-    expect(aliceStore.getState().previousPeers).toHaveLength(1);
+    expect(selectPreviousPeers(aliceStore.getState())).toHaveLength(1);
 
     // Alice reconnects to Bob
-    await act(async () => aliceStore.dispatch({type: 'RECONNECT_VIA_SERVER', signalingPeerId: 'bob-sig', name: 'Bob'}));
+    await act(async () => aliceStore.dispatch(reconnectViaServer('bob-sig', 'Bob')));
 
     await waitFor(() => {
-      expect(aliceStore.getState().peers).toHaveLength(1);
-      expect(aliceStore.getState().previousPeers).toHaveLength(0);
+      expect(selectPeers(aliceStore.getState())).toHaveLength(1);
+      expect(selectPreviousPeers(aliceStore.getState())).toHaveLength(0);
     });
   });
 
@@ -60,9 +62,9 @@ describe('Connections integration', () => {
     const makeRelayMiddleware = (myName: string, mySignalingPeerId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
       (_deps) => (next) => (action) => {
         if (action.type === 'RELAY_OFFER') {
-          getOther().dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: mySignalingPeerId, name: myName, sdp: action.sdp});
+          getOther().dispatch(serverOfferReceived(mySignalingPeerId, myName, action.sdp));
         } else if (action.type === 'RELAY_ANSWER') {
-          getOther().dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: mySignalingPeerId, sdp: action.sdp});
+          getOther().dispatch(serverAnswerReceived(mySignalingPeerId, action.sdp));
         }
         next(action);
       };
@@ -93,13 +95,13 @@ describe('Connections integration', () => {
 
     const aliceUI = within(screen.getByTestId('alice'));
 
-    await act(async () => aliceStore.dispatch({type: 'ONLINE_PEERS_UPDATED', peers: [{peerId: 'bob-sig', name: 'Bob'}]}));
+    await act(async () => aliceStore.dispatch(onlinePeersUpdated([{peerId: 'bob-sig', name: 'Bob'}])));
 
     await user.click(aliceUI.getByRole('button', {name: /connect/i}));
 
     await waitFor(() => {
-      expect(aliceStore.getState().peers).toHaveLength(1);
-      expect(bobStore.getState().peers).toHaveLength(1);
+      expect(selectPeers(aliceStore.getState())).toHaveLength(1);
+      expect(selectPeers(bobStore.getState())).toHaveLength(1);
     });
   });
 
@@ -136,21 +138,21 @@ describe('Connections integration', () => {
     const carolUI = within(screen.getByTestId('carol'));
 
     const connectStores = async (offerer: ConnectionStore, answerer: ConnectionStore) => {
-      const priorOffererPeers = offerer.getState().peers.length;
-      const priorAnswererPeers = answerer.getState().peers.length;
+      const priorOffererPeers = selectPeers(offerer.getState()).length;
+      const priorAnswererPeers = selectPeers(answerer.getState()).length;
 
-      await act(async () => { offerer.dispatch({type: 'CREATE_OFFER', passphrase: 'pass'}); });
-      await waitFor(() => expect(offerer.getState().flow.phase).toBe('offer-ready'));
-      const offerFlow = offerer.getState().flow as Extract<ConnectionFlow, {phase: 'offer-ready'}>;
+      await act(async () => { offerer.dispatch(createOffer('pass')); });
+      await waitFor(() => expect(selectFlow(offerer.getState()).phase).toBe('offer-ready'));
+      const offerFlow = selectFlow(offerer.getState()) as Extract<ConnectionFlow, {phase: 'offer-ready'}>;
 
-      await act(async () => { answerer.dispatch({type: 'JOIN_OFFER', code: offerFlow.code, passphrase: 'pass'}); });
-      await waitFor(() => expect(answerer.getState().flow.phase).toBe('answer-ready'));
-      const answerFlow = answerer.getState().flow as Extract<ConnectionFlow, {phase: 'answer-ready'}>;
+      await act(async () => { answerer.dispatch(joinOffer(offerFlow.code, 'pass')); });
+      await waitFor(() => expect(selectFlow(answerer.getState()).phase).toBe('answer-ready'));
+      const answerFlow = selectFlow(answerer.getState()) as Extract<ConnectionFlow, {phase: 'answer-ready'}>;
 
-      await act(async () => { offerer.dispatch({type: 'ACCEPT_ANSWER_CODE', responseCode: answerFlow.code}); });
+      await act(async () => { offerer.dispatch(acceptAnswerCode(answerFlow.code)); });
       await waitFor(() => {
-        expect(offerer.getState().peers.length).toBeGreaterThan(priorOffererPeers);
-        expect(answerer.getState().peers.length).toBeGreaterThan(priorAnswererPeers);
+        expect(selectPeers(offerer.getState()).length).toBeGreaterThan(priorOffererPeers);
+        expect(selectPeers(answerer.getState()).length).toBeGreaterThan(priorAnswererPeers);
       });
     };
 
@@ -159,7 +161,7 @@ describe('Connections integration', () => {
     await connectStores(aliceStore, carolStore);
 
     // Wait for Alice to know both names before introducing
-    await waitFor(() => expect(aliceStore.getState().peers.filter(p => p.name)).toHaveLength(2));
+    await waitFor(() => expect(selectPeers(aliceStore.getState()).filter(p => p.name)).toHaveLength(2));
 
     // Bob and Carol each grant trust to Alice so she can introduce them
     await user.click(bobUI.getByRole('button', {name: /^trust$/i}));
@@ -186,8 +188,8 @@ describe('Connections integration', () => {
 
     // Bob and Carol should now each see two peers: Alice and the newly connected peer
     await waitFor(() => {
-      expect(bobStore.getState().peers).toHaveLength(2);
-      expect(carolStore.getState().peers).toHaveLength(2);
+      expect(selectPeers(bobStore.getState())).toHaveLength(2);
+      expect(selectPeers(carolStore.getState())).toHaveLength(2);
     });
   });
 });

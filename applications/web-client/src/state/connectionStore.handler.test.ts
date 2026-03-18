@@ -2,13 +2,15 @@ import {createConnectionStore, createHandlerListener, encodingMiddleware, codecM
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
 import type {ConnectionFlow} from './connections';
+import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode} from './connectionActions';
+import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections} from './connectionSelectors';
 
 const makeRelayMiddleware = (myName: string, mySigId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
   (_deps) => (next) => (action) => {
     if (action.type === 'RELAY_OFFER') {
-      getOther().dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: mySigId, name: myName, sdp: action.sdp});
+      getOther().dispatch(serverOfferReceived(mySigId, myName, action.sdp));
     } else if (action.type === 'RELAY_ANSWER') {
-      getOther().dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: mySigId, sdp: action.sdp});
+      getOther().dispatch(serverAnswerReceived(mySigId, action.sdp));
     }
     next(action);
   };
@@ -28,10 +30,10 @@ const makePair = () => {
   );
 
   const connect = async () => {
-    stores.alice!.dispatch({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'bob-sig', name: 'Bob'});
+    stores.alice!.dispatch(connectViaServer('bob-sig', 'Bob'));
     await vi.waitFor(() => {
-      expect(stores.alice!.getState().peers).toHaveLength(1);
-      expect(stores.bob!.getState().peers).toHaveLength(1);
+      expect(selectPeers(stores.alice!.getState())).toHaveLength(1);
+      expect(selectPeers(stores.bob!.getState())).toHaveLength(1);
     });
   };
 
@@ -41,9 +43,9 @@ const makePair = () => {
 const makeRelayForAll = (myName: string, myId: string, registry: Record<string, () => ConnectionStore | undefined>): MiddlewareFactory =>
   (_deps) => (next) => (action) => {
     if (action.type === 'RELAY_OFFER') {
-      registry[action.targetPeerId]?.()?.dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: myId, name: myName, sdp: action.sdp});
+      registry[action.targetPeerId]?.()?.dispatch(serverOfferReceived(myId, myName, action.sdp));
     } else if (action.type === 'RELAY_ANSWER') {
-      registry[action.targetPeerId]?.()?.dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: myId, sdp: action.sdp});
+      registry[action.targetPeerId]?.()?.dispatch(serverAnswerReceived(myId, action.sdp));
     }
     next(action);
   };
@@ -70,14 +72,14 @@ const makeTriple = () => {
   registry['carol-sig'] = () => stores.carol;
 
   const connect = async () => {
-    stores.alice!.dispatch({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'bob-sig', name: 'Bob'});
-    stores.alice!.dispatch({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'carol-sig', name: 'Carol'});
+    stores.alice!.dispatch(connectViaServer('bob-sig', 'Bob'));
+    stores.alice!.dispatch(connectViaServer('carol-sig', 'Carol'));
     await vi.waitFor(() => {
-      expect(stores.alice!.getState().peers).toHaveLength(2);
-      expect(stores.bob!.getState().peers).toHaveLength(1);
-      expect(stores.carol!.getState().peers).toHaveLength(1);
+      expect(selectPeers(stores.alice!.getState())).toHaveLength(2);
+      expect(selectPeers(stores.bob!.getState())).toHaveLength(1);
+      expect(selectPeers(stores.carol!.getState())).toHaveLength(1);
     });
-    await vi.waitFor(() => expect(stores.alice!.getState().peers.every(p => p.name)).toBe(true));
+    await vi.waitFor(() => expect(selectPeers(stores.alice!.getState()).every(p => p.name)).toBe(true));
   };
 
   return {alice: stores.alice!, bob: stores.bob!, carol: stores.carol!, connect};
@@ -89,116 +91,116 @@ describe('createHandlerMiddleware (store)', () => {
 
     await connect();
 
-    expect(alice.getState().peers).toHaveLength(1);
-    expect(bob.getState().peers).toHaveLength(1);
+    expect(selectPeers(alice.getState())).toHaveLength(1);
+    expect(selectPeers(bob.getState())).toHaveLength(1);
   });
 
   it('DISCONNECT dispatch removes peer from state', async () => {
     const {alice, connect} = makePair();
     await connect();
-    const peerId = alice.getState().peers[0].id;
+    const peerId = selectPeers(alice.getState())[0].id;
 
-    alice.dispatch({type: 'DISCONNECT', peerId});
+    alice.dispatch(disconnect(peerId));
 
-    await vi.waitFor(() => expect(alice.getState().peers).toHaveLength(0));
+    await vi.waitFor(() => expect(selectPeers(alice.getState())).toHaveLength(0));
   });
 
   it('DISCONNECT only removes the specified peer', async () => {
     const {alice, connect} = makeTriple();
     await connect();
 
-    const bobPeerId = alice.getState().peers.find(p => p.name === 'Bob')!.id;
+    const bobPeerId = selectPeers(alice.getState()).find(p => p.name === 'Bob')!.id;
 
-    alice.dispatch({type: 'DISCONNECT', peerId: bobPeerId});
+    alice.dispatch(disconnect(bobPeerId));
 
-    await vi.waitFor(() => expect(alice.getState().peers.find(p => p.name === 'Bob')).toBeUndefined());
-    expect(alice.getState().peers.find(p => p.name === 'Carol')).toBeDefined();
+    await vi.waitFor(() => expect(selectPeers(alice.getState()).find(p => p.name === 'Bob')).toBeUndefined());
+    expect(selectPeers(alice.getState()).find(p => p.name === 'Carol')).toBeDefined();
   });
 
   it('GRANT_TRUST dispatch updates trustsMe on the remote store', async () => {
     const {alice, bob, connect} = makePair();
     await connect();
-    const alicePeerIdOnBob = bob.getState().peers[0].id;
+    const alicePeerIdOnBob = selectPeers(bob.getState())[0].id;
 
-    bob.dispatch({type: 'GRANT_TRUST', peerId: alicePeerIdOnBob});
+    bob.dispatch(grantTrust(alicePeerIdOnBob));
 
-    await vi.waitFor(() => expect(alice.getState().peers[0].trustsMe).toBe(true));
+    await vi.waitFor(() => expect(selectPeers(alice.getState())[0].trustsMe).toBe(true));
   });
 
   it('REVOKE_TRUST dispatch clears trustsMe on the remote store', async () => {
     const {alice, bob, connect} = makePair();
     await connect();
-    const alicePeerIdOnBob = bob.getState().peers[0].id;
+    const alicePeerIdOnBob = selectPeers(bob.getState())[0].id;
 
-    bob.dispatch({type: 'GRANT_TRUST', peerId: alicePeerIdOnBob});
-    await vi.waitFor(() => expect(alice.getState().peers[0].trustsMe).toBe(true));
+    bob.dispatch(grantTrust(alicePeerIdOnBob));
+    await vi.waitFor(() => expect(selectPeers(alice.getState())[0].trustsMe).toBe(true));
 
-    bob.dispatch({type: 'REVOKE_TRUST', peerId: alicePeerIdOnBob});
+    bob.dispatch(revokeTrust(alicePeerIdOnBob));
 
-    await vi.waitFor(() => expect(alice.getState().peers[0].trustsMe).toBe(false));
+    await vi.waitFor(() => expect(selectPeers(alice.getState())[0].trustsMe).toBe(false));
   });
 
   it('CONNECT_VIA_SERVER to a previous peer removes them from previousPeers', async () => {
     const {alice, connect} = makePair();
-    alice.dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: [{peerId: 'bob-sig', name: 'Bob', online: false}]});
+    alice.dispatch(previousPeersReceived([{peerId: 'bob-sig', name: 'Bob', online: false}]));
 
     await connect();
 
-    await vi.waitFor(() => expect(alice.getState().previousPeers).toHaveLength(0));
+    await vi.waitFor(() => expect(selectPreviousPeers(alice.getState())).toHaveLength(0));
   });
 
   it('receiving an INTRODUCTION records the relay peer in handlerState.introChannels', async () => {
     const {alice, bob, connect} = makeTriple();
     await connect();
 
-    const bobPeerId = alice.getState().peers.find(p => p.name === 'Bob')!.id;
-    const carolPeerId = alice.getState().peers.find(p => p.name === 'Carol')!.id;
-    alice.dispatch({type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId});
+    const bobPeerId = selectPeers(alice.getState()).find(p => p.name === 'Bob')!.id;
+    const carolPeerId = selectPeers(alice.getState()).find(p => p.name === 'Carol')!.id;
+    alice.dispatch(introducePeers(bobPeerId, carolPeerId));
 
-    await vi.waitFor(() => expect(bob.getState().pendingIntroductions).toHaveLength(1));
-    const introId = bob.getState().pendingIntroductions[0].introId;
+    await vi.waitFor(() => expect(selectPendingIntroductions(bob.getState())).toHaveLength(1));
+    const introId = selectPendingIntroductions(bob.getState())[0].introId;
 
-    expect(bob.getState().handlerState.introChannels).toHaveProperty(introId);
+    expect(selectIntroChannels(bob.getState())).toHaveProperty(introId);
   });
 
   it('ACCEPT_INTRODUCTION removes the intro from handlerState.introChannels', async () => {
     const {alice, bob, connect} = makeTriple();
     await connect();
 
-    const bobPeerId = alice.getState().peers.find(p => p.name === 'Bob')!.id;
-    const carolPeerId = alice.getState().peers.find(p => p.name === 'Carol')!.id;
-    alice.dispatch({type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId});
+    const bobPeerId = selectPeers(alice.getState()).find(p => p.name === 'Bob')!.id;
+    const carolPeerId = selectPeers(alice.getState()).find(p => p.name === 'Carol')!.id;
+    alice.dispatch(introducePeers(bobPeerId, carolPeerId));
 
-    await vi.waitFor(() => expect(bob.getState().pendingIntroductions).toHaveLength(1));
-    const introId = bob.getState().pendingIntroductions[0].introId;
+    await vi.waitFor(() => expect(selectPendingIntroductions(bob.getState())).toHaveLength(1));
+    const introId = selectPendingIntroductions(bob.getState())[0].introId;
 
-    bob.dispatch({type: 'ACCEPT_INTRODUCTION', introId});
+    bob.dispatch(acceptIntroduction(introId));
 
-    expect(bob.getState().handlerState.introChannels).not.toHaveProperty(introId);
+    expect(selectIntroChannels(bob.getState())).not.toHaveProperty(introId);
   });
 
   it('introduction flow connects Bob and Carol directly when both accept', async () => {
     const {alice, bob, carol, connect} = makeTriple();
     await connect();
 
-    const bobPeerId = alice.getState().peers.find(p => p.name === 'Bob')!.id;
-    const carolPeerId = alice.getState().peers.find(p => p.name === 'Carol')!.id;
-    alice.dispatch({type: 'INTRODUCE_PEERS', peerId1: bobPeerId, peerId2: carolPeerId});
+    const bobPeerId = selectPeers(alice.getState()).find(p => p.name === 'Bob')!.id;
+    const carolPeerId = selectPeers(alice.getState()).find(p => p.name === 'Carol')!.id;
+    alice.dispatch(introducePeers(bobPeerId, carolPeerId));
 
-    await vi.waitFor(() => expect(bob.getState().pendingIntroductions).toHaveLength(1));
-    const introId = bob.getState().pendingIntroductions[0].introId;
-    bob.dispatch({type: 'ACCEPT_INTRODUCTION', introId});
+    await vi.waitFor(() => expect(selectPendingIntroductions(bob.getState())).toHaveLength(1));
+    const introId = selectPendingIntroductions(bob.getState())[0].introId;
+    bob.dispatch(acceptIntroduction(introId));
 
-    await vi.waitFor(() => expect(carol.getState().pendingIntroductions).toHaveLength(1));
-    carol.dispatch({type: 'ACCEPT_INTRODUCTION', introId: carol.getState().pendingIntroductions[0].introId});
+    await vi.waitFor(() => expect(selectPendingIntroductions(carol.getState())).toHaveLength(1));
+    carol.dispatch(acceptIntroduction(selectPendingIntroductions(carol.getState())[0].introId));
 
     await vi.waitFor(() => {
-      expect(bob.getState().peers).toHaveLength(2);
-      expect(carol.getState().peers).toHaveLength(2);
+      expect(selectPeers(bob.getState())).toHaveLength(2);
+      expect(selectPeers(carol.getState())).toHaveLength(2);
     });
     // introConnections cleared after channel opens — state is clean
-    expect(Object.keys(bob.getState().handlerState.introConnections)).toHaveLength(0);
-    expect(Object.keys(carol.getState().handlerState.introConnections)).toHaveLength(0);
+    expect(Object.keys(selectIntroConnections(bob.getState()))).toHaveLength(0);
+    expect(Object.keys(selectIntroConnections(carol.getState()))).toHaveLength(0);
   });
 
   it('CREATE_OFFER transitions to offer-failed when peer connection setup fails', async () => {
@@ -220,9 +222,9 @@ describe('createHandlerMiddleware (store)', () => {
       [createHandlerListener({name: 'Player', createPeerConnection: () => failingPc})],
     );
 
-    store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+    store.dispatch(createOffer('secret'));
 
-    await vi.waitFor(() => expect(store.getState().flow.phase).toBe('offer-failed'));
+    await vi.waitFor(() => expect(selectFlow(store.getState()).phase).toBe('offer-failed'));
   });
 
   it('full offer/answer handshake connects both stores', async () => {
@@ -238,19 +240,19 @@ describe('createHandlerMiddleware (store)', () => {
       [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection})],
     );
 
-    alice.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
-    await vi.waitFor(() => expect(alice.getState().flow.phase).toBe('offer-ready'));
-    const offerFlow = alice.getState().flow as Extract<ConnectionFlow, {phase: 'offer-ready'}>;
+    alice.dispatch(createOffer('secret'));
+    await vi.waitFor(() => expect(selectFlow(alice.getState()).phase).toBe('offer-ready'));
+    const offerFlow = selectFlow(alice.getState()) as Extract<ConnectionFlow, {phase: 'offer-ready'}>;
 
-    bob.dispatch({type: 'JOIN_OFFER', code: offerFlow.code, passphrase: 'secret'});
-    await vi.waitFor(() => expect(bob.getState().flow.phase).toBe('answer-ready'));
-    const answerFlow = bob.getState().flow as Extract<ConnectionFlow, {phase: 'answer-ready'}>;
+    bob.dispatch(joinOffer(offerFlow.code, 'secret'));
+    await vi.waitFor(() => expect(selectFlow(bob.getState()).phase).toBe('answer-ready'));
+    const answerFlow = selectFlow(bob.getState()) as Extract<ConnectionFlow, {phase: 'answer-ready'}>;
 
-    alice.dispatch({type: 'ACCEPT_ANSWER_CODE', responseCode: answerFlow.code});
+    alice.dispatch(acceptAnswerCode(answerFlow.code));
 
     await vi.waitFor(() => {
-      expect(alice.getState().peers).toHaveLength(1);
-      expect(bob.getState().peers).toHaveLength(1);
+      expect(selectPeers(alice.getState())).toHaveLength(1);
+      expect(selectPeers(bob.getState())).toHaveLength(1);
     });
   });
 });

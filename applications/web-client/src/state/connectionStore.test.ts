@@ -2,6 +2,8 @@ import {createConnectionStore, createHandlerListener, encodingMiddleware, codecM
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionsAction, ConnectionsState} from './connections';
 import type {MiddlewareFactory, ListenerFactory} from './connectionStore';
+import {createOffer, joinOffer, acceptAnswerCode, peerConnected, peerNamed, peerDisconnected, grantTrust, revokeTrust, peerTrustUpdated, introductionReceived, acceptIntroduction, declineIntroduction, introductionResolved, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, connectViaServer} from './connectionActions';
+import {selectFlow, selectPeers, selectPendingIntroductions, selectOnlinePeers, selectPeerConnectionHealth} from './connectionSelectors';
 
 const makeStore = (extra: MiddlewareFactory[] = []) => {
   const factory = createFakePeerConnectionFactory();
@@ -17,18 +19,18 @@ describe('connectionStore', () => {
     it('transitions state to creating', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+      store.dispatch(createOffer('secret'));
 
-      expect(store.getState().flow).toEqual({phase: 'creating', passphrase: 'secret'});
+      expect(selectFlow(store.getState())).toEqual({phase: 'creating', passphrase: 'secret'});
     });
 
     it('transitions to offer-ready after CREATE_OFFER', async () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+      store.dispatch(createOffer('secret'));
 
-      await vi.waitFor(() => expect(store.getState().flow.phase).toBe('offer-ready'));
-      const flow = store.getState().flow;
+      await vi.waitFor(() => expect(selectFlow(store.getState()).phase).toBe('offer-ready'));
+      const flow = selectFlow(store.getState());
       if (flow.phase === 'offer-ready') {
         expect(flow.code.length).toBeGreaterThan(0);
         expect(flow.peerId).toBeTruthy();
@@ -40,17 +42,17 @@ describe('connectionStore', () => {
     it('transitions state to joining', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'JOIN_OFFER', code: 'any-code', passphrase: 'secret'});
+      store.dispatch(joinOffer('any-code', 'secret'));
 
-      expect(store.getState().flow.phase).toBe('joining');
+      expect(selectFlow(store.getState()).phase).toBe('joining');
     });
 
     it('resets to idle when code cannot be decoded', async () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'JOIN_OFFER', code: 'invalid-code', passphrase: 'wrong'});
+      store.dispatch(joinOffer('invalid-code', 'wrong'));
 
-      await vi.waitFor(() => expect(store.getState().flow).toEqual({phase: 'idle'}));
+      await vi.waitFor(() => expect(selectFlow(store.getState())).toEqual({phase: 'idle'}));
     });
   });
 
@@ -58,9 +60,9 @@ describe('connectionStore', () => {
     it('does nothing when not in offer-ready phase', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'ACCEPT_ANSWER_CODE', responseCode: 'not-a-valid-code'});
+      store.dispatch(acceptAnswerCode('not-a-valid-code'));
 
-      expect(store.getState().flow).toEqual({phase: 'idle'});
+      expect(selectFlow(store.getState())).toEqual({phase: 'idle'});
     });
   });
 
@@ -68,27 +70,27 @@ describe('connectionStore', () => {
     it('PEER_CONNECTED adds peer', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'});
+      store.dispatch(peerConnected('p1'));
 
-      expect(store.getState().peers).toEqual([{id: 'p1'}]);
+      expect(selectPeers(store.getState())).toEqual([{id: 'p1'}]);
     });
 
     it('PEER_NAMED updates peer name', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'});
-      store.dispatch({type: 'PEER_NAMED', peerId: 'p1', name: 'Alice'});
+      store.dispatch(peerConnected('p1'));
+      store.dispatch(peerNamed('p1', 'Alice'));
 
-      expect(store.getState().peers).toEqual([{id: 'p1', name: 'Alice'}]);
+      expect(selectPeers(store.getState())).toEqual([{id: 'p1', name: 'Alice'}]);
     });
 
     it('PEER_DISCONNECTED removes peer', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'});
-      store.dispatch({type: 'PEER_DISCONNECTED', peerId: 'p1'});
+      store.dispatch(peerConnected('p1'));
+      store.dispatch(peerDisconnected('p1'));
 
-      expect(store.getState().peers).toEqual([]);
+      expect(selectPeers(store.getState())).toEqual([]);
     });
   });
 
@@ -96,29 +98,29 @@ describe('connectionStore', () => {
     it('GRANT_TRUST updates peer trusted state', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'});
-      store.dispatch({type: 'GRANT_TRUST', peerId: 'p1'});
+      store.dispatch(peerConnected('p1'));
+      store.dispatch(grantTrust('p1'));
 
-      expect(store.getState().peers).toEqual([{id: 'p1', trusted: true}]);
+      expect(selectPeers(store.getState())).toEqual([{id: 'p1', trusted: true}]);
     });
 
     it('REVOKE_TRUST clears peer trusted state', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'});
-      store.dispatch({type: 'GRANT_TRUST', peerId: 'p1'});
-      store.dispatch({type: 'REVOKE_TRUST', peerId: 'p1'});
+      store.dispatch(peerConnected('p1'));
+      store.dispatch(grantTrust('p1'));
+      store.dispatch(revokeTrust('p1'));
 
-      expect(store.getState().peers).toEqual([{id: 'p1', trusted: false}]);
+      expect(selectPeers(store.getState())).toEqual([{id: 'p1', trusted: false}]);
     });
 
     it('PEER_TRUST_UPDATED event updates peer trustsMe state', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'});
-      store.dispatch({type: 'PEER_TRUST_UPDATED', peerId: 'p1', trusts: true});
+      store.dispatch(peerConnected('p1'));
+      store.dispatch(peerTrustUpdated('p1', true));
 
-      expect(store.getState().peers).toEqual([{id: 'p1', trustsMe: true}]);
+      expect(selectPeers(store.getState())).toEqual([{id: 'p1', trustsMe: true}]);
     });
   });
 
@@ -126,36 +128,36 @@ describe('connectionStore', () => {
     it('ACCEPT_INTRODUCTION removes from pendingIntroductions', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'});
-      store.dispatch({type: 'ACCEPT_INTRODUCTION', introId: 'i1'});
+      store.dispatch(introductionReceived('i1', 'Alice', 'Carol'));
+      store.dispatch(acceptIntroduction('i1'));
 
-      expect(store.getState().pendingIntroductions).toEqual([]);
+      expect(selectPendingIntroductions(store.getState())).toEqual([]);
     });
 
     it('DECLINE_INTRODUCTION removes from pendingIntroductions', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'});
-      store.dispatch({type: 'DECLINE_INTRODUCTION', introId: 'i1'});
+      store.dispatch(introductionReceived('i1', 'Alice', 'Carol'));
+      store.dispatch(declineIntroduction('i1'));
 
-      expect(store.getState().pendingIntroductions).toEqual([]);
+      expect(selectPendingIntroductions(store.getState())).toEqual([]);
     });
 
     it('INTRODUCTION_RECEIVED adds to pendingIntroductions', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'});
+      store.dispatch(introductionReceived('i1', 'Alice', 'Carol'));
 
-      expect(store.getState().pendingIntroductions).toEqual([{introId: 'i1', from: 'Alice', peer: 'Carol'}]);
+      expect(selectPendingIntroductions(store.getState())).toEqual([{introId: 'i1', from: 'Alice', peer: 'Carol'}]);
     });
 
     it('INTRODUCTION_RESOLVED removes from pendingIntroductions', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'INTRODUCTION_RECEIVED', introId: 'i1', from: 'Alice', peer: 'Carol'});
-      store.dispatch({type: 'INTRODUCTION_RESOLVED', introId: 'i1'});
+      store.dispatch(introductionReceived('i1', 'Alice', 'Carol'));
+      store.dispatch(introductionResolved('i1'));
 
-      expect(store.getState().pendingIntroductions).toEqual([]);
+      expect(selectPendingIntroductions(store.getState())).toEqual([]);
     });
   });
 
@@ -163,26 +165,26 @@ describe('connectionStore', () => {
     it('ONLINE_PEERS_UPDATED action updates onlinePeers', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'ONLINE_PEERS_UPDATED', peers: [{peerId: 'p1', name: 'Alice'}]});
+      store.dispatch(onlinePeersUpdated([{peerId: 'p1', name: 'Alice'}]));
 
-      expect(store.getState().onlinePeers).toEqual([{peerId: 'p1', name: 'Alice'}]);
+      expect(selectOnlinePeers(store.getState())).toEqual([{peerId: 'p1', name: 'Alice'}]);
     });
 
     it('ONLINE_PEER_JOINED action adds to onlinePeers', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'ONLINE_PEER_JOINED', peerId: 'p1', name: 'Alice'});
+      store.dispatch(onlinePeerJoined('p1', 'Alice'));
 
-      expect(store.getState().onlinePeers).toEqual([{peerId: 'p1', name: 'Alice'}]);
+      expect(selectOnlinePeers(store.getState())).toEqual([{peerId: 'p1', name: 'Alice'}]);
     });
 
     it('ONLINE_PEER_LEFT action removes from onlinePeers', () => {
       const {store} = makeStore();
 
-      store.dispatch({type: 'ONLINE_PEERS_UPDATED', peers: [{peerId: 'p1', name: 'Alice'}]});
-      store.dispatch({type: 'ONLINE_PEER_LEFT', peerId: 'p1'});
+      store.dispatch(onlinePeersUpdated([{peerId: 'p1', name: 'Alice'}]));
+      store.dispatch(onlinePeerLeft('p1'));
 
-      expect(store.getState().onlinePeers).toEqual([]);
+      expect(selectOnlinePeers(store.getState())).toEqual([]);
     });
   });
 
@@ -194,7 +196,7 @@ describe('connectionStore', () => {
         return original(action);
       })(store.dispatch);
 
-      store.dispatch({type: 'CONNECT_VIA_SERVER', signalingPeerId: 'bob-sig', name: 'Bob'});
+      store.dispatch(connectViaServer('bob-sig', 'Bob'));
       await vi.waitFor(() => expect(dispatched).toContainEqual(expect.objectContaining({type: 'RELAY_OFFER'})));
       return (dispatched.find(a => a.type === 'RELAY_OFFER') as {sdp: string}).sdp;
     };
@@ -206,7 +208,7 @@ describe('connectionStore', () => {
       factory.simulateIceStateChange(offerSdp, 'disconnected');
 
       await vi.waitFor(() =>
-        expect(Object.values(store.getState().peerConnectionHealth)).toContain('unstable')
+        expect(Object.values(selectPeerConnectionHealth(store.getState()))).toContain('unstable')
       );
     });
 
@@ -215,12 +217,12 @@ describe('connectionStore', () => {
 
       const offerSdp = await connectViaServerAndGetOfferSdp(store);
       factory.simulateIceStateChange(offerSdp, 'disconnected');
-      await vi.waitFor(() => expect(Object.values(store.getState().peerConnectionHealth)).toContain('unstable'));
+      await vi.waitFor(() => expect(Object.values(selectPeerConnectionHealth(store.getState()))).toContain('unstable'));
 
       factory.simulateIceStateChange(offerSdp, 'connected');
 
       await vi.waitFor(() =>
-        expect(Object.values(store.getState().peerConnectionHealth)).toContain('stable')
+        expect(Object.values(selectPeerConnectionHealth(store.getState()))).toContain('stable')
       );
     });
 
@@ -246,7 +248,7 @@ describe('connectionStore', () => {
         () => (next) => (action) => { received1.push(action); next(action); },
         () => (next) => (action) => { received2.push(action); next(action); },
       ]);
-      const action: ConnectionsAction = {type: 'CREATE_OFFER', passphrase: 'secret'};
+      const action = createOffer('secret');
       const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}, introChannels: {}, introConnections: {}}})})(noop);
 
       dispatch(action);
@@ -264,7 +266,7 @@ describe('connectionStore', () => {
       const baseDispatch = () => order.push('base');
       const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}, introChannels: {}, introConnections: {}}})})(baseDispatch);
 
-      dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+      dispatch(createOffer('secret'));
 
       expect(order).toEqual(['middleware', 'base']);
     });
@@ -273,7 +275,7 @@ describe('connectionStore', () => {
       const noop = () => {};
       const composed = applyMiddleware([]);
       const dispatch = composed({dispatch: noop, getState: () => ({flow: {phase: 'idle'}, peers: [], pendingIntroductions: [], onlinePeers: [], previousPeers: [], peerConnectionHealth: {}, handlerState: {signalingToPeer: {}, peerToSignaling: {}, offererPeerIds: [], iceRestartAttempts: {}, introChannels: {}, introConnections: {}}})})(noop);
-      expect(() => dispatch({type: 'CREATE_OFFER', passphrase: 'secret'})).not.toThrow();
+      expect(() => dispatch(createOffer('secret'))).not.toThrow();
     });
   });
 
@@ -282,9 +284,9 @@ describe('connectionStore', () => {
       const actions: ConnectionsAction[] = [];
       const {store} = makeStore([() => (next) => (action) => { actions.push(action); next(action); }]);
 
-      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+      store.dispatch(createOffer('secret'));
 
-      expect(actions).toContainEqual({type: 'CREATE_OFFER', passphrase: 'secret'});
+      expect(actions).toContainEqual(createOffer('secret'));
     });
   });
 
@@ -294,7 +296,7 @@ describe('connectionStore', () => {
       const listener = vi.fn();
       store.subscribe(listener);
 
-      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+      store.dispatch(createOffer('secret'));
 
       expect(listener).toHaveBeenCalled();
     });
@@ -305,7 +307,7 @@ describe('connectionStore', () => {
       const unsubscribe = store.subscribe(listener);
 
       unsubscribe();
-      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+      store.dispatch(createOffer('secret'));
 
       expect(listener).not.toHaveBeenCalled();
     });
@@ -317,7 +319,7 @@ describe('connectionStore', () => {
       const received: Array<{action: ConnectionsAction; prevState: ConnectionsState; state: ConnectionsState}> = [];
       store.addListener((action, {prevState, state}) => received.push({action, prevState, state}));
 
-      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+      store.dispatch(createOffer('secret'));
 
       const entry = received.find(r => r.action.type === 'CREATE_OFFER');
       expect(entry).toBeDefined();
@@ -330,7 +332,7 @@ describe('connectionStore', () => {
       let seenState: ConnectionsState | undefined;
       store.addListener((_action, {state}) => { seenState = state; });
 
-      store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'});
+      store.dispatch(peerConnected('p1'));
 
       expect(seenState?.peers).toContainEqual({id: 'p1'});
     });
@@ -340,14 +342,14 @@ describe('connectionStore', () => {
       const seen: string[] = [];
       store.addListener((action, {dispatch}) => {
         seen.push(action.type);
-        if (action.type === 'PEER_CONNECTED') dispatch({type: 'PEER_NAMED', peerId: action.peerId, name: 'Alice'});
+        if (action.type === 'PEER_CONNECTED') dispatch(peerNamed(action.peerId, 'Alice'));
       });
 
-      store.dispatch({type: 'PEER_CONNECTED', peerId: 'p1'});
+      store.dispatch(peerConnected('p1'));
 
       expect(seen).toContain('PEER_CONNECTED');
       expect(seen).toContain('PEER_NAMED');
-      expect(store.getState().peers).toContainEqual({id: 'p1', name: 'Alice'});
+      expect(selectPeers(store.getState())).toContainEqual({id: 'p1', name: 'Alice'});
     });
 
     it('unsubscribe stops listener from receiving actions', () => {
@@ -356,7 +358,7 @@ describe('connectionStore', () => {
       const unsubscribe = store.addListener((action) => received.push(action));
 
       unsubscribe();
-      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+      store.dispatch(createOffer('secret'));
 
       expect(received).toHaveLength(0);
     });
@@ -369,9 +371,9 @@ describe('connectionStore', () => {
         (action) => received.push(action);
 
       const store = createConnectionStore(undefined, [factory]);
-      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+      store.dispatch(createOffer('secret'));
 
-      expect(received).toContainEqual({type: 'CREATE_OFFER', passphrase: 'secret'});
+      expect(received).toContainEqual(createOffer('secret'));
     });
 
     it('listener factory receives prevState and state on each action', () => {
@@ -381,7 +383,7 @@ describe('connectionStore', () => {
           entries.push({prevPhase: prevState.flow.phase, phase: state.flow.phase});
 
       const store = createConnectionStore(undefined, [factory]);
-      store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+      store.dispatch(createOffer('secret'));
 
       const entry = entries.find(e => e.phase === 'creating');
       expect(entry?.prevPhase).toBe('idle');

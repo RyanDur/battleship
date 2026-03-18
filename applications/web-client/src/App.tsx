@@ -8,6 +8,7 @@ import type {HeartbeatState} from './protocol/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
 import {detectPlatform} from './protocol/platform';
 import {createConnectionStore, createHandlerListener, createSignalingListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './state/connectionStore';
+import {startSignaling, stopSignaling} from './state/connectionActions';
 import {ConnectionProvider} from './state/ConnectionProvider';
 
 const platform = detectPlatform(navigator.userAgent);
@@ -40,8 +41,8 @@ const App = () => {
 
   useEffect(() => {
     if (!store) return;
-    store.dispatch({type: 'START_SIGNALING'});
-    return () => store.dispatch({type: 'STOP_SIGNALING'});
+    store.dispatch(startSignaling());
+    return () => store.dispatch(stopSignaling());
   }, [store]);
 
   return (

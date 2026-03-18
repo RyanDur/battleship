@@ -3,6 +3,8 @@ import {createConnectionStore, createSignalingListener} from './connectionStore'
 import {createStubServer} from '../test/stubServer';
 import {makeWebSocket} from '../test/makeWebSocket';
 import type {WsConnection} from '../test/stubServer';
+import {startSignaling, stopSignaling, relayOffer, relayAnswer, forgetPeer, relayIceRestart, relayIceRestartAnswer, shareEmail, stopSharingEmail, updateEmail, savePeerEmail} from './connectionActions';
+import {selectOnlinePeers, selectPreviousPeers} from './connectionSelectors';
 
 const connectStore = async (serverSetup: (conn: WsConnection) => void = () => undefined) => {
   let wsConn: WsConnection | undefined;
@@ -22,11 +24,11 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
     }),
   ]);
 
-  store.dispatch({type: 'START_SIGNALING'});
+  store.dispatch(startSignaling());
   await vi.waitFor(() => expect(wsConn).toBeDefined());
 
   const cleanup = async () => {
-    store.dispatch({type: 'STOP_SIGNALING'});
+    store.dispatch(stopSignaling());
     await server.close();
   };
 
@@ -39,7 +41,7 @@ describe('createSignalingMiddleware (server)', () => {
 
     getConn().send(JSON.stringify({type: 'PEERS', peers: [{peerId: 'p1', name: 'Alice'}]}));
 
-    await vi.waitFor(() => expect(store.getState().onlinePeers).toEqual([{peerId: 'p1', name: 'Alice'}]));
+    await vi.waitFor(() => expect(selectOnlinePeers(store.getState())).toEqual([{peerId: 'p1', name: 'Alice'}]));
     await cleanup();
   });
 
@@ -48,7 +50,7 @@ describe('createSignalingMiddleware (server)', () => {
 
     getConn().send(JSON.stringify({type: 'PEER_JOINED', peerId: 'p1', name: 'Alice'}));
 
-    await vi.waitFor(() => expect(store.getState().onlinePeers).toEqual([{peerId: 'p1', name: 'Alice'}]));
+    await vi.waitFor(() => expect(selectOnlinePeers(store.getState())).toEqual([{peerId: 'p1', name: 'Alice'}]));
     await cleanup();
   });
 
@@ -56,10 +58,10 @@ describe('createSignalingMiddleware (server)', () => {
     const {store, getConn, cleanup} = await connectStore();
 
     getConn().send(JSON.stringify({type: 'PEERS', peers: [{peerId: 'p1', name: 'Alice'}]}));
-    await vi.waitFor(() => expect(store.getState().onlinePeers).toHaveLength(1));
+    await vi.waitFor(() => expect(selectOnlinePeers(store.getState())).toHaveLength(1));
     getConn().send(JSON.stringify({type: 'PEER_LEFT', peerId: 'p1'}));
 
-    await vi.waitFor(() => expect(store.getState().onlinePeers).toEqual([]));
+    await vi.waitFor(() => expect(selectOnlinePeers(store.getState())).toEqual([]));
     await cleanup();
   });
 
@@ -67,7 +69,7 @@ describe('createSignalingMiddleware (server)', () => {
     const received: string[] = [];
     const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
 
-    store.dispatch({type: 'RELAY_OFFER', targetPeerId: 'p1', sdp: 'v=0'});
+    store.dispatch(relayOffer('p1', 'v=0'));
 
     await vi.waitFor(() =>
       expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'RELAY_OFFER', targetPeerId: 'p1', sdp: 'v=0'})
@@ -79,7 +81,7 @@ describe('createSignalingMiddleware (server)', () => {
     const received: string[] = [];
     const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
 
-    store.dispatch({type: 'RELAY_ANSWER', targetPeerId: 'p1', sdp: 'v=answer'});
+    store.dispatch(relayAnswer('p1', 'v=answer'));
 
     await vi.waitFor(() =>
       expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'RELAY_ANSWER', targetPeerId: 'p1', sdp: 'v=answer'})
@@ -92,7 +94,7 @@ describe('createSignalingMiddleware (server)', () => {
 
     getConn().send(JSON.stringify({type: 'PREVIOUS_PEERS', peers: [{peerId: 'p1', name: 'Alice', online: false}]}));
 
-    await vi.waitFor(() => expect(store.getState().previousPeers).toEqual([{peerId: 'p1', name: 'Alice', online: false}]));
+    await vi.waitFor(() => expect(selectPreviousPeers(store.getState())).toEqual([{peerId: 'p1', name: 'Alice', online: false}]));
     await cleanup();
   });
 
@@ -100,7 +102,7 @@ describe('createSignalingMiddleware (server)', () => {
     const received: string[] = [];
     const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
 
-    store.dispatch({type: 'FORGET_PEER', peerId: 'p1'});
+    store.dispatch(forgetPeer('p1'));
 
     await vi.waitFor(() =>
       expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'FORGET_PEER', targetPeerId: 'p1'})
@@ -112,7 +114,7 @@ describe('createSignalingMiddleware (server)', () => {
     const received: string[] = [];
     const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
 
-    store.dispatch({type: 'RELAY_ICE_RESTART', targetPeerId: 'p1', sdp: 'v=restart'});
+    store.dispatch(relayIceRestart('p1', 'v=restart'));
 
     await vi.waitFor(() =>
       expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'RELAY_ICE_RESTART', targetPeerId: 'p1', sdp: 'v=restart'})
@@ -124,7 +126,7 @@ describe('createSignalingMiddleware (server)', () => {
     const received: string[] = [];
     const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
 
-    store.dispatch({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: 'p1', sdp: 'v=restart-answer'});
+    store.dispatch(relayIceRestartAnswer('p1', 'v=restart-answer'));
 
     await vi.waitFor(() =>
       expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: 'p1', sdp: 'v=restart-answer'})
@@ -164,11 +166,11 @@ describe('createSignalingMiddleware (server)', () => {
     const {store, getConn, cleanup} = await connectStore();
 
     getConn().send(JSON.stringify({type: 'PREVIOUS_PEERS', peers: [{peerId: 'p1', name: 'Alice', online: false}]}));
-    await vi.waitFor(() => expect(store.getState().previousPeers).toHaveLength(1));
+    await vi.waitFor(() => expect(selectPreviousPeers(store.getState())).toHaveLength(1));
 
     getConn().send(JSON.stringify({type: 'EMAIL_SHARED', fromPeerId: 'p1', email: 'alice@example.com'}));
 
-    await vi.waitFor(() => expect(store.getState().previousPeers[0]).toEqual({peerId: 'p1', name: 'Alice', online: false, email: 'alice@example.com'}));
+    await vi.waitFor(() => expect(selectPreviousPeers(store.getState())[0]).toEqual({peerId: 'p1', name: 'Alice', online: false, email: 'alice@example.com'}));
     await cleanup();
   });
 
@@ -176,11 +178,11 @@ describe('createSignalingMiddleware (server)', () => {
     const {store, getConn, cleanup} = await connectStore();
 
     getConn().send(JSON.stringify({type: 'PREVIOUS_PEERS', peers: [{peerId: 'p1', name: 'Alice', online: false, email: 'alice@example.com'}]}));
-    await vi.waitFor(() => expect(store.getState().previousPeers[0]?.email).toBe('alice@example.com'));
+    await vi.waitFor(() => expect(selectPreviousPeers(store.getState())[0]?.email).toBe('alice@example.com'));
 
     getConn().send(JSON.stringify({type: 'EMAIL_REVOKED', fromPeerId: 'p1'}));
 
-    await vi.waitFor(() => expect(store.getState().previousPeers[0]?.email).toBeUndefined());
+    await vi.waitFor(() => expect(selectPreviousPeers(store.getState())[0]?.email).toBeUndefined());
     await cleanup();
   });
 
@@ -188,7 +190,7 @@ describe('createSignalingMiddleware (server)', () => {
     const received: string[] = [];
     const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
 
-    store.dispatch({type: 'SHARE_EMAIL', targetPeerId: 'p1'});
+    store.dispatch(shareEmail('p1'));
 
     await vi.waitFor(() =>
       expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'SHARE_EMAIL', targetPeerId: 'p1'})
@@ -200,7 +202,7 @@ describe('createSignalingMiddleware (server)', () => {
     const received: string[] = [];
     const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
 
-    store.dispatch({type: 'STOP_SHARING_EMAIL', targetPeerId: 'p1'});
+    store.dispatch(stopSharingEmail('p1'));
 
     await vi.waitFor(() =>
       expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'STOP_SHARING_EMAIL', targetPeerId: 'p1'})
@@ -212,7 +214,7 @@ describe('createSignalingMiddleware (server)', () => {
     const received: string[] = [];
     const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
 
-    store.dispatch({type: 'UPDATE_EMAIL', email: 'new@example.com'});
+    store.dispatch(updateEmail('new@example.com'));
 
     await vi.waitFor(() =>
       expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'UPDATE_EMAIL', email: 'new@example.com'})
@@ -225,25 +227,25 @@ describe('createSignalingMiddleware (server)', () => {
     const {store, getConn, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
 
     getConn().send(JSON.stringify({type: 'PREVIOUS_PEERS', peers: [{peerId: 'p1', name: 'Bob', online: false}]}));
-    await vi.waitFor(() => expect(store.getState().previousPeers).toHaveLength(1));
+    await vi.waitFor(() => expect(selectPreviousPeers(store.getState())).toHaveLength(1));
 
-    store.dispatch({type: 'SAVE_PEER_EMAIL', peerId: 'p1', email: 'bob@example.com'});
+    store.dispatch(savePeerEmail('p1', 'bob@example.com'));
 
     await vi.waitFor(() =>
       expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'SAVE_PEER_EMAIL', targetPeerId: 'p1', email: 'bob@example.com'})
     );
-    expect(store.getState().previousPeers[0]).toEqual({peerId: 'p1', name: 'Bob', online: false, email: 'bob@example.com'});
+    expect(selectPreviousPeers(store.getState())[0]).toEqual({peerId: 'p1', name: 'Bob', online: false, email: 'bob@example.com'});
     await cleanup();
   });
 
   it('STOP_SIGNALING prevents further server events from updating state', async () => {
     const {store, getConn, cleanup} = await connectStore();
 
-    store.dispatch({type: 'STOP_SIGNALING'});
+    store.dispatch(stopSignaling());
     getConn().send(JSON.stringify({type: 'PEER_JOINED', peerId: 'p1', name: 'Alice'}));
 
     await new Promise(r => setTimeout(r, 50));
-    expect(store.getState().onlinePeers).toEqual([]);
+    expect(selectOnlinePeers(store.getState())).toEqual([]);
     await cleanup();
   });
 });

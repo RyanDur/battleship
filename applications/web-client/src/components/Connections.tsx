@@ -2,6 +2,7 @@ import {useState} from 'react';
 import {useConnectionState, useConnectionStore} from '../state/useConnection';
 import type {ConnectionFlow, Peer, PreviousPeer} from '../state/connections';
 import {selectFlow, selectPeers, selectPendingIntroductions, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth} from '../state/connectionSelectors';
+import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, acceptAnswerCode, cancelOffer, createOffer, joinOffer, connectViaServer, acceptIntroduction, declineIntroduction} from '../state/connectionActions';
 
 type FlowPhase =
   | {phase: 'idle'}
@@ -39,16 +40,16 @@ const PeerRow = ({peer, otherTrustingPeers, unstable}: {peer: Peer; otherTrustin
       {introducing && otherTrustingPeers.map(other => (
         <button
           key={other.id}
-          onClick={() => { store.dispatch({type: 'INTRODUCE_PEERS', peerId1: peer.id, peerId2: other.id}); setIntroducing(false); }}
+          onClick={() => { store.dispatch(introducePeers(peer.id, other.id)); setIntroducing(false); }}
         >
           {other.name ?? 'Unknown'}
         </button>
       ))}
       {peer.trusted
-        ? <button onClick={() => store.dispatch({type: 'REVOKE_TRUST', peerId: peer.id})}>Revoke trust</button>
-        : <button onClick={() => store.dispatch({type: 'GRANT_TRUST', peerId: peer.id})}>Trust</button>
+        ? <button onClick={() => store.dispatch(revokeTrust(peer.id))}>Revoke trust</button>
+        : <button onClick={() => store.dispatch(grantTrust(peer.id))}>Trust</button>
       }
-      <button onClick={() => store.dispatch({type: 'DISCONNECT', peerId: peer.id})}>Disconnect</button>
+      <button onClick={() => store.dispatch(disconnect(peer.id))}>Disconnect</button>
     </li>
   );
 };
@@ -60,7 +61,7 @@ const PreviousPeerRow = ({peer}: {peer: PreviousPeer}) => {
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (emailInput.trim()) {
-      store.dispatch({type: 'SAVE_PEER_EMAIL', peerId: peer.peerId, email: emailInput.trim()});
+      store.dispatch(savePeerEmail(peer.peerId, emailInput.trim()));
       setEmailInput('');
     }
   };
@@ -70,7 +71,7 @@ const PreviousPeerRow = ({peer}: {peer: PreviousPeer}) => {
       {peer.name}
       <span>{peer.online ? 'Online' : 'Offline'}</span>
       {peer.online && (
-        <button onClick={() => store.dispatch({type: 'RECONNECT_VIA_SERVER', signalingPeerId: peer.peerId, name: peer.name})}>Reconnect</button>
+        <button onClick={() => store.dispatch(reconnectViaServer(peer.peerId, peer.name))}>Reconnect</button>
       )}
       {!peer.online && peer.email && (
         <a href={`mailto:${peer.email}`}>Invite</a>
@@ -84,7 +85,7 @@ const PreviousPeerRow = ({peer}: {peer: PreviousPeer}) => {
           />
         </form>
       )}
-      <button onClick={() => store.dispatch({type: 'FORGET_PEER', peerId: peer.peerId})}>Forget</button>
+      <button onClick={() => store.dispatch(forgetPeer(peer.peerId))}>Forget</button>
     </li>
   );
 };
@@ -120,7 +121,7 @@ export const Connections = ({serviceOnline}: Props) => {
               value={responseCode}
               onChange={e => setResponseCode(e.target.value)}
             />
-            <button onClick={() => store.dispatch({type: 'ACCEPT_ANSWER_CODE', responseCode})}>Connect</button>
+            <button onClick={() => store.dispatch(acceptAnswerCode(responseCode))}>Connect</button>
           </div>
         </div>
       );
@@ -139,7 +140,7 @@ export const Connections = ({serviceOnline}: Props) => {
       return (
         <div>
           <p>Failed to generate a code. Please try again.</p>
-          <button onClick={() => store.dispatch({type: 'CANCEL_OFFER'})}>Cancel</button>
+          <button onClick={() => store.dispatch(cancelOffer())}>Cancel</button>
         </div>
       );
     }
@@ -150,7 +151,7 @@ export const Connections = ({serviceOnline}: Props) => {
 
     if (formMode === 'create') {
       return (
-        <form onSubmit={e => { e.preventDefault(); store.dispatch({type: 'CREATE_OFFER', passphrase}); }}>
+        <form onSubmit={e => { e.preventDefault(); store.dispatch(createOffer(passphrase)); }}>
           <label htmlFor="create-passphrase">Passphrase</label>
           <input
             id="create-passphrase"
@@ -164,7 +165,7 @@ export const Connections = ({serviceOnline}: Props) => {
 
     if (formMode === 'join') {
       return (
-        <form onSubmit={e => { e.preventDefault(); store.dispatch({type: 'JOIN_OFFER', code: offerCode, passphrase}); }}>
+        <form onSubmit={e => { e.preventDefault(); store.dispatch(joinOffer(offerCode, passphrase)); }}>
           <label htmlFor="join-passphrase">Passphrase</label>
           <input
             id="join-passphrase"
@@ -204,7 +205,7 @@ export const Connections = ({serviceOnline}: Props) => {
           {onlinePeers.map(peer => (
             <li key={peer.peerId}>
               {peer.name}
-              <button onClick={() => store.dispatch({type: 'CONNECT_VIA_SERVER', signalingPeerId: peer.peerId, name: peer.name})}>Connect</button>
+              <button onClick={() => store.dispatch(connectViaServer(peer.peerId, peer.name))}>Connect</button>
             </li>
           ))}
         </ul>
@@ -227,8 +228,8 @@ export const Connections = ({serviceOnline}: Props) => {
           {pendingIntroductions.map(intro => (
             <li key={intro.introId}>
               {intro.from} wants to introduce you to {intro.peer}
-              <button onClick={() => store.dispatch({type: 'ACCEPT_INTRODUCTION', introId: intro.introId})}>Accept</button>
-              <button onClick={() => store.dispatch({type: 'DECLINE_INTRODUCTION', introId: intro.introId})}>Decline</button>
+              <button onClick={() => store.dispatch(acceptIntroduction(intro.introId))}>Accept</button>
+              <button onClick={() => store.dispatch(declineIntroduction(intro.introId))}>Decline</button>
             </li>
           ))}
         </ul>

@@ -5,6 +5,7 @@ import { asyncResult, asyncTryCatch } from '../lib/asyncResult';
 import type { PeerCommand, PeerEvent } from '../types/worker-messages';
 import type { ConnectionsState, ConnectionsAction } from '../state/connections';
 import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer} from '../state/connectionSelectors';
+import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered} from '../state/connectionActions';
 
 const introduceDecoder = Decoder.object({
   required: { type: Decoder.literal('INTRODUCE'), name: Decoder.string },
@@ -166,7 +167,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
   const cleanupIntro = (introId: string, type: 'INTRODUCTION_DECLINED' | 'INTRODUCTION_EXPIRED') => {
     const introPeerId = selectIntroConnections(deps.getState())[introId];
     if (introPeerId) {
-      deps.dispatch({type: 'INTRO_CONNECTION_CLEARED', introId});
+      deps.dispatch(introConnectionCleared(introId));
       const pc = connections.get(introPeerId);
       connections.delete(introPeerId);
       pc?.close();
@@ -186,7 +187,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
           if (attempts > MAX_ICE_RESTART_ATTEMPTS) {
             deps.emit({type: 'PEER_DISCONNECTED', peerId});
           } else {
-            deps.dispatch({type: 'ICE_RESTART_ATTEMPTED', peerId});
+            deps.dispatch(iceRestartAttempted(peerId));
             createIceRestartOffer(pc, signalingPeerId, deps.emit);
           }
         }
@@ -202,7 +203,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
     onOpen: (peerId, channel) => {
       dataChannels.set(peerId, channel);
       const introEntry = Object.entries(selectIntroConnections(deps.getState())).find(([, pid]) => pid === peerId);
-      if (introEntry) deps.dispatch({type: 'INTRO_CONNECTION_CLEARED', introId: introEntry[0]});
+      if (introEntry) deps.dispatch(introConnectionCleared(introEntry[0]));
     },
     onClose: (peerId) => {
       const wasConnected = dataChannels.has(peerId);
@@ -272,7 +273,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
           }))
         .or(() => maybe(introductionDecoder.decode(parsed))
           .map(msg => {
-            deps.dispatch({type: 'INTRO_CHANNEL_REGISTERED', introId: msg.introId, relayPeerId: peerId});
+            deps.dispatch(introChannelRegistered(msg.introId, peerId));
             deps.emit({ type: 'INTRODUCTION_RECEIVED', introId: msg.introId, from: msg.from, peer: msg.peer });
           }))
         .or(() => maybe(createOfferForDecoder.decode(parsed))
@@ -282,7 +283,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
             const newPeerId = generatePeerId();
             const pc = deps.createPeerConnection();
             connections.set(newPeerId, pc);
-            deps.dispatch({type: 'INTRO_CONNECTION_REGISTERED', introId: msg.introId, newPeerId});
+            deps.dispatch(introConnectionRegistered(msg.introId, newPeerId));
             negotiateIntroOffer(pc, newPeerId, deps.name, deps.emit, cbs, relayChannel, msg.introId);
           }))
         .or(() => maybe(introductionSdpAnswerDecoder.decode(parsed))
@@ -297,7 +298,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
             const newPeerId = generatePeerId();
             const pc = deps.createPeerConnection();
             connections.set(newPeerId, pc);
-            deps.dispatch({type: 'INTRO_CONNECTION_REGISTERED', introId: msg.introId, newPeerId});
+            deps.dispatch(introConnectionRegistered(msg.introId, newPeerId));
             negotiateIntroAnswer(pc, newPeerId, deps.name, deps.emit, msg.sdp, cbs, relayChannel, msg.introId);
           }))
         .or(() => maybe(introductionDeclinedDecoder.decode(parsed))
@@ -378,7 +379,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const localPeerId = generatePeerId();
         const pc = deps.createPeerConnection();
         connections.set(localPeerId, pc);
-        deps.dispatch({type: 'SIGNALING_PEER_REGISTERED', localPeerId, signalingPeerId: command.signalingPeerId, isOfferer: true});
+        deps.dispatch(signalingPeerRegistered(localPeerId, command.signalingPeerId, true));
         wireIceRestart(pc, localPeerId);
         negotiateServerOffer(pc, localPeerId, command.signalingPeerId, deps.name, deps.emit, cbs);
         break;
@@ -387,7 +388,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const localPeerId = generatePeerId();
         const pc = deps.createPeerConnection();
         connections.set(localPeerId, pc);
-        deps.dispatch({type: 'SIGNALING_PEER_REGISTERED', localPeerId, signalingPeerId: command.signalingPeerId, isOfferer: false});
+        deps.dispatch(signalingPeerRegistered(localPeerId, command.signalingPeerId, false));
         wireIceRestart(pc, localPeerId);
         negotiateServerAnswer(pc, localPeerId, command.signalingPeerId, deps.name, deps.emit, command.sdp, cbs);
         break;

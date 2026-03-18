@@ -4,6 +4,7 @@ import {useConnectionState, useConnectionStore} from './useConnection';
 import {initialState} from './connections';
 import type {ConnectionStore} from './connectionStore';
 import type {ConnectionsState} from './connections';
+import {createOffer} from './connectionActions';
 
 const makeFakeStore = (initial: ConnectionsState = initialState): ConnectionStore & {_emit: () => void} => {
   let state = initial;
@@ -83,7 +84,7 @@ describe('ConnectionContext', () => {
 
       const Button = () => {
         const s = useConnectionStore();
-        return <button onClick={() => s.dispatch({type: 'CREATE_OFFER', passphrase: 'pass'})}>go</button>;
+        return <button onClick={() => s.dispatch(createOffer('pass'))}>go</button>;
       };
 
       render(
@@ -94,7 +95,7 @@ describe('ConnectionContext', () => {
 
       screen.getByRole('button').click();
 
-      expect(store.dispatch).toHaveBeenCalledWith({type: 'CREATE_OFFER', passphrase: 'pass'});
+      expect(store.dispatch).toHaveBeenCalledWith(createOffer('pass'));
     });
   });
 });

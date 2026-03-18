@@ -1,7 +1,7 @@
 import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction} from './connections';
-import {selectFlow, selectIntroChannels, selectIsCreatingOffer} from './connectionSelectors';
-
+import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling} from './connectionSelectors';
+import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived} from './connectionActions';
 import type {PeerEvent} from '../types/worker-messages';
 import {encodeConnectionCode, decodeConnectionCode} from '../protocol/connection-code';
 import {createPeerHandler} from '../workers/connection.handler';
@@ -80,29 +80,28 @@ type HandlerListenerConfig = {
 const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState) =>
   (event: PeerEvent) => {
     if (event.type === 'PEER_CONNECTED') {
-      dispatch({type: 'PEER_CONNECTED', peerId: event.peerId});
-      const {peerToSignaling, offererPeerIds} = getState().handlerState;
-      if (offererPeerIds.includes(event.peerId)) {
-        const signalingPeerId = peerToSignaling[event.peerId];
-        if (signalingPeerId) dispatch({type: 'PREVIOUS_PEER_CONNECTED', signalingPeerId});
+      dispatch(peerConnected(event.peerId));
+      if (selectOffererPeerIds(getState()).includes(event.peerId)) {
+        const signalingPeerId = selectPeerToSignaling(getState())[event.peerId];
+        if (signalingPeerId) dispatch(previousPeerConnected(signalingPeerId));
       }
     }
-    else if (event.type === 'PEER_NAMED') dispatch({type: 'PEER_NAMED', peerId: event.peerId, name: event.name});
-    else if (event.type === 'PEER_DISCONNECTED') dispatch({type: 'PEER_DISCONNECTED', peerId: event.peerId});
-    else if (event.type === 'PEER_TRUST_UPDATED') dispatch({type: 'PEER_TRUST_UPDATED', peerId: event.peerId, trusts: event.trusts});
-    else if (event.type === 'OFFER_CREATED') dispatch({type: 'OFFER_SDP_READY', peerId: event.peerId, sdp: event.sdp});
-    else if (event.type === 'ANSWER_CREATED') dispatch({type: 'ANSWER_SDP_READY', sdp: event.sdp});
-    else if (event.type === 'INTRODUCTION_RECEIVED') dispatch({type: 'INTRODUCTION_RECEIVED', introId: event.introId, from: event.from, peer: event.peer});
-    else if (event.type === 'INTRODUCTION_DECLINED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
-    else if (event.type === 'INTRODUCTION_EXPIRED') dispatch({type: 'INTRODUCTION_RESOLVED', introId: event.introId});
-    else if (event.type === 'SERVER_OFFER_CREATED') dispatch({type: 'RELAY_OFFER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
-    else if (event.type === 'SERVER_ANSWER_CREATED') dispatch({type: 'RELAY_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
-    else if (event.type === 'PEER_CONNECTION_UNSTABLE') dispatch({type: 'PEER_CONNECTION_UNSTABLE', peerId: event.peerId});
-    else if (event.type === 'PEER_CONNECTION_RESTORED') dispatch({type: 'PEER_CONNECTION_RESTORED', peerId: event.peerId});
-    else if (event.type === 'ICE_RESTART_OFFER_CREATED') dispatch({type: 'RELAY_ICE_RESTART', targetPeerId: event.signalingPeerId, sdp: event.sdp});
-    else if (event.type === 'ICE_RESTART_ANSWER_CREATED') dispatch({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
+    else if (event.type === 'PEER_NAMED') dispatch(peerNamed(event.peerId, event.name));
+    else if (event.type === 'PEER_DISCONNECTED') dispatch(peerDisconnected(event.peerId));
+    else if (event.type === 'PEER_TRUST_UPDATED') dispatch(peerTrustUpdated(event.peerId, event.trusts));
+    else if (event.type === 'OFFER_CREATED') dispatch(offerSdpReady(event.peerId, event.sdp));
+    else if (event.type === 'ANSWER_CREATED') dispatch(answerSdpReady(event.sdp));
+    else if (event.type === 'INTRODUCTION_RECEIVED') dispatch(introductionReceived(event.introId, event.from, event.peer));
+    else if (event.type === 'INTRODUCTION_DECLINED') dispatch(introductionResolved(event.introId));
+    else if (event.type === 'INTRODUCTION_EXPIRED') dispatch(introductionResolved(event.introId));
+    else if (event.type === 'SERVER_OFFER_CREATED') dispatch(relayOffer(event.signalingPeerId, event.sdp));
+    else if (event.type === 'SERVER_ANSWER_CREATED') dispatch(relayAnswer(event.signalingPeerId, event.sdp));
+    else if (event.type === 'PEER_CONNECTION_UNSTABLE') dispatch(peerConnectionUnstable(event.peerId));
+    else if (event.type === 'PEER_CONNECTION_RESTORED') dispatch(peerConnectionRestored(event.peerId));
+    else if (event.type === 'ICE_RESTART_OFFER_CREATED') dispatch(relayIceRestart(event.signalingPeerId, event.sdp));
+    else if (event.type === 'ICE_RESTART_ANSWER_CREATED') dispatch(relayIceRestartAnswer(event.signalingPeerId, event.sdp));
     else if (event.type === 'ERROR') {
-      if (selectIsCreatingOffer(getState())) dispatch({type: 'OFFER_FAILED'});
+      if (selectIsCreatingOffer(getState())) dispatch(offerFailed());
     }
   };
 
@@ -136,9 +135,9 @@ export const encodingMiddleware: MiddlewareFactory =
     (action: ConnectionsAction) => {
       const flow = selectFlow(getState());
       if (action.type === 'OFFER_SDP_READY' && flow.phase === 'creating') {
-        encodeConnectionCode(action.sdp, flow.passphrase).onSuccess(code => dispatch({type: 'OFFER_ENCODED', peerId: action.peerId, code}));
+        encodeConnectionCode(action.sdp, flow.passphrase).onSuccess(code => dispatch(offerEncoded(action.peerId, code)));
       } else if (action.type === 'ANSWER_SDP_READY' && flow.phase === 'joining') {
-        encodeConnectionCode(action.sdp, flow.passphrase).onSuccess(code => dispatch({type: 'ANSWER_ENCODED', code}));
+        encodeConnectionCode(action.sdp, flow.passphrase).onSuccess(code => dispatch(answerEncoded(code)));
       }
       next(action);
     };
@@ -148,13 +147,13 @@ export const codecMiddleware: MiddlewareFactory =
     (action: ConnectionsAction) => {
       if (action.type === 'JOIN_OFFER') {
         decodeConnectionCode(action.code, action.passphrase)
-          .onSuccess(sdp => dispatch({type: 'ACCEPT_OFFER', sdp}))
-          .onFailure(() => dispatch({type: 'DECODE_FAILED'}));
+          .onSuccess(sdp => dispatch(acceptOffer(sdp)))
+          .onFailure(() => dispatch(decodeFailed()));
       } else if (action.type === 'ACCEPT_ANSWER_CODE') {
         const flow = selectFlow(getState());
         if (flow.phase === 'offer-ready') {
           decodeConnectionCode(action.responseCode, flow.passphrase)
-            .onSuccess(sdp => dispatch({type: 'ACCEPT_ANSWER', peerId: flow.peerId, sdp}));
+            .onSuccess(sdp => dispatch(acceptAnswer(flow.peerId, sdp)));
         }
       }
       next(action);
@@ -171,16 +170,16 @@ export const createSignalingListener = ({config}: SignalingListenerConfig): List
     return (action) => {
       if (action.type === 'START_SIGNALING') {
         handle = startSignaling(config, (event: SignalingEvent) => {
-          if (event.type === 'PEERS') dispatch({type: 'ONLINE_PEERS_UPDATED', peers: event.peers});
-          else if (event.type === 'PEER_JOINED') dispatch({type: 'ONLINE_PEER_JOINED', peerId: event.peerId, name: event.name});
-          else if (event.type === 'PEER_LEFT') dispatch({type: 'ONLINE_PEER_LEFT', peerId: event.peerId});
-          else if (event.type === 'OFFER_RECEIVED') dispatch({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: event.fromPeerId, name: event.name, sdp: event.sdp});
-          else if (event.type === 'ANSWER_RECEIVED') dispatch({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: event.fromPeerId, sdp: event.sdp});
-          else if (event.type === 'PREVIOUS_PEERS') dispatch({type: 'PREVIOUS_PEERS_RECEIVED', peers: event.peers});
-          else if (event.type === 'ICE_RESTART_RECEIVED') dispatch({type: 'ICE_RESTART_RECEIVED', signalingPeerId: event.fromPeerId, sdp: event.sdp});
-          else if (event.type === 'ICE_RESTART_ANSWER_RECEIVED') dispatch({type: 'ICE_RESTART_ANSWER_RECEIVED', signalingPeerId: event.fromPeerId, sdp: event.sdp});
-          else if (event.type === 'EMAIL_SHARED') dispatch({type: 'EMAIL_SHARED_RECEIVED', fromPeerId: event.fromPeerId, email: event.email});
-          else if (event.type === 'EMAIL_REVOKED') dispatch({type: 'EMAIL_REVOKED_RECEIVED', fromPeerId: event.fromPeerId});
+          if (event.type === 'PEERS') dispatch(onlinePeersUpdated(event.peers));
+          else if (event.type === 'PEER_JOINED') dispatch(onlinePeerJoined(event.peerId, event.name));
+          else if (event.type === 'PEER_LEFT') dispatch(onlinePeerLeft(event.peerId));
+          else if (event.type === 'OFFER_RECEIVED') dispatch(serverOfferReceived(event.fromPeerId, event.name, event.sdp));
+          else if (event.type === 'ANSWER_RECEIVED') dispatch(serverAnswerReceived(event.fromPeerId, event.sdp));
+          else if (event.type === 'PREVIOUS_PEERS') dispatch(previousPeersReceived(event.peers));
+          else if (event.type === 'ICE_RESTART_RECEIVED') dispatch(iceRestartReceived(event.fromPeerId, event.sdp));
+          else if (event.type === 'ICE_RESTART_ANSWER_RECEIVED') dispatch(iceRestartAnswerReceived(event.fromPeerId, event.sdp));
+          else if (event.type === 'EMAIL_SHARED') dispatch(emailSharedReceived(event.fromPeerId, event.email));
+          else if (event.type === 'EMAIL_REVOKED') dispatch(emailRevokedReceived(event.fromPeerId));
         });
       } else if (action.type === 'STOP_SIGNALING') {
         handle?.stop();
