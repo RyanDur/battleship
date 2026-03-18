@@ -32,7 +32,7 @@ const App = () => {
     return createConnectionStore(
       applyMiddleware([encodingMiddleware, codecMiddleware]),
       [
-        createHandlerListener({name: 'Player', createPeerConnection: () => new RTCPeerConnection()}),
+        createHandlerListener({name: 'Player', createPeerConnection: () => new RTCPeerConnection({iceServers: [{urls: 'stun:stun.l.google.com:19302'}]})}),
         createSignalingListener({config: {createWebSocket: (url) => new WebSocket(url), sessionUrl: `${config.serviceUrl}/session`, url: signalingUrl, name: 'Player'}}),
       ],
     );
