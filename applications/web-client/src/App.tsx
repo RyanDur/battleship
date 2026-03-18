@@ -1,4 +1,5 @@
 import {useEffect, useMemo, useState} from 'react';
+import {Comms} from './components/Comms';
 import {DirectConnect} from './components/DirectConnect';
 import {DownloadLink} from './components/DownloadLink';
 import {Fleet} from './components/Fleet';
@@ -20,8 +21,11 @@ const actionFor = (state: HeartbeatState) => {
   return 'download' as const;
 };
 
+type SelectedPeer = {id: string; name: string | null} | null;
+
 const App = () => {
   const [config, setConfig] = useState<import('./protocol/config').Config | null>(null);
+  const [selectedPeer, setSelectedPeer] = useState<SelectedPeer>(null);
   const {state: heartbeat, retry} = useHeartbeat(config);
 
   useEffect(() => {
@@ -55,10 +59,15 @@ const App = () => {
       </header>
       {store && (
         <ConnectionProvider store={store}>
-          <Fleet/>
+          <Fleet onSelectPeer={(id, name) => setSelectedPeer({id, name})}/>
         </ConnectionProvider>
       )}
       <main className="hud-main"/>
+      {store && (
+        <ConnectionProvider store={store}>
+          <Comms peerId={selectedPeer?.id ?? null} peerName={selectedPeer?.name ?? null}/>
+        </ConnectionProvider>
+      )}
       <footer className="hud-footer">
         {store && (
           <ConnectionProvider store={store}>

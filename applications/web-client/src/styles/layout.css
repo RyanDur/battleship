@@ -3,11 +3,11 @@
 .hud-root {
   display: grid;
   grid-template-rows: auto 1fr auto;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 280px 1fr 280px;
   grid-template-areas:
-    "header  header"
-    "fleet   main"
-    "footer  footer";
+    "header  header  header"
+    "fleet   main    comms"
+    "footer  footer  footer";
   min-height: 100dvh;
   max-width: 1200px;
   width: 100%;
@@ -21,6 +21,7 @@
       "header"
       "fleet"
       "main"
+      "comms"
       "footer";
   }
 }
@@ -154,6 +155,85 @@
 .direct-connect-label {
   margin: 0;
   font-size: 0.8rem;
+}
+
+/* ── Comms panel ─────────────────────────────────────────────────────────── */
+
+.hud-comms {
+  grid-area: comms;
+  border-left: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.comms-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  list-style: none;
+  user-select: none;
+}
+
+.comms-summary::-webkit-details-marker {
+  display: none;
+}
+
+.comms-details[open] .comms-summary {
+  color: var(--color-accent);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.comms-unread {
+  font-size: 0.7rem;
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.comms-conversation {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  gap: var(--space-sm);
+}
+
+.comms-messages {
+  flex: 1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.comms-message {
+  font-size: 0.85rem;
+}
+
+.comms-message--sent {
+  color: var(--color-accent);
+}
+
+.comms-form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.comms-label {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
 }
 
 /* ── Service health (live region in header) ─────────────────────────────── */
