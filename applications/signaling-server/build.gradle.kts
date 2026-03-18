@@ -60,6 +60,7 @@ tasks.register<Exec>("jpackage") {
         },
         "--type", installerType,
         "--dest", outputDir.absolutePath,
-        "--java-options", "-Xmx256m"
+        "--java-options", "-Xmx256m",
+        "--java-options", "-Djava.awt.headless=false"
     )
 }
