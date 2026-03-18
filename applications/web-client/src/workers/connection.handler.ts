@@ -5,7 +5,7 @@ import { asyncResult, asyncTryCatch } from '../lib/asyncResult';
 import type { PeerCommand, PeerEvent } from '../types/worker-messages';
 import type { ConnectionsState, ConnectionsAction } from '../state/connections';
 import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer} from '../state/connectionSelectors';
-import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered} from '../state/connectionActions';
+import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed} from '../state/connectionActions';
 
 const introduceDecoder = Decoder.object({
   required: { type: Decoder.literal('INTRODUCE'), name: Decoder.string },
@@ -124,23 +124,40 @@ const negotiateOffer = (pc: RTCPeerConnection, peerId: string, name: string, emi
 
 const negotiateAnswer = (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void, remoteSdp: string, cbs: ChannelCallbacks) =>
   acceptOfferSdp(pc, peerId, name, emit, remoteSdp, cbs)
-    .onSuccess(sdp => { if (sdp) emit({ type: 'ANSWER_CREATED', peerId, sdp }); });
+    .onSuccess(sdp => { if (sdp) emit({ type: 'ANSWER_CREATED', peerId, sdp }); })
+    .onFailure(err => emit({ type: 'ERROR', message: err.message }));
 
 const negotiateServerOffer = (pc: RTCPeerConnection, localPeerId: string, signalingPeerId: string, name: string, emit: (event: PeerEvent) => void, cbs: ChannelCallbacks) =>
   createOfferSdp(pc, localPeerId, name, emit, cbs)
-    .onSuccess(sdp => { if (sdp) emit({ type: 'SERVER_OFFER_CREATED', signalingPeerId, localPeerId, sdp }); });
+    .onSuccess(sdp => {
+      if (sdp) emit({ type: 'SERVER_OFFER_CREATED', signalingPeerId, localPeerId, sdp });
+      else emit({ type: 'ERROR', message: 'ICE gathering timed out' });
+    })
+    .onFailure(err => emit({ type: 'ERROR', message: err.message }));
 
 const negotiateServerAnswer = (pc: RTCPeerConnection, localPeerId: string, signalingPeerId: string, name: string, emit: (event: PeerEvent) => void, remoteSdp: string, cbs: ChannelCallbacks) =>
   acceptOfferSdp(pc, localPeerId, name, emit, remoteSdp, cbs)
-    .onSuccess(sdp => { if (sdp) emit({ type: 'SERVER_ANSWER_CREATED', signalingPeerId, sdp }); });
+    .onSuccess(sdp => {
+      if (sdp) emit({ type: 'SERVER_ANSWER_CREATED', signalingPeerId, sdp });
+      else emit({ type: 'ERROR', message: 'ICE gathering timed out' });
+    })
+    .onFailure(err => emit({ type: 'ERROR', message: err.message }));
 
 const negotiateIntroOffer = (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void, cbs: ChannelCallbacks, relayChannel: RTCDataChannel, introId: string) =>
   createOfferSdp(pc, peerId, name, emit, cbs)
-    .onSuccess(sdp => { if (sdp) relayChannel.send(JSON.stringify({ type: 'RELAY_SDP', introId, peerId, sdp })); });
+    .onSuccess(sdp => {
+      if (sdp) relayChannel.send(JSON.stringify({ type: 'RELAY_SDP', introId, peerId, sdp }));
+      else emit({ type: 'ERROR', message: 'ICE gathering timed out' });
+    })
+    .onFailure(err => emit({ type: 'ERROR', message: err.message }));
 
 const negotiateIntroAnswer = (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void, remoteSdp: string, cbs: ChannelCallbacks, relayChannel: RTCDataChannel, introId: string) =>
   acceptOfferSdp(pc, peerId, name, emit, remoteSdp, cbs)
-    .onSuccess(sdp => { if (sdp) relayChannel.send(JSON.stringify({ type: 'RELAY_SDP_ANSWER', introId, sdp })); });
+    .onSuccess(sdp => {
+      if (sdp) relayChannel.send(JSON.stringify({ type: 'RELAY_SDP_ANSWER', introId, sdp }));
+      else emit({ type: 'ERROR', message: 'ICE gathering timed out' });
+    })
+    .onFailure(err => emit({ type: 'ERROR', message: err.message }));
 
 const MAX_ICE_RESTART_ATTEMPTS = 3;
 
@@ -329,7 +346,9 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const peerId = generatePeerId();
         const pc = deps.createPeerConnection();
         connections.set(peerId, pc);
-        negotiateAnswer(pc, peerId, deps.name, deps.emit, command.sdp, cbs);
+        negotiateAnswer(pc, peerId, deps.name, deps.emit, command.sdp, cbs)
+          .onSuccess(sdp => { if (!sdp) deps.dispatch(offerFailed()); })
+          .onFailure(() => deps.dispatch(offerFailed()));
         break;
       }
       case 'ACCEPT_ANSWER': {

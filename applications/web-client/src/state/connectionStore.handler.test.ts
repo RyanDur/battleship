@@ -259,6 +259,42 @@ describe('createHandlerMiddleware (store)', () => {
     }
   });
 
+  it('ACCEPT_OFFER transitions to offer-failed when ICE gathering produces no SDP', async () => {
+    // Generate a real offer code from a normal store
+    const aliceFactory = createFakePeerConnectionFactory();
+    const alice = createConnectionStore(
+      applyMiddleware([encodingMiddleware, codecMiddleware]),
+      [createHandlerListener({name: 'Alice', createPeerConnection: aliceFactory.createPeerConnection})],
+    );
+    alice.dispatch(createOffer('secret'));
+    await vi.waitFor(() => expect(selectFlow(alice.getState()).phase).toBe('offer-ready'));
+    const offerCode = (selectFlow(alice.getState()) as Extract<ConnectionFlow, {phase: 'offer-ready'}>).code;
+
+    // PC where iceGatheringState is already 'complete' but localDescription stays null,
+    // so gatherIceCandidates short-circuits and resolves with undefined immediately
+    const nullSdpPc = {
+      iceGatheringState: 'complete',
+      localDescription: null,
+      onicecandidate: null,
+      ondatachannel: null,
+      createDataChannel: () => ({onopen: null, onclose: null, onmessage: null, send: () => {}, close: () => {}}),
+      createOffer: async () => ({type: 'offer' as const, sdp: 'fake-offer'}),
+      createAnswer: async () => ({type: 'answer' as const, sdp: 'fake-answer'}),
+      setLocalDescription: async () => {},
+      setRemoteDescription: async () => {},
+      close: () => {},
+    } as unknown as RTCPeerConnection;
+
+    const bob = createConnectionStore(
+      applyMiddleware([encodingMiddleware, codecMiddleware]),
+      [createHandlerListener({name: 'Bob', createPeerConnection: () => nullSdpPc})],
+    );
+
+    bob.dispatch(joinOffer(offerCode, 'secret'));
+
+    await vi.waitFor(() => expect(selectFlow(bob.getState()).phase).toBe('offer-failed'));
+  });
+
   it('full offer/answer handshake connects both stores', async () => {
     const factory = createFakePeerConnectionFactory();
 
