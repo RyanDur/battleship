@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import {useConnectionState, useConnectionStore} from '../state/useConnection';
 import type {ConnectionFlow, Peer, PreviousPeer} from '../state/connections';
+import {selectFlow, selectPeers, selectPendingIntroductions, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth} from '../state/connectionSelectors';
 
 type FlowPhase =
   | {phase: 'idle'}
@@ -90,12 +91,12 @@ const PreviousPeerRow = ({peer}: {peer: PreviousPeer}) => {
 
 export const Connections = ({serviceOnline}: Props) => {
   const store = useConnectionStore();
-  const flow = toFlowPhase(useConnectionState(s => s.flow));
-  const peers = useConnectionState(s => s.peers);
-  const peerConnectionHealth = useConnectionState(s => s.peerConnectionHealth);
-  const pendingIntroductions = useConnectionState(s => s.pendingIntroductions);
-  const onlinePeers = useConnectionState(s => s.onlinePeers);
-  const previousPeers = useConnectionState(s => s.previousPeers);
+  const flow = toFlowPhase(useConnectionState(selectFlow));
+  const peers = useConnectionState(selectPeers);
+  const peerConnectionHealth = useConnectionState(selectPeerConnectionHealth);
+  const pendingIntroductions = useConnectionState(selectPendingIntroductions);
+  const onlinePeers = useConnectionState(selectOnlinePeers);
+  const previousPeers = useConnectionState(selectPreviousPeers);
 
   const [formMode, setFormMode] = useState<'none' | 'create' | 'join'>('none');
   const [passphrase, setPassphrase] = useState('');

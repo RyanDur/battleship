@@ -4,6 +4,7 @@ import { tryCatch } from '../lib/result';
 import { asyncResult, asyncTryCatch } from '../lib/asyncResult';
 import type { PeerCommand, PeerEvent } from '../types/worker-messages';
 import type { ConnectionsState, ConnectionsAction } from '../state/connections';
+import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer} from '../state/connectionSelectors';
 
 const introduceDecoder = Decoder.object({
   required: { type: Decoder.literal('INTRODUCE'), name: Decoder.string },
@@ -163,7 +164,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
   const pendingIntros = new Map<string, PendingIntro>();
 
   const cleanupIntro = (introId: string, type: 'INTRODUCTION_DECLINED' | 'INTRODUCTION_EXPIRED') => {
-    const introPeerId = deps.getState().handlerState.introConnections[introId];
+    const introPeerId = selectIntroConnections(deps.getState())[introId];
     if (introPeerId) {
       deps.dispatch({type: 'INTRO_CONNECTION_CLEARED', introId});
       const pc = connections.get(introPeerId);
@@ -178,10 +179,10 @@ export const createPeerHandler = (deps: Deps): Handler => {
       const iceState = pc.iceConnectionState;
       if (iceState === 'disconnected' || iceState === 'failed') {
         deps.emit({type: 'PEER_CONNECTION_UNSTABLE', peerId});
-        if (deps.getState().handlerState.offererPeerIds.includes(peerId)) {
-          const signalingPeerId = deps.getState().handlerState.peerToSignaling[peerId];
+        if (selectOffererPeerIds(deps.getState()).includes(peerId)) {
+          const signalingPeerId = selectPeerToSignaling(deps.getState())[peerId];
           if (!signalingPeerId) return;
-          const attempts = (deps.getState().handlerState.iceRestartAttempts[peerId] ?? 0) + 1;
+          const attempts = (selectIceRestartAttempts(deps.getState())[peerId] ?? 0) + 1;
           if (attempts > MAX_ICE_RESTART_ATTEMPTS) {
             deps.emit({type: 'PEER_DISCONNECTED', peerId});
           } else {
@@ -190,7 +191,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
           }
         }
       } else if (iceState === 'connected' || iceState === 'completed') {
-        if (deps.getState().peerConnectionHealth[peerId] === 'unstable') {
+        if (selectPeerConnectionHealth(deps.getState())[peerId] === 'unstable') {
           deps.emit({type: 'PEER_CONNECTION_RESTORED', peerId});
         }
       }
@@ -200,7 +201,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
   const cbs: ChannelCallbacks = {
     onOpen: (peerId, channel) => {
       dataChannels.set(peerId, channel);
-      const introEntry = Object.entries(deps.getState().handlerState.introConnections).find(([, pid]) => pid === peerId);
+      const introEntry = Object.entries(selectIntroConnections(deps.getState())).find(([, pid]) => pid === peerId);
       if (introEntry) deps.dispatch({type: 'INTRO_CONNECTION_CLEARED', introId: introEntry[0]});
     },
     onClose: (peerId) => {
@@ -342,8 +343,9 @@ export const createPeerHandler = (deps: Deps): Handler => {
       case 'INTRODUCE_PEERS': {
         const ch1 = dataChannels.get(command.peerId1);
         const ch2 = dataChannels.get(command.peerId2);
-        const name1 = deps.getState().peers.find(p => p.id === command.peerId1)?.name;
-        const name2 = deps.getState().peers.find(p => p.id === command.peerId2)?.name;
+        const peers = selectPeers(deps.getState());
+        const name1 = peers.find(p => p.id === command.peerId1)?.name;
+        const name2 = peers.find(p => p.id === command.peerId2)?.name;
         if (!ch1 || !ch2 || !name1 || !name2) break;
         const introId = generatePeerId();
         const timer = setTimeout(() => {
@@ -359,14 +361,14 @@ export const createPeerHandler = (deps: Deps): Handler => {
         break;
       }
       case 'ACCEPT_INTRODUCTION': {
-        const introducerPeerId = command.relayPeerId ?? deps.getState().handlerState.introChannels[command.introId];
+        const introducerPeerId = command.relayPeerId ?? selectIntroChannels(deps.getState())[command.introId];
         if (introducerPeerId) {
           dataChannels.get(introducerPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: command.introId, accepted: true }));
         }
         break;
       }
       case 'DECLINE_INTRODUCTION': {
-        const introducerPeerId = command.relayPeerId ?? deps.getState().handlerState.introChannels[command.introId];
+        const introducerPeerId = command.relayPeerId ?? selectIntroChannels(deps.getState())[command.introId];
         if (introducerPeerId) {
           dataChannels.get(introducerPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: command.introId, accepted: false }));
         }
@@ -391,21 +393,21 @@ export const createPeerHandler = (deps: Deps): Handler => {
         break;
       }
       case 'SERVER_ANSWER_RECEIVED': {
-        const localPeerId = deps.getState().handlerState.signalingToPeer[command.signalingPeerId];
+        const localPeerId = selectSignalingToPeer(deps.getState())[command.signalingPeerId];
         if (!localPeerId) break;
         const pc = connections.get(localPeerId);
         if (pc) asyncTryCatch(() => pc.setRemoteDescription({ type: 'answer', sdp: command.sdp }));
         break;
       }
       case 'ICE_RESTART_RECEIVED': {
-        const localPeerId = deps.getState().handlerState.signalingToPeer[command.signalingPeerId];
+        const localPeerId = selectSignalingToPeer(deps.getState())[command.signalingPeerId];
         if (!localPeerId) break;
         const pc = connections.get(localPeerId);
         if (pc) acceptIceRestartOffer(pc, command.signalingPeerId, command.sdp, deps.emit);
         break;
       }
       case 'ICE_RESTART_ANSWER_RECEIVED': {
-        const localPeerId = deps.getState().handlerState.signalingToPeer[command.signalingPeerId];
+        const localPeerId = selectSignalingToPeer(deps.getState())[command.signalingPeerId];
         if (!localPeerId) break;
         const pc = connections.get(localPeerId);
         if (pc) asyncTryCatch(() => pc.setRemoteDescription({type: 'answer', sdp: command.sdp}));

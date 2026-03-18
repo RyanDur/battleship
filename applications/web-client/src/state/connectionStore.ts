@@ -1,5 +1,7 @@
 import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction} from './connections';
+import {selectFlow, selectIntroChannels, selectIsCreatingOffer} from './connectionSelectors';
+
 import type {PeerEvent} from '../types/worker-messages';
 import {encodeConnectionCode, decodeConnectionCode} from '../protocol/connection-code';
 import {createPeerHandler} from '../workers/connection.handler';
@@ -100,8 +102,7 @@ const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState) =
     else if (event.type === 'ICE_RESTART_OFFER_CREATED') dispatch({type: 'RELAY_ICE_RESTART', targetPeerId: event.signalingPeerId, sdp: event.sdp});
     else if (event.type === 'ICE_RESTART_ANSWER_CREATED') dispatch({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
     else if (event.type === 'ERROR') {
-      const {flow} = getState();
-      if (flow.phase === 'creating' || flow.phase === 'encoding-offer') dispatch({type: 'OFFER_FAILED'});
+      if (selectIsCreatingOffer(getState())) dispatch({type: 'OFFER_FAILED'});
     }
   };
 
@@ -118,8 +119,8 @@ export const createHandlerListener = ({name, createPeerConnection}: HandlerListe
       else if (action.type === 'GRANT_TRUST') handler.handleCommand({type: 'GRANT_TRUST', peerId: action.peerId});
       else if (action.type === 'REVOKE_TRUST') handler.handleCommand({type: 'REVOKE_TRUST', peerId: action.peerId});
       else if (action.type === 'INTRODUCE_PEERS') handler.handleCommand({type: 'INTRODUCE_PEERS', peerId1: action.peerId1, peerId2: action.peerId2});
-      else if (action.type === 'ACCEPT_INTRODUCTION') handler.handleCommand({type: 'ACCEPT_INTRODUCTION', introId: action.introId, relayPeerId: prevState.handlerState.introChannels[action.introId]});
-      else if (action.type === 'DECLINE_INTRODUCTION') handler.handleCommand({type: 'DECLINE_INTRODUCTION', introId: action.introId, relayPeerId: prevState.handlerState.introChannels[action.introId]});
+      else if (action.type === 'ACCEPT_INTRODUCTION') handler.handleCommand({type: 'ACCEPT_INTRODUCTION', introId: action.introId, relayPeerId: selectIntroChannels(prevState)[action.introId]});
+      else if (action.type === 'DECLINE_INTRODUCTION') handler.handleCommand({type: 'DECLINE_INTRODUCTION', introId: action.introId, relayPeerId: selectIntroChannels(prevState)[action.introId]});
       else if (action.type === 'CONNECT_VIA_SERVER') handler.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: action.signalingPeerId, name: action.name});
       else if (action.type === 'RECONNECT_VIA_SERVER') handler.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: action.signalingPeerId, name: action.name});
       else if (action.type === 'SERVER_OFFER_RECEIVED') handler.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: action.signalingPeerId, name: action.name, sdp: action.sdp});
@@ -133,7 +134,7 @@ export const createHandlerListener = ({name, createPeerConnection}: HandlerListe
 export const encodingMiddleware: MiddlewareFactory =
   ({dispatch, getState}) => (next) =>
     (action: ConnectionsAction) => {
-      const {flow} = getState();
+      const flow = selectFlow(getState());
       if (action.type === 'OFFER_SDP_READY' && flow.phase === 'creating') {
         encodeConnectionCode(action.sdp, flow.passphrase).onSuccess(code => dispatch({type: 'OFFER_ENCODED', peerId: action.peerId, code}));
       } else if (action.type === 'ANSWER_SDP_READY' && flow.phase === 'joining') {
@@ -150,7 +151,7 @@ export const codecMiddleware: MiddlewareFactory =
           .onSuccess(sdp => dispatch({type: 'ACCEPT_OFFER', sdp}))
           .onFailure(() => dispatch({type: 'DECODE_FAILED'}));
       } else if (action.type === 'ACCEPT_ANSWER_CODE') {
-        const {flow} = getState();
+        const flow = selectFlow(getState());
         if (flow.phase === 'offer-ready') {
           decodeConnectionCode(action.responseCode, flow.passphrase)
             .onSuccess(sdp => dispatch({type: 'ACCEPT_ANSWER', peerId: flow.peerId, sdp}));

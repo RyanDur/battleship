@@ -1,0 +1,18 @@
+import type {ConnectionsState} from './connections';
+
+export const selectFlow = (state: ConnectionsState) => state.flow;
+export const selectPeers = (state: ConnectionsState) => state.peers;
+export const selectPendingIntroductions = (state: ConnectionsState) => state.pendingIntroductions;
+export const selectOnlinePeers = (state: ConnectionsState) => state.onlinePeers;
+export const selectPreviousPeers = (state: ConnectionsState) => state.previousPeers;
+export const selectPeerConnectionHealth = (state: ConnectionsState) => state.peerConnectionHealth;
+export const selectHandlerState = (state: ConnectionsState) => state.handlerState;
+export const selectOffererPeerIds = (state: ConnectionsState) => state.handlerState.offererPeerIds;
+export const selectPeerToSignaling = (state: ConnectionsState) => state.handlerState.peerToSignaling;
+export const selectSignalingToPeer = (state: ConnectionsState) => state.handlerState.signalingToPeer;
+export const selectIceRestartAttempts = (state: ConnectionsState) => state.handlerState.iceRestartAttempts;
+export const selectIntroChannels = (state: ConnectionsState) => state.handlerState.introChannels;
+export const selectIntroConnections = (state: ConnectionsState) => state.handlerState.introConnections;
+
+export const selectIsCreatingOffer = (state: ConnectionsState) =>
+  state.flow.phase === 'creating' || state.flow.phase === 'encoding-offer';
