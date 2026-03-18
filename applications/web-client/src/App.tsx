@@ -46,16 +46,23 @@ const App = () => {
   }, [store]);
 
   return (
-    <main>
-      <h1>Battleship</h1>
-      <ServiceHealth state={heartbeat} onRetry={retry}/>
-      <DownloadLink platform={platform} action={actionFor(heartbeat)} fetchDownloadUrl={fetchDownloadUrl}/>
-      {store && (
-        <ConnectionProvider store={store}>
-          <Connections serviceOnline={heartbeat.status === 'online'}/>
-        </ConnectionProvider>
-      )}
-    </main>
+    <>
+      <header>
+        <h1>Battleship</h1>
+        <ServiceHealth state={heartbeat} onRetry={retry}/>
+        <DownloadLink platform={platform} action={actionFor(heartbeat)} fetchDownloadUrl={fetchDownloadUrl}/>
+      </header>
+      <main>
+        {store && (
+          <ConnectionProvider store={store}>
+            <Connections serviceOnline={heartbeat.status === 'online'}/>
+          </ConnectionProvider>
+        )}
+      </main>
+      <footer>
+        {config && <small>{config.version}</small>}
+      </footer>
+    </>
   );
 };
 

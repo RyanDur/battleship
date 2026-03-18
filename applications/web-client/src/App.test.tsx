@@ -1,16 +1,25 @@
-import {render, screen, waitFor} from '@testing-library/react';
+import {render, screen, waitFor, within} from '@testing-library/react';
 import {App} from './App';
 
 describe('App', () => {
-  it('renders heading', async () => {
+  it('renders heading in the header', async () => {
     render(<App/>);
 
-    await waitFor(() => expect(screen.getByRole('heading')).toBeInTheDocument());
+    const header = screen.getByRole('banner');
+    await waitFor(() => expect(within(header).getByRole('heading', {name: /battleship/i})).toBeInTheDocument());
   });
 
-  it('renders download link once config is loaded', async () => {
+  it('renders download link in the header once config is loaded', async () => {
     render(<App/>);
 
-    await waitFor(() => expect(screen.getByRole('link', {name: /download/i})).toBeInTheDocument());
+    const header = screen.getByRole('banner');
+    await waitFor(() => expect(within(header).getByRole('link', {name: /download/i})).toBeInTheDocument());
+  });
+
+  it('shows version in the footer', async () => {
+    render(<App/>);
+
+    const footer = screen.getByRole('contentinfo');
+    await waitFor(() => expect(within(footer).getByText(/dev/i)).toBeInTheDocument());
   });
 });

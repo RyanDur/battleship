@@ -7,7 +7,7 @@ interface ServiceHealthProps {
 
 export const ServiceHealth = ({state, onRetry}: ServiceHealthProps) => {
   return (
-    <section>
+    <output aria-live="polite">
       {state.status === 'online' && <p>Service online</p>}
       {state.status === 'update-available' && <p>Update available</p>}
       {state.status === 'reconnecting' && (
@@ -19,6 +19,6 @@ export const ServiceHealth = ({state, onRetry}: ServiceHealthProps) => {
           <button onClick={onRetry}>Try again</button>
         </>
       )}
-    </section>
+    </output>
   );
 };

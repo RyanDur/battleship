@@ -60,4 +60,10 @@ describe('ServiceHealth', () => {
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  it('renders as a live region', () => {
+    render(<ServiceHealth state={{status: 'connecting'}} onRetry={noop}/>);
+
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
 });
