@@ -47,18 +47,20 @@ const assemble = (chunks: Uint8Array[]): Uint8Array => {
 const compress = (data: string): AsyncResult<ArrayBuffer, Error> => {
   const stream = new CompressionStream('deflate-raw');
   const writer = stream.writable.getWriter();
+  const pendingRead = readChunks(stream.readable.getReader());
   return asyncResult<void, Error>(writer.write(new TextEncoder().encode(data)))
     .andThen(() => asyncResult<void, Error>(writer.close()))
-    .andThen(() => readChunks(stream.readable.getReader()))
+    .andThen(() => pendingRead)
     .map(chunks => assemble(chunks).buffer as ArrayBuffer);
 };
 
 const decompress = (data: BufferSource): AsyncResult<string, Error> => {
   const stream = new DecompressionStream('deflate-raw');
   const writer = stream.writable.getWriter();
+  const pendingRead = readChunks(stream.readable.getReader());
   return asyncResult<void, Error>(writer.write(data))
     .andThen(() => asyncResult<void, Error>(writer.close()))
-    .andThen(() => readChunks(stream.readable.getReader()))
+    .andThen(() => pendingRead)
     .map(chunks => new TextDecoder().decode(assemble(chunks)));
 };
 
@@ -68,7 +70,7 @@ export const encodeConnectionCode = (sdp: string, passphrase: string): AsyncResu
   return deriveKey(passphrase, salt)
     .andThen(key =>
       compress(sdp).andThen(compressed =>
-        asyncResult(crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, compressed))
+        asyncResult<ArrayBuffer, Error>(crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, compressed))
       )
     )
     .map(ciphertext => {
