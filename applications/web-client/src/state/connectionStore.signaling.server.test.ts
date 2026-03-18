@@ -72,7 +72,7 @@ describe('createSignalingMiddleware (server)', () => {
     store.dispatch(relayOffer('p1', 'v=0'));
 
     await vi.waitFor(() =>
-      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'RELAY_OFFER', targetPeerId: 'p1', sdp: 'v=0'})
+      expect(received.map(m => JSON.parse(m))).toContainEqual({type: 'RELAY_OFFER', targetPeerId: 'p1', sdp: 'v=0'})
     );
     await cleanup();
   });
@@ -84,7 +84,7 @@ describe('createSignalingMiddleware (server)', () => {
     store.dispatch(relayAnswer('p1', 'v=answer'));
 
     await vi.waitFor(() =>
-      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'RELAY_ANSWER', targetPeerId: 'p1', sdp: 'v=answer'})
+      expect(received.map(m => JSON.parse(m))).toContainEqual({type: 'RELAY_ANSWER', targetPeerId: 'p1', sdp: 'v=answer'})
     );
     await cleanup();
   });
@@ -105,7 +105,7 @@ describe('createSignalingMiddleware (server)', () => {
     store.dispatch(forgetPeer('p1'));
 
     await vi.waitFor(() =>
-      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'FORGET_PEER', targetPeerId: 'p1'})
+      expect(received.map(m => JSON.parse(m))).toContainEqual({type: 'FORGET_PEER', targetPeerId: 'p1'})
     );
     await cleanup();
   });
@@ -117,7 +117,7 @@ describe('createSignalingMiddleware (server)', () => {
     store.dispatch(relayIceRestart('p1', 'v=restart'));
 
     await vi.waitFor(() =>
-      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'RELAY_ICE_RESTART', targetPeerId: 'p1', sdp: 'v=restart'})
+      expect(received.map(m => JSON.parse(m))).toContainEqual({type: 'RELAY_ICE_RESTART', targetPeerId: 'p1', sdp: 'v=restart'})
     );
     await cleanup();
   });
@@ -129,7 +129,7 @@ describe('createSignalingMiddleware (server)', () => {
     store.dispatch(relayIceRestartAnswer('p1', 'v=restart-answer'));
 
     await vi.waitFor(() =>
-      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: 'p1', sdp: 'v=restart-answer'})
+      expect(received.map(m => JSON.parse(m))).toContainEqual({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: 'p1', sdp: 'v=restart-answer'})
     );
     await cleanup();
   });
@@ -193,7 +193,7 @@ describe('createSignalingMiddleware (server)', () => {
     store.dispatch(shareEmail('p1'));
 
     await vi.waitFor(() =>
-      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'SHARE_EMAIL', targetPeerId: 'p1'})
+      expect(received.map(m => JSON.parse(m))).toContainEqual({type: 'SHARE_EMAIL', targetPeerId: 'p1'})
     );
     await cleanup();
   });
@@ -205,7 +205,7 @@ describe('createSignalingMiddleware (server)', () => {
     store.dispatch(stopSharingEmail('p1'));
 
     await vi.waitFor(() =>
-      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'STOP_SHARING_EMAIL', targetPeerId: 'p1'})
+      expect(received.map(m => JSON.parse(m))).toContainEqual({type: 'STOP_SHARING_EMAIL', targetPeerId: 'p1'})
     );
     await cleanup();
   });
@@ -217,7 +217,7 @@ describe('createSignalingMiddleware (server)', () => {
     store.dispatch(updateEmail('new@example.com'));
 
     await vi.waitFor(() =>
-      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'UPDATE_EMAIL', email: 'new@example.com'})
+      expect(received.map(m => JSON.parse(m))).toContainEqual({type: 'UPDATE_EMAIL', email: 'new@example.com'})
     );
     await cleanup();
   });
@@ -232,7 +232,7 @@ describe('createSignalingMiddleware (server)', () => {
     store.dispatch(savePeerEmail('p1', 'bob@example.com'));
 
     await vi.waitFor(() =>
-      expect(received.map(m => JSON.parse(m) as object)).toContainEqual({type: 'SAVE_PEER_EMAIL', targetPeerId: 'p1', email: 'bob@example.com'})
+      expect(received.map(m => JSON.parse(m))).toContainEqual({type: 'SAVE_PEER_EMAIL', targetPeerId: 'p1', email: 'bob@example.com'})
     );
     expect(selectPreviousPeers(store.getState())[0]).toEqual({peerId: 'p1', name: 'Bob', online: false, email: 'bob@example.com'});
     await cleanup();
