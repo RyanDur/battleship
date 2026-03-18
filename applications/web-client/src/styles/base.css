@@ -52,12 +52,6 @@ html {
   letter-spacing: 0.06em;
 }
 
-.small-caps {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
 /* ── Control (interactive button) ───────────────────────────────────────── */
 
 .control {
