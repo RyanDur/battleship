@@ -70,7 +70,10 @@ const gatherIceCandidates = (pc: RTCPeerConnection): Promise<string | undefined>
   new Promise((resolve) => {
     const checkComplete = () => resolve(pc.localDescription?.sdp);
     if (pc.iceGatheringState === 'complete') { checkComplete(); return; }
-    pc.onicecandidate = ({ candidate }) => { if (candidate === null) checkComplete(); };
+    const timeoutId = setTimeout(checkComplete, 5000);
+    pc.onicecandidate = ({ candidate }) => {
+      if (candidate === null) { clearTimeout(timeoutId); checkComplete(); }
+    };
   });
 
 type ChannelCallbacks = {
