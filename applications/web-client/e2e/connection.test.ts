@@ -33,8 +33,8 @@ test('two peers complete the full offer/answer connection flow', async ({browser
 
   // Alice accepts the response code
   await alice.getByLabel('Response code').fill(responseCode!);
-  await expect(alice.locator('input[id="response-code"]')).toHaveValue(responseCode!);
-  await alice.locator('input[id="response-code"] ~ button').click();
+  await expect(alice.getByLabel('Response code')).toHaveValue(responseCode!);
+  await alice.getByRole('button', {name: 'Accept'}).click();
 
   // Both see each other as connected (Disconnect button only appears in the connected peers list)
   await expect(alice.getByRole('button', {name: 'Disconnect'})).toBeVisible({timeout: 30_000});
