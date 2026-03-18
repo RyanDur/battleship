@@ -12,16 +12,20 @@ export const Comms = ({peerId, peerName}: Props) => {
   const store = useConnectionStore();
   const allMessages = useConnectionState(selectMessages);
   const [messageText, setMessageText] = useState('');
-  const [seenCount, setSeenCount] = useState(0);
+  const [seenCounts, setSeenCounts] = useState<Map<string, number>>(new Map());
   const [isOpen, setIsOpen] = useState(true);
 
   const messages = peerId ? allMessages.filter(m => m.peerId === peerId) : [];
+  const seenCount = peerId ? (seenCounts.get(peerId) ?? 0) : 0;
   const unread = isOpen ? 0 : Math.max(0, messages.length - seenCount);
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
 
   const handleToggle = (e: React.SyntheticEvent<HTMLDetailsElement>) => {
     const open = e.currentTarget.open;
     setIsOpen(open);
-    if (open) setSeenCount(messages.length);
+    if (open && peerId) {
+      setSeenCounts(prev => new Map(prev).set(peerId, messages.length));
+    }
   };
 
   const handleSend = (e: React.FormEvent) => {
@@ -36,7 +40,13 @@ export const Comms = ({peerId, peerName}: Props) => {
     <aside className="hud-comms" aria-label="Communications">
       <details className="comms-details" open onToggle={handleToggle}>
         <summary className="comms-summary">
-          Comms <output className="comms-unread" aria-live="polite">{unread > 0 ? String(unread) : ''}</output>
+          Comms
+          {!isOpen && lastMessage && (
+            <span className="comms-last-message">
+              {lastMessage.fromSelf ? 'You' : peerName}: {lastMessage.text}
+            </span>
+          )}
+          <output className="comms-unread" aria-live="polite">{unread > 0 ? String(unread) : ''}</output>
         </summary>
 
         {peerId && (
@@ -44,7 +54,7 @@ export const Comms = ({peerId, peerName}: Props) => {
             {messages.length > 0 && (
               <ol className="comms-messages">
                 {messages.map((m, i) => (
-                  <li className={`comms-message ${m.fromSelf ? 'comms-message--sent' : 'comms-message--received'}`} key={i}>
+                  <li className={`comms-message ${m.fromSelf ? 'sent' : 'received'}`} key={i}>
                     {m.fromSelf ? 'You' : peerName}: {m.text}
                   </li>
                 ))}

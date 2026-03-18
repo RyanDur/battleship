@@ -1,4 +1,4 @@
-import {render, screen, act, within} from '@testing-library/react';
+import {render, screen, act, within, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Comms} from './Comms';
 import {ConnectionProvider} from '../state/ConnectionProvider';
@@ -159,5 +159,54 @@ describe('Comms', () => {
     await user.click(summary);
 
     expect(screen.getByRole('status')).toHaveTextContent('');
+  });
+
+  it('summary shows last message sender and text when collapsed', async () => {
+    const user = userEvent.setup();
+    const {store} = setup('p1', 'Alice');
+
+    await act(async () => store.dispatch(messageReceived('p1', 'First message')));
+    await act(async () => store.dispatch(messageReceived('p1', 'Latest message')));
+
+    await user.click(screen.getByRole('complementary').querySelector('summary')!);
+
+    const summary = screen.getByRole('complementary').querySelector('summary')!;
+    expect(summary).toHaveTextContent(/alice/i);
+    expect(summary).toHaveTextContent(/latest message/i);
+  });
+
+  it('switching peers while collapsed resets unread count for the new peer', async () => {
+    const user = userEvent.setup();
+    const {store} = makeStore();
+    const {rerender} = render(
+      <ConnectionProvider store={store}>
+        <Comms peerId="p1" peerName="Alice"/>
+      </ConnectionProvider>
+    );
+
+    // Give Alice several messages so seenCount gets set on open
+    await act(async () => {
+      store.dispatch(messageReceived('p1', 'Alice 1'));
+      store.dispatch(messageReceived('p1', 'Alice 2'));
+      store.dispatch(messageReceived('p1', 'Alice 3'));
+    });
+    // Bob has fewer messages pre-loaded
+    await act(async () => store.dispatch(messageReceived('p2', 'Bob 1')));
+
+    // Open panel (seenCount set to 3 for Alice)
+    const summary = screen.getByRole('complementary').querySelector('summary')!;
+    await user.click(summary); // close
+    await user.click(summary); // open → seenCount = 3
+    await user.click(summary); // close
+
+    // Switch to Bob — seenCount (3) > Bob messages (1), would wrongly show 0
+    rerender(
+      <ConnectionProvider store={store}>
+        <Comms peerId="p2" peerName="Bob"/>
+      </ConnectionProvider>
+    );
+
+    // Bob has 1 message that should be unread
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1'));
   });
 });
