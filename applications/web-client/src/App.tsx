@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useState} from 'react';
-import {Connections} from './components/Connections';
+import {DirectConnect} from './components/DirectConnect';
 import {DownloadLink} from './components/DownloadLink';
+import {Fleet} from './components/Fleet';
 import {ServiceHealth} from './components/ServiceHealth';
 import {loadConfig} from './protocol/config';
 import {fetchDownloadUrl} from './protocol/download';
@@ -52,14 +53,18 @@ const App = () => {
         <ServiceHealth state={heartbeat} onRetry={retry}/>
         <DownloadLink platform={platform} action={actionFor(heartbeat)} fetchDownloadUrl={fetchDownloadUrl}/>
       </header>
-      <main className="hud-main">
+      {store && (
+        <ConnectionProvider store={store}>
+          <Fleet/>
+        </ConnectionProvider>
+      )}
+      <main className="hud-main"/>
+      <footer className="hud-footer">
         {store && (
           <ConnectionProvider store={store}>
-            <Connections serviceOnline={heartbeat.status === 'online'}/>
+            <DirectConnect serviceOnline={heartbeat.status === 'online'}/>
           </ConnectionProvider>
         )}
-      </main>
-      <footer className="hud-footer">
         {config && <small className="app-version">{config.version}</small>}
       </footer>
     </>

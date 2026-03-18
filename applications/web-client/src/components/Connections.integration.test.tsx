@@ -1,6 +1,6 @@
 import {render, screen, within, waitFor, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {Connections} from './Connections';
+import {Fleet} from './Fleet';
 import {ConnectionProvider} from '../state/ConnectionProvider';
 import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
@@ -85,10 +85,10 @@ describe('Connections integration', () => {
     render(
       <div>
         <div data-testid="alice">
-          <ConnectionProvider store={aliceStore}><Connections serviceOnline={true} /></ConnectionProvider>
+          <ConnectionProvider store={aliceStore}><Fleet /></ConnectionProvider>
         </div>
         <div data-testid="bob">
-          <ConnectionProvider store={bobStore}><Connections serviceOnline={true} /></ConnectionProvider>
+          <ConnectionProvider store={bobStore}><Fleet /></ConnectionProvider>
         </div>
       </div>
     );
@@ -122,13 +122,13 @@ describe('Connections integration', () => {
     render(
       <div>
         <div data-testid="alice">
-          <ConnectionProvider store={aliceStore}><Connections serviceOnline={true} /></ConnectionProvider>
+          <ConnectionProvider store={aliceStore}><Fleet /></ConnectionProvider>
         </div>
         <div data-testid="bob">
-          <ConnectionProvider store={bobStore}><Connections serviceOnline={true} /></ConnectionProvider>
+          <ConnectionProvider store={bobStore}><Fleet /></ConnectionProvider>
         </div>
         <div data-testid="carol">
-          <ConnectionProvider store={carolStore}><Connections serviceOnline={true} /></ConnectionProvider>
+          <ConnectionProvider store={carolStore}><Fleet /></ConnectionProvider>
         </div>
       </div>
     );
