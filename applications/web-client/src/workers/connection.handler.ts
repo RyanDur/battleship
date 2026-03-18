@@ -335,7 +335,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         .or(() => maybe(introductionExpiredDecoder.decode(parsed))
           .map(msg => cleanupIntro(msg.introId, 'INTRODUCTION_EXPIRED')))
         .or(() => maybe(chatDecoder.decode(parsed))
-          .map(msg => emit({ type: 'MESSAGE_RECEIVED', peerId, text: msg.text })));
+          .map(msg => deps.emit({ type: 'MESSAGE_RECEIVED', peerId, text: msg.text })));
     },
   };
 

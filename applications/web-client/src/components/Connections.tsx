@@ -1,8 +1,8 @@
 import {useState} from 'react';
 import {useConnectionState, useConnectionStore} from '../state/useConnection';
 import type {ConnectionFlow, Peer, PreviousPeer} from '../state/connections';
-import {selectFlow, selectPeers, selectPendingIntroductions, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth} from '../state/connectionSelectors';
-import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, acceptAnswerCode, cancelOffer, createOffer, joinOffer, connectViaServer, acceptIntroduction, declineIntroduction} from '../state/connectionActions';
+import {selectFlow, selectPeers, selectPendingIntroductions, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth, selectMessages} from '../state/connectionSelectors';
+import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, acceptAnswerCode, cancelOffer, createOffer, joinOffer, connectViaServer, acceptIntroduction, declineIntroduction, sendMessage} from '../state/connectionActions';
 
 type FlowPhase =
   | {phase: 'idle'}
@@ -27,7 +27,18 @@ type Props = {
 const PeerRow = ({peer, otherTrustingPeers, unstable}: {peer: Peer; otherTrustingPeers: Peer[]; unstable: boolean}) => {
   const store = useConnectionStore();
   const [introducing, setIntroducing] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const allMessages = useConnectionState(selectMessages);
+  const messages = allMessages.filter(m => m.peerId === peer.id);
   const showIntroduceButton = peer.trustsMe && otherTrustingPeers.length > 0;
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (messageText.trim()) {
+      store.dispatch(sendMessage(peer.id, messageText.trim()));
+      setMessageText('');
+    }
+  };
 
   return (
     <li>
@@ -50,6 +61,22 @@ const PeerRow = ({peer, otherTrustingPeers, unstable}: {peer: Peer; otherTrustin
         : <button onClick={() => store.dispatch(grantTrust(peer.id))}>Trust</button>
       }
       <button onClick={() => store.dispatch(disconnect(peer.id))}>Disconnect</button>
+      {messages.length > 0 && (
+        <ul aria-label="Messages">
+          {messages.map((m, i) => (
+            <li key={i}>{m.fromSelf ? 'You' : (peer.name ?? 'Unknown')}: {m.text}</li>
+          ))}
+        </ul>
+      )}
+      <form onSubmit={handleSend}>
+        <label htmlFor={`message-${peer.id}`}>Message</label>
+        <input
+          id={`message-${peer.id}`}
+          value={messageText}
+          onChange={e => setMessageText(e.target.value)}
+        />
+        <button type="submit">Send</button>
+      </form>
     </li>
   );
 };
