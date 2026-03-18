@@ -51,6 +51,10 @@ const introductionExpiredDecoder = Decoder.object({
   required: { type: Decoder.literal('INTRODUCTION_EXPIRED'), introId: Decoder.string },
 });
 
+const chatDecoder = Decoder.object({
+  required: { type: Decoder.literal('CHAT'), text: Decoder.string },
+});
+
 type Deps = {
   name: string
   emit: (event: PeerEvent) => void
@@ -329,7 +333,9 @@ export const createPeerHandler = (deps: Deps): Handler => {
         .or(() => maybe(introductionDeclinedDecoder.decode(parsed))
           .map(msg => cleanupIntro(msg.introId, 'INTRODUCTION_DECLINED')))
         .or(() => maybe(introductionExpiredDecoder.decode(parsed))
-          .map(msg => cleanupIntro(msg.introId, 'INTRODUCTION_EXPIRED')));
+          .map(msg => cleanupIntro(msg.introId, 'INTRODUCTION_EXPIRED')))
+        .or(() => maybe(chatDecoder.decode(parsed))
+          .map(msg => emit({ type: 'MESSAGE_RECEIVED', peerId, text: msg.text })));
     },
   };
 
@@ -354,6 +360,10 @@ export const createPeerHandler = (deps: Deps): Handler => {
       case 'ACCEPT_ANSWER': {
         const pc = connections.get(command.peerId);
         if (pc) asyncTryCatch(() => pc.setRemoteDescription({ type: 'answer', sdp: command.sdp }));
+        break;
+      }
+      case 'SEND_MESSAGE': {
+        dataChannels.get(command.peerId)?.send(JSON.stringify({ type: 'CHAT', text: command.text }));
         break;
       }
       case 'DISCONNECT': {

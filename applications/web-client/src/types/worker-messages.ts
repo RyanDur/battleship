@@ -1,5 +1,6 @@
 export type PeerCommand =
   | { type: 'CREATE_OFFER' }
+  | { type: 'SEND_MESSAGE'; peerId: string; text: string }
   | { type: 'ACCEPT_OFFER'; sdp: string }
   | { type: 'ACCEPT_ANSWER'; peerId: string; sdp: string }
   | { type: 'DISCONNECT'; peerId: string }
@@ -31,3 +32,4 @@ export type PeerEvent =
   | { type: 'PEER_CONNECTION_RESTORED'; peerId: string }
   | { type: 'ICE_RESTART_OFFER_CREATED'; signalingPeerId: string; sdp: string }
   | { type: 'ICE_RESTART_ANSWER_CREATED'; signalingPeerId: string; sdp: string }
+  | { type: 'MESSAGE_RECEIVED'; peerId: string; text: string }
