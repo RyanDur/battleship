@@ -11,6 +11,7 @@ export type ConnectionFlow =
   | {phase: 'creating'; passphrase: string}
   | {phase: 'encoding-offer'; peerId: string; sdp: string; passphrase: string}
   | {phase: 'offer-ready'; peerId: string; code: string; passphrase: string}
+  | {phase: 'offer-failed'}
   | {phase: 'joining'; passphrase: string}
   | {phase: 'encoding-answer'; sdp: string; passphrase: string}
   | {phase: 'answer-ready'; code: string}
@@ -42,6 +43,8 @@ export type ConnectionsAction =
   | {type: 'ANSWER_SDP_READY'; sdp: string}
   | {type: 'ANSWER_ENCODED'; code: string}
   | {type: 'DECODE_FAILED'}
+  | {type: 'OFFER_FAILED'}
+  | {type: 'CANCEL_OFFER'}
   | {type: 'PEER_CONNECTED'; peerId: string}
   | {type: 'PEER_DISCONNECTED'; peerId: string}
   | {type: 'PEER_NAMED'; peerId: string; name: string}
@@ -191,7 +194,11 @@ const coreConnectionsReducer = (state: ConnectionsState, action: ConnectionsActi
       return {...state, flow: {phase: 'answer-ready', code: action.code}};
 
     case 'DECODE_FAILED':
+    case 'CANCEL_OFFER':
       return {...state, flow: {phase: 'idle'}};
+
+    case 'OFFER_FAILED':
+      return {...state, flow: {phase: 'offer-failed'}};
 
     case 'PEER_CONNECTED':
       return {...state, peers: [...state.peers, {id: action.peerId}]};

@@ -109,7 +109,8 @@ const acceptOfferSdp = (pc: RTCPeerConnection, peerId: string, name: string, emi
 
 const negotiateOffer = (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void, cbs: ChannelCallbacks) =>
   createOfferSdp(pc, peerId, name, emit, cbs)
-    .onSuccess(sdp => { if (sdp) emit({ type: 'OFFER_CREATED', peerId, sdp }); });
+    .onSuccess(sdp => { if (sdp) emit({ type: 'OFFER_CREATED', peerId, sdp }); })
+    .onFailure(err => emit({ type: 'ERROR', message: err.message }));
 
 const negotiateAnswer = (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void, remoteSdp: string, cbs: ChannelCallbacks) =>
   acceptOfferSdp(pc, peerId, name, emit, remoteSdp, cbs)

@@ -6,6 +6,7 @@ type FlowPhase =
   | {phase: 'idle'}
   | {phase: 'creating'}
   | {phase: 'offer-ready'; code: string}
+  | {phase: 'offer-failed'}
   | {phase: 'joining'}
   | {phase: 'answer-ready'; code: string}
 
@@ -129,6 +130,15 @@ export const Connections = ({serviceOnline}: Props) => {
         <div>
           <p>Share this response code with the other person:</p>
           <code>{flow.code}</code>
+        </div>
+      );
+    }
+
+    if (flow.phase === 'offer-failed') {
+      return (
+        <div>
+          <p>Failed to generate a code. Please try again.</p>
+          <button onClick={() => store.dispatch({type: 'CANCEL_OFFER'})}>Cancel</button>
         </div>
       );
     }

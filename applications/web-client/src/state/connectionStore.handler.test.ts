@@ -201,6 +201,30 @@ describe('createHandlerMiddleware (store)', () => {
     expect(Object.keys(carol.getState().handlerState.introConnections)).toHaveLength(0);
   });
 
+  it('CREATE_OFFER transitions to offer-failed when peer connection setup fails', async () => {
+    const failingPc = {
+      iceGatheringState: 'new',
+      localDescription: null,
+      onicecandidate: null,
+      ondatachannel: null,
+      createDataChannel: () => ({onopen: null, onclose: null, onmessage: null, send: () => {}, close: () => {}}),
+      createOffer: async () => { throw new Error('ICE failed'); },
+      createAnswer: async () => ({type: 'answer', sdp: ''}),
+      setLocalDescription: async () => {},
+      setRemoteDescription: async () => {},
+      close: () => {},
+    } as unknown as RTCPeerConnection;
+
+    const store = createConnectionStore(
+      applyMiddleware([encodingMiddleware, codecMiddleware]),
+      [createHandlerListener({name: 'Player', createPeerConnection: () => failingPc})],
+    );
+
+    store.dispatch({type: 'CREATE_OFFER', passphrase: 'secret'});
+
+    await vi.waitFor(() => expect(store.getState().flow.phase).toBe('offer-failed'));
+  });
+
   it('full offer/answer handshake connects both stores', async () => {
     const factory = createFakePeerConnectionFactory();
 

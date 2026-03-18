@@ -99,6 +99,10 @@ const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState) =
     else if (event.type === 'PEER_CONNECTION_RESTORED') dispatch({type: 'PEER_CONNECTION_RESTORED', peerId: event.peerId});
     else if (event.type === 'ICE_RESTART_OFFER_CREATED') dispatch({type: 'RELAY_ICE_RESTART', targetPeerId: event.signalingPeerId, sdp: event.sdp});
     else if (event.type === 'ICE_RESTART_ANSWER_CREATED') dispatch({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: event.signalingPeerId, sdp: event.sdp});
+    else if (event.type === 'ERROR') {
+      const {flow} = getState();
+      if (flow.phase === 'creating' || flow.phase === 'encoding-offer') dispatch({type: 'OFFER_FAILED'});
+    }
   };
 
 export const createHandlerListener = ({name, createPeerConnection}: HandlerListenerConfig): ListenerFactory =>
