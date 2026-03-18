@@ -16,7 +16,7 @@ export const ServiceHealth = ({state, onRetry}: ServiceHealthProps) => {
       {state.status === 'disconnected' && (
         <>
           <p>Service offline</p>
-          <button onClick={onRetry}>Try again</button>
+          <button className="control" onClick={onRetry}>Try again</button>
         </>
       )}
     </output>
