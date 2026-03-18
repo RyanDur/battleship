@@ -17,11 +17,11 @@ const makeStore = () => {
   return {store};
 };
 
-const setup = () => {
+const setup = (onSelectPeer?: (id: string, name: string | null) => void) => {
   const {store} = makeStore();
   render(
     <ConnectionProvider store={store}>
-      <Fleet/>
+      <Fleet onSelectPeer={onSelectPeer}/>
     </ConnectionProvider>
   );
   return {store};
@@ -186,7 +186,7 @@ describe('Fleet', () => {
 
       await user.click(screen.getAllByRole('button', {name: /^introduce$/i})[0]);
 
-      expect(screen.getByRole('button', {name: 'Carol'})).toBeInTheDocument();
+      expect(screen.getByRole('button', {name: /introduce to carol/i})).toBeInTheDocument();
     });
 
     it('selecting a peer to introduce dispatches and hides peer buttons', async () => {
@@ -201,9 +201,33 @@ describe('Fleet', () => {
       await act(async () => store.dispatch(peerTrustUpdated('p2', true)));
 
       await user.click(screen.getAllByRole('button', {name: /^introduce$/i})[0]);
-      await user.click(screen.getByRole('button', {name: 'Carol'}));
+      await user.click(screen.getByRole('button', {name: /introduce to carol/i}));
 
-      expect(screen.queryByRole('button', {name: 'Carol'})).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', {name: /introduce to carol/i})).not.toBeInTheDocument();
+    });
+
+    it('clicking a peer name calls onSelectPeer with the peer id and name', async () => {
+      const user = userEvent.setup();
+      let selectedId: string | null = null;
+      let selectedName: string | null = null;
+      const {store} = setup((id, name) => { selectedId = id; selectedName = name; });
+
+      await act(async () => store.dispatch(peerConnected('p1')));
+      await act(async () => store.dispatch(peerNamed('p1', 'Alice')));
+
+      await user.click(screen.getByRole('button', {name: 'Alice'}));
+
+      expect(selectedId).toBe('p1');
+      expect(selectedName).toBe('Alice');
+    });
+
+    it('does not show inline message input for connected peers', async () => {
+      const {store} = setup();
+
+      await act(async () => store.dispatch(peerConnected('p1')));
+      await act(async () => store.dispatch(peerNamed('p1', 'Alice')));
+
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     });
 
     it('clicking disconnect removes the peer', async () => {

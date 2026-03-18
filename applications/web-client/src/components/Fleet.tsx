@@ -1,28 +1,19 @@
 import {useState} from 'react';
 import {useConnectionState, useConnectionStore} from '../state/useConnection';
 import type {Peer, PreviousPeer} from '../state/connections';
-import {selectPeers, selectPendingIntroductions, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth, selectMessages} from '../state/connectionSelectors';
-import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, connectViaServer, acceptIntroduction, declineIntroduction, sendMessage} from '../state/connectionActions';
+import {selectPeers, selectPendingIntroductions, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth} from '../state/connectionSelectors';
+import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, connectViaServer, acceptIntroduction, declineIntroduction} from '../state/connectionActions';
 
-const PeerCard = ({peer, otherTrustingPeers, unstable}: {peer: Peer; otherTrustingPeers: Peer[]; unstable: boolean}) => {
+type SelectPeer = (id: string, name: string | null) => void;
+
+const PeerCard = ({peer, otherTrustingPeers, unstable, onSelect}: {peer: Peer; otherTrustingPeers: Peer[]; unstable: boolean; onSelect?: SelectPeer}) => {
   const store = useConnectionStore();
   const [introducing, setIntroducing] = useState(false);
-  const [messageText, setMessageText] = useState('');
-  const allMessages = useConnectionState(selectMessages);
-  const messages = allMessages.filter(m => m.peerId === peer.id);
   const showIntroduceButton = peer.trustsMe && otherTrustingPeers.length > 0;
-
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (messageText.trim()) {
-      store.dispatch(sendMessage(peer.id, messageText.trim()));
-      setMessageText('');
-    }
-  };
 
   return (
     <article className="fleet-peer-card">
-      <strong className="fleet-peer-name">{peer.name ?? 'Unknown'}</strong>
+      <button className="fleet-peer-name" onClick={() => onSelect?.(peer.id, peer.name ?? null)}>{peer.name ?? 'Unknown'}</button>
       {unstable && <small className="fleet-peer-health">Reconnecting...</small>}
       {peer.trustsMe && (
         <abbr className="fleet-peer-trust" aria-label="Trusts you to introduce them">★</abbr>
@@ -36,7 +27,7 @@ const PeerCard = ({peer, otherTrustingPeers, unstable}: {peer: Peer; otherTrusti
           key={other.id}
           onClick={() => { store.dispatch(introducePeers(peer.id, other.id)); setIntroducing(false); }}
         >
-          {other.name ?? 'Unknown'}
+          Introduce to {other.name ?? 'Unknown'}
         </button>
       ))}
       {peer.trusted
@@ -44,23 +35,6 @@ const PeerCard = ({peer, otherTrustingPeers, unstable}: {peer: Peer; otherTrusti
         : <button className="control" onClick={() => store.dispatch(grantTrust(peer.id))}>Trust</button>
       }
       <button className="control" onClick={() => store.dispatch(disconnect(peer.id))}>Disconnect</button>
-      {messages.length > 0 && (
-        <ul aria-label="Messages">
-          {messages.map((m, i) => (
-            <li key={i}>{m.fromSelf ? 'You' : (peer.name ?? 'Unknown')}: {m.text}</li>
-          ))}
-        </ul>
-      )}
-      <form onSubmit={handleSend}>
-        <label htmlFor={`message-${peer.id}`}>Message</label>
-        <input
-          className="field"
-          id={`message-${peer.id}`}
-          value={messageText}
-          onChange={e => setMessageText(e.target.value)}
-        />
-        <button className="control" type="submit">Send</button>
-      </form>
     </article>
   );
 };
@@ -110,7 +84,11 @@ const countSummary = (connected: number, online: number, previous: number): stri
   return parts.join(', ');
 };
 
-export const Fleet = () => {
+type Props = {
+  onSelectPeer?: SelectPeer;
+}
+
+export const Fleet = ({onSelectPeer}: Props = {}) => {
   const store = useConnectionStore();
   const peers = useConnectionState(selectPeers);
   const peerConnectionHealth = useConnectionState(selectPeerConnectionHealth);
@@ -138,6 +116,7 @@ export const Fleet = () => {
                     peer={peer}
                     otherTrustingPeers={trustingPeers.filter(p => p.id !== peer.id)}
                     unstable={peerConnectionHealth[peer.id] === 'unstable'}
+                    onSelect={onSelectPeer}
                   />
                 </li>
               ))}

@@ -174,7 +174,7 @@ describe('Fleet integration', () => {
 
     // Alice clicks Introduce on Bob's row, then selects Carol from the peer list
     await user.click(aliceUI.getAllByRole('button', {name: /introduce/i})[0]);
-    await user.click(aliceUI.getByRole('button', {name: /carol/i}));
+    await user.click(aliceUI.getByRole('button', {name: /introduce to carol/i}));
 
     // Bob and Carol receive the introduction
     await waitFor(() => {
