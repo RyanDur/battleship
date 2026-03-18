@@ -2,8 +2,8 @@ import {createConnectionStore, createHandlerListener, encodingMiddleware, codecM
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
 import type {ConnectionFlow} from './connections';
-import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode} from './connectionActions';
-import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections} from './connectionSelectors';
+import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage} from './connectionActions';
+import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections, selectMessages} from './connectionSelectors';
 
 const makeRelayMiddleware = (myName: string, mySigId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
   (_deps) => (next) => (action) => {
@@ -293,6 +293,33 @@ describe('createHandlerMiddleware (store)', () => {
     bob.dispatch(joinOffer(offerCode, 'secret'));
 
     await vi.waitFor(() => expect(selectFlow(bob.getState()).phase).toBe('offer-failed'));
+  });
+
+  it('SEND_MESSAGE delivers the text to the receiving peer store', async () => {
+    const {alice, bob, connect} = makePair();
+    await connect();
+    const bobPeerIdOnAlice = selectPeers(alice.getState())[0].id;
+
+    alice.dispatch(sendMessage(bobPeerIdOnAlice, 'hello'));
+
+    const alicePeerIdOnBob = selectPeers(bob.getState())[0].id;
+    await vi.waitFor(() =>
+      expect(selectMessages(bob.getState())).toEqual([
+        {peerId: alicePeerIdOnBob, text: 'hello', fromSelf: false},
+      ])
+    );
+  });
+
+  it('SEND_MESSAGE is recorded locally with fromSelf: true', async () => {
+    const {alice, connect} = makePair();
+    await connect();
+    const bobPeerIdOnAlice = selectPeers(alice.getState())[0].id;
+
+    alice.dispatch(sendMessage(bobPeerIdOnAlice, 'hello'));
+
+    expect(selectMessages(alice.getState())).toEqual([
+      {peerId: bobPeerIdOnAlice, text: 'hello', fromSelf: true},
+    ]);
   });
 
   it('full offer/answer handshake connects both stores', async () => {
