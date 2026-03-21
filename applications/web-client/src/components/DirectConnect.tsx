@@ -39,7 +39,7 @@ export const DirectConnect = ({serviceOnline}: Props) => {
     return (
       <section className="direct-connect">
         <p className="direct-connect-label">Share this code with the other person:</p>
-        <code>{flow.code}</code>
+        <code className="direct-connect-code">{flow.code}</code>
         <form onSubmit={e => { e.preventDefault(); store.dispatch(acceptAnswerCode(responseCode)); }}>
           <label htmlFor="response-code">Response code</label>
           <input
@@ -58,7 +58,7 @@ export const DirectConnect = ({serviceOnline}: Props) => {
     return (
       <section className="direct-connect">
         <p className="direct-connect-label">Share this response code with the other person:</p>
-        <code>{flow.code}</code>
+        <code className="direct-connect-code">{flow.code}</code>
       </section>
     );
   }

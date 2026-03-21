@@ -158,6 +158,11 @@
   gap: var(--space-sm);
   flex-wrap: wrap;
   flex: 1;
+  min-width: 0;
+}
+
+.direct-connect-code {
+  overflow-wrap: anywhere;
 }
 
 .direct-connect-label {
