@@ -1,8 +1,8 @@
 import {useState} from 'react';
 import {useConnectionState, useConnectionStore} from '../state/useConnection';
 import type {Peer, PreviousPeer} from '../state/connections';
-import {selectPeers, selectPendingIntroductions, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth} from '../state/connectionSelectors';
-import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, connectViaServer, acceptIntroduction, declineIntroduction} from '../state/connectionActions';
+import {selectPeers, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth} from '../state/connectionSelectors';
+import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, connectViaServer} from '../state/connectionActions';
 
 type SelectPeer = (id: string, name: string | null) => void;
 
@@ -92,12 +92,12 @@ export const Fleet = ({onSelectPeer}: Props = {}) => {
   const store = useConnectionStore();
   const peers = useConnectionState(selectPeers);
   const peerConnectionHealth = useConnectionState(selectPeerConnectionHealth);
-  const pendingIntroductions = useConnectionState(selectPendingIntroductions);
   const onlinePeers = useConnectionState(selectOnlinePeers);
   const previousPeers = useConnectionState(selectPreviousPeers);
 
   const trustingPeers = peers.filter(p => p.trustsMe);
   const summary = countSummary(peers.length, onlinePeers.length, previousPeers.length);
+
 
   return (
     <nav className="hud-fleet" aria-label="Fleet">
@@ -151,20 +151,6 @@ export const Fleet = ({onSelectPeer}: Props = {}) => {
           </section>
         )}
 
-        {pendingIntroductions.length > 0 && (
-          <section className="fleet-section" aria-labelledby="fleet-introductions">
-            <h2 className="fleet-section-heading" id="fleet-introductions">Introductions</h2>
-            <ul aria-label="Introductions">
-              {pendingIntroductions.map(intro => (
-                <li key={intro.introId}>
-                  {intro.from} wants to introduce you to {intro.peer}
-                  <button className="control" onClick={() => store.dispatch(acceptIntroduction(intro.introId))}>Accept</button>
-                  <button className="control" onClick={() => store.dispatch(declineIntroduction(intro.introId))}>Decline</button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
       </details>
     </nav>
   );

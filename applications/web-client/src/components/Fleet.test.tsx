@@ -6,7 +6,7 @@ import {createConnectionStore, createHandlerListener, encodingMiddleware, codecM
 import type {ConnectionsAction} from '../state/connections';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import {peerConnected, peerNamed, peerDisconnected, grantTrust, peerTrustUpdated, introductionReceived, peerConnectionUnstable, peerConnectionRestored, previousPeersReceived, onlinePeerLeft, onlinePeersUpdated, onlinePeerJoined, reconnectViaServer, forgetPeer, savePeerEmail} from '../state/connectionActions';
-import {selectPeers, selectPendingIntroductions} from '../state/connectionSelectors';
+import {selectPeers} from '../state/connectionSelectors';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();
@@ -445,43 +445,21 @@ describe('Fleet', () => {
   });
 
   describe('Introductions', () => {
-    it('shows pending introduction with from and peer name', async () => {
+    it('does not show introductions section in Fleet', async () => {
       const {store} = setup();
 
       await act(async () => store.dispatch(introductionReceived('i1', 'Alice', 'Carol')));
 
-      expect(screen.getByText(/alice wants to introduce you to carol/i)).toBeInTheDocument();
+      expect(screen.queryByRole('region', {name: /introductions/i})).not.toBeInTheDocument();
     });
 
-    it('shows accept and decline buttons for a pending introduction', async () => {
+    it('does not show accept or decline buttons in Fleet', async () => {
       const {store} = setup();
 
       await act(async () => store.dispatch(introductionReceived('i1', 'Alice', 'Carol')));
 
-      expect(screen.getByRole('button', {name: /accept/i})).toBeInTheDocument();
-      expect(screen.getByRole('button', {name: /decline/i})).toBeInTheDocument();
-    });
-
-    it('clicking accept removes the pending introduction', async () => {
-      const user = userEvent.setup();
-      const {store} = setup();
-
-      await act(async () => store.dispatch(introductionReceived('i1', 'Alice', 'Carol')));
-
-      await user.click(screen.getByRole('button', {name: /accept/i}));
-
-      expect(selectPendingIntroductions(store.getState())).toEqual([]);
-    });
-
-    it('clicking decline removes the pending introduction', async () => {
-      const user = userEvent.setup();
-      const {store} = setup();
-
-      await act(async () => store.dispatch(introductionReceived('i1', 'Alice', 'Carol')));
-
-      await user.click(screen.getByRole('button', {name: /decline/i}));
-
-      expect(selectPendingIntroductions(store.getState())).toEqual([]);
+      expect(screen.queryByRole('button', {name: /accept/i})).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', {name: /decline/i})).not.toBeInTheDocument();
     });
   });
 });

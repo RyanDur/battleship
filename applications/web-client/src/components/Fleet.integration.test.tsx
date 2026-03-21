@@ -1,6 +1,7 @@
 import {render, screen, within, waitFor, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Fleet} from './Fleet';
+import {Alerts} from './Alerts';
 import {ConnectionProvider} from '../state/ConnectionProvider';
 import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
@@ -122,13 +123,13 @@ describe('Fleet integration', () => {
     render(
       <div>
         <div data-testid="alice">
-          <ConnectionProvider store={aliceStore}><Fleet /></ConnectionProvider>
+          <ConnectionProvider store={aliceStore}><Fleet /><Alerts /></ConnectionProvider>
         </div>
         <div data-testid="bob">
-          <ConnectionProvider store={bobStore}><Fleet /></ConnectionProvider>
+          <ConnectionProvider store={bobStore}><Fleet /><Alerts /></ConnectionProvider>
         </div>
         <div data-testid="carol">
-          <ConnectionProvider store={carolStore}><Fleet /></ConnectionProvider>
+          <ConnectionProvider store={carolStore}><Fleet /><Alerts /></ConnectionProvider>
         </div>
       </div>
     );
