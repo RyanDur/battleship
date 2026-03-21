@@ -47,6 +47,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: app-icons
+          path: icons
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
       - name: Smoke test boot jar
         shell: bash
         run: |
@@ -61,6 +68,15 @@ jobs:
             { echo "Smoke test failed. Expected version: $EXPECTED, got: $RESPONSE"; exit 1; }
         env:
           TAG: ${{ github.event.workflow_run.head_branch }}
+
+      - name: Select icon for platform
+        shell: bash
+        run: |
+          case "${{ matrix.type }}" in
+            dmg) echo "ICON_PATH=icons/icon.icns" >> "$GITHUB_ENV" ;;
+            msi) echo "ICON_PATH=icons/icon.ico" >> "$GITHUB_ENV" ;;
+            *)   echo "ICON_PATH=icons/icon_256.png" >> "$GITHUB_ENV" ;;
+          esac
 
       - name: Build installer
         shell: bash
@@ -84,6 +100,7 @@ jobs:
             --app-version "$APP_VERSION" \
             --type ${{ matrix.type }} \
             --dest build/jpackage \
+            --icon "$ICON_PATH" \
             --java-options "-Xmx256m" \
             --java-options "-Djava.awt.headless=false"
         env:

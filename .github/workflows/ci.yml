@@ -60,6 +60,13 @@ jobs:
           path: applications/web-client/dist/
           if-no-files-found: error
 
+      - name: Upload app icons
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-icons
+          path: applications/signaling-server/src/main/resources/icon/
+          if-no-files-found: error
+
   e2e:
     needs: test
     runs-on: ubuntu-latest

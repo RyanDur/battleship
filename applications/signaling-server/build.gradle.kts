@@ -42,10 +42,20 @@ tasks.register<Exec>("jpackage") {
         os.contains("win") -> "msi"
         else -> "deb"
     }
+    val iconExt = when {
+        os.contains("mac") -> "icns"
+        os.contains("win") -> "ico"
+        else -> "png"
+    }
+    val iconFile = when (iconExt) {
+        "png" -> "icon_256.png"
+        else -> "icon.$iconExt"
+    }
     val bootJar = tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar").get()
     val inputDir = bootJar.archiveFile.get().asFile.parentFile
     val jarName = bootJar.archiveFile.get().asFile.name
     val outputDir = layout.buildDirectory.dir("jpackage").get().asFile
+    val iconPath = project.file("src/main/resources/icon/$iconFile").absolutePath
 
     commandLine(
         "jpackage",
@@ -60,6 +70,7 @@ tasks.register<Exec>("jpackage") {
         },
         "--type", installerType,
         "--dest", outputDir.absolutePath,
+        "--icon", iconPath,
         "--java-options", "-Xmx256m",
         "--java-options", "-Djava.awt.headless=false"
     )
