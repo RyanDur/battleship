@@ -1,9 +1,8 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
+  push:
+    tags: ["v*"]
 
 permissions:
   contents: write
@@ -15,10 +14,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   build:
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      startsWith(github.event.workflow_run.head_branch, 'v')
+    needs: ci
     strategy:
       matrix:
         include:
@@ -44,15 +44,11 @@ jobs:
         with:
           name: boot-jar
           path: boot-jar
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
 
       - uses: actions/download-artifact@v8
         with:
           name: app-icons
           path: icons
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Smoke test boot jar
         shell: bash
@@ -67,7 +63,7 @@ jobs:
           echo "$RESPONSE" | grep -q "\"version\":\"$EXPECTED\"" || \
             { echo "Smoke test failed. Expected version: $EXPECTED, got: $RESPONSE"; exit 1; }
         env:
-          TAG: ${{ github.event.workflow_run.head_branch }}
+          TAG: ${{ github.ref_name }}
 
       - name: Select icon for platform
         shell: bash
@@ -104,7 +100,7 @@ jobs:
             --java-options "-Xmx256m" \
             --java-options "-Djava.awt.headless=false"
         env:
-          TAG: ${{ github.event.workflow_run.head_branch }}
+          TAG: ${{ github.ref_name }}
 
       - name: Upload installer
         uses: actions/upload-artifact@v7
@@ -124,15 +120,13 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: dist
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Write production config
         run: |
           VERSION=${TAG#v}
           echo "{\"version\":\"$VERSION\",\"serviceUrl\":\"http://localhost:8080\"}" > config.json
         env:
-          TAG: ${{ github.event.workflow_run.head_branch }}
+          TAG: ${{ github.ref_name }}
 
       - uses: actions/configure-pages@v5
 
@@ -156,6 +150,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.workflow_run.head_branch }}
+          tag_name: ${{ github.ref_name }}
           files: "*"
           generate_release_notes: true
