@@ -33,10 +33,17 @@ describe('Comms', () => {
     expect(screen.getByRole('complementary', {name: /communications/i})).toBeInTheDocument();
   });
 
+  it('shows the alerts section inside the communications panel', () => {
+    setup();
+
+    const comms = screen.getByRole('complementary', {name: /communications/i});
+    expect(within(comms).getByRole('group', {name: /alerts/i})).toBeInTheDocument();
+  });
+
   it('is expanded by default', () => {
     setup();
 
-    expect(screen.getByRole('complementary').querySelector('details')).toHaveAttribute('open');
+    expect(screen.getByRole('group', {name: /comms/i})).toHaveAttribute('open');
   });
 
   it('shows no conversation when no peer is selected', () => {
@@ -127,7 +134,7 @@ describe('Comms', () => {
   it('unread count live region is present', () => {
     setup();
 
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(within(screen.getByRole('group', {name: /comms/i})).getByRole('status')).toBeInTheDocument();
   });
 
   it('unread count is empty when panel is open', async () => {
@@ -135,30 +142,32 @@ describe('Comms', () => {
 
     await act(async () => store.dispatch(messageReceived('p1', 'Hello!')));
 
-    expect(screen.getByRole('status')).toHaveTextContent('');
+    expect(within(screen.getByRole('group', {name: /comms/i})).getByRole('status')).toHaveTextContent('');
   });
 
   it('unread count increments when panel is collapsed and messages arrive', async () => {
     const user = userEvent.setup();
     const {store} = setup('p1', 'Alice');
 
-    await user.click(screen.getByRole('complementary').querySelector('summary')!);
+    const comms = screen.getByRole('group', {name: /comms/i});
+    await user.click(comms.querySelector('summary')!);
     await act(async () => store.dispatch(messageReceived('p1', 'Hello!')));
     await act(async () => store.dispatch(messageReceived('p1', 'Another!')));
 
-    expect(screen.getByRole('status')).toHaveTextContent('2');
+    expect(within(screen.getByRole('group', {name: /comms/i})).getByRole('status')).toHaveTextContent('2');
   });
 
   it('unread count resets when panel is expanded', async () => {
     const user = userEvent.setup();
     const {store} = setup('p1', 'Alice');
 
-    const summary = screen.getByRole('complementary').querySelector('summary')!;
+    const comms = screen.getByRole('group', {name: /comms/i});
+    const summary = comms.querySelector('summary')!;
     await user.click(summary);
     await act(async () => store.dispatch(messageReceived('p1', 'Hello!')));
     await user.click(summary);
 
-    expect(screen.getByRole('status')).toHaveTextContent('');
+    expect(within(screen.getByRole('group', {name: /comms/i})).getByRole('status')).toHaveTextContent('');
   });
 
   it('summary shows last message sender and text when collapsed', async () => {
@@ -168,9 +177,10 @@ describe('Comms', () => {
     await act(async () => store.dispatch(messageReceived('p1', 'First message')));
     await act(async () => store.dispatch(messageReceived('p1', 'Latest message')));
 
-    await user.click(screen.getByRole('complementary').querySelector('summary')!);
+    const comms = screen.getByRole('group', {name: /comms/i});
+    await user.click(comms.querySelector('summary')!);
 
-    const summary = screen.getByRole('complementary').querySelector('summary')!;
+    const summary = screen.getByRole('group', {name: /comms/i}).querySelector('summary')!;
     expect(summary).toHaveTextContent(/alice/i);
     expect(summary).toHaveTextContent(/latest message/i);
   });
@@ -194,7 +204,8 @@ describe('Comms', () => {
     await act(async () => store.dispatch(messageReceived('p2', 'Bob 1')));
 
     // Open panel (seenCount set to 3 for Alice)
-    const summary = screen.getByRole('complementary').querySelector('summary')!;
+    const comms = screen.getByRole('group', {name: /comms/i});
+    const summary = comms.querySelector('summary')!;
     await user.click(summary); // close
     await user.click(summary); // open → seenCount = 3
     await user.click(summary); // close
@@ -207,6 +218,6 @@ describe('Comms', () => {
     );
 
     // Bob has 1 message that should be unread
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1'));
+    await waitFor(() => expect(within(screen.getByRole('group', {name: /comms/i})).getByRole('status')).toHaveTextContent('1'));
   });
 });
