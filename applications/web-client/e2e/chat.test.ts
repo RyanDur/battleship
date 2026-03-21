@@ -17,7 +17,7 @@ const connectPeers = async (alice: Page, bob: Page) => {
 
   await alice.getByLabel('Response code').fill(responseCode!);
   await expect(alice.getByLabel('Response code')).toHaveValue(responseCode!);
-  await alice.getByRole('button', {name: 'Accept'}).click();
+  await alice.locator('.direct-connect').getByRole('button', {name: 'Accept'}).click();
 
   await expect(alice.getByRole('button', {name: 'Disconnect'})).toBeVisible({timeout: 30_000});
   await expect(bob.getByRole('button', {name: 'Disconnect'})).toBeVisible({timeout: 30_000});
@@ -38,6 +38,12 @@ test('connected peers can send and receive chat messages', async ({browser}) => 
   await expect(bob.getByText('Service online')).toBeVisible({timeout: 10_000});
 
   await connectPeers(alice, bob);
+
+  // Select the connected peer in Fleet to open chat in Comms
+  await expect(alice.getByRole('region', {name: /connected/i}).getByRole('button', {name: 'Player'})).toBeVisible({timeout: 10_000});
+  await expect(bob.getByRole('region', {name: /connected/i}).getByRole('button', {name: 'Player'})).toBeVisible({timeout: 10_000});
+  await alice.getByRole('region', {name: /connected/i}).getByRole('button', {name: 'Player'}).click();
+  await bob.getByRole('region', {name: /connected/i}).getByRole('button', {name: 'Player'}).click();
 
   // Alice sends a message
   await alice.getByLabel('Message', {exact: true}).fill('Hello Bob!');
