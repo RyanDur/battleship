@@ -98,7 +98,6 @@ export const Fleet = ({onSelectPeer}: Props = {}) => {
   const trustingPeers = peers.filter(p => p.trustsMe);
   const summary = countSummary(peers.length, onlinePeers.length, previousPeers.length);
 
-
   return (
     <nav className="hud-fleet" aria-label="Fleet">
       <details className="fleet-details" open>
