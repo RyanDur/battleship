@@ -8,7 +8,7 @@
     "header  header  header"
     "fleet   main    comms"
     "footer  footer  footer";
-  min-height: 100dvh;
+  height: 100dvh;
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
@@ -16,6 +16,8 @@
 
 @media (max-width: 767px) {
   .hud-root {
+    height: auto;
+    min-height: 100dvh;
     grid-template-columns: 1fr;
     grid-template-areas:
       "header"
