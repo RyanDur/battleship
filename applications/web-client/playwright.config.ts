@@ -23,7 +23,7 @@ export default defineConfig({
   reporter: [['html', {open: 'never'}]],
   use: {
     baseURL: 'http://localhost:4173',
-    video: 'on',
+    video: process.env.CI ? 'on' : 'off',
     launchOptions: {
       args: ['--allow-loopback-in-peer-connection'],
     },
