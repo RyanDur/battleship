@@ -20,8 +20,10 @@ if (!bootJar) {
 
 export default defineConfig({
   testDir: './e2e',
+  reporter: [['html', {open: 'never'}]],
   use: {
     baseURL: 'http://localhost:4173',
+    video: 'on',
     launchOptions: {
       args: ['--allow-loopback-in-peer-connection'],
     },
