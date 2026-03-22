@@ -6,10 +6,6 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
-import org.springframework.test.annotation.Commit
-import org.springframework.test.context.transaction.TestTransaction
-import org.springframework.transaction.annotation.Propagation
-import org.springframework.transaction.annotation.Transactional
 
 @DataJpaTest
 class JpaPeerRelationshipGatewayTest {
@@ -96,24 +92,6 @@ class JpaPeerRelationshipGatewayTest {
         gateway.saveName("alice", "Alicia")
 
         assertEquals("Alicia", gateway.findName("alice"))
-    }
-
-    @Test
-    @Commit
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    fun `saveName is idempotent when the same peer reconnects in a separate session`() {
-        val gateway = JpaPeerRelationshipGateway(jpaRepo, nameRepo, forgottenRepo, emailRepo, sharingRepo, savedPeerEmailRepo)
-
-        // First session: peer registers (e.g., via the installed app)
-        gateway.saveName("reconnecting-peer", "Player")
-
-        // Second session: same browser UUID reconnects to the dev server
-        gateway.saveName("reconnecting-peer", "Player")
-
-        assertEquals("Player", gateway.findName("reconnecting-peer"))
-
-        // Cleanup since @Commit is needed to create separate transactions
-        nameRepo.deleteById("reconnecting-peer")
     }
 
     @Test

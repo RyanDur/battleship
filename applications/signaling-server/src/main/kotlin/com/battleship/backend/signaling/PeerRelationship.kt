@@ -130,7 +130,13 @@ class JpaPeerRelationshipGateway(
     }
 
     override fun saveEmail(peerId: String, email: String) {
-        emailRepo.save(PeerEmail(peerId = peerId, email = email))
+        val existing = emailRepo.findById(peerId).orElse(null)
+        if (existing != null) {
+            existing.email = email
+            emailRepo.save(existing)
+        } else {
+            emailRepo.save(PeerEmail(peerId = peerId, email = email))
+        }
     }
 
     override fun findEmail(peerId: String): String? =
