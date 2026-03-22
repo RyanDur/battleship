@@ -31,9 +31,12 @@ type Props = {config: Config};
 const App = ({config}: Props) => {
   const [selectedPeer, setSelectedPeer] = useState<SelectedPeer>(null);
   const [confirmedBoard, setConfirmedBoard] = useState<Board | null>(null);
+  const [boardLoading, setBoardLoading] = useState(true);
 
   useEffect(() => {
-    loadBoard(config.serviceUrl).onSuccess(setConfirmedBoard);
+    loadBoard(config.serviceUrl)
+      .onPending(setBoardLoading)
+      .onSuccess(setConfirmedBoard);
   }, [config.serviceUrl]);
   const {state: heartbeat, retry} = useHeartbeat(config);
 
@@ -63,7 +66,7 @@ const App = ({config}: Props) => {
       <ConnectionProvider store={store}>
         <Fleet onSelectPeer={(id, name) => setSelectedPeer({id, name})}/>
         <main className="hud-main">
-          {!confirmedBoard && (
+          {!boardLoading && !confirmedBoard && (
             <BoardSetup onConfirm={board => {
               saveBoard(config.serviceUrl, board).onSuccess(() => setConfirmedBoard(board));
             }}/>
