@@ -12,8 +12,8 @@ test('connected peers can send and receive chat messages', async ({browser}) => 
   await alice.goto('/battleship/');
   await bob.goto('/battleship/');
 
-  await expect(alice.getByText('Service online')).toBeVisible({timeout: 10_000});
-  await expect(bob.getByText('Service online')).toBeVisible({timeout: 10_000});
+  await expect(alice.getByText('Service online')).toBeVisible();
+  await expect(bob.getByText('Service online')).toBeVisible();
 
   await connectPeers(alice, bob);
 
@@ -28,7 +28,7 @@ test('connected peers can send and receive chat messages', async ({browser}) => 
   await alice.getByRole('button', {name: 'Send'}).click();
 
   // Both peers see Alice's message
-  await expect(alice.getByText('Hello Bob!')).toBeVisible({timeout: 15_000});
+  await expect(alice.getByText('Hello Bob!')).toBeVisible();
   await expect(bob.getByText('Hello Bob!')).toBeVisible({timeout: 15_000});
 
   // Bob replies
@@ -36,7 +36,7 @@ test('connected peers can send and receive chat messages', async ({browser}) => 
   await bob.getByRole('button', {name: 'Send'}).click();
 
   // Both peers see Bob's reply
-  await expect(bob.getByText('Hello Alice!')).toBeVisible({timeout: 15_000});
+  await expect(bob.getByText('Hello Alice!')).toBeVisible();
   await expect(alice.getByText('Hello Alice!')).toBeVisible({timeout: 15_000});
 
   await aliceCtx.close();

@@ -21,6 +21,11 @@ if (!bootJar) {
 export default defineConfig({
   testDir: './e2e',
   reporter: [['html', {open: 'never'}]],
+  expect: {
+    // Default assertion timeout. Operations needing more time (WebRTC
+    // negotiation, data channel delivery) use explicit overrides.
+    timeout: 5_000,
+  },
   use: {
     baseURL: 'http://localhost:4173',
     video: process.env.CI ? 'on' : 'off',
