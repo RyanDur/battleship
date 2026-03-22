@@ -350,4 +350,31 @@ describe('createHandlerMiddleware (store)', () => {
       expect(selectPeers(bob.getState())).toHaveLength(1);
     });
   });
+
+  it('flow resets to idle after a successful offer/answer handshake', async () => {
+    const factory = createFakePeerConnectionFactory();
+
+    const alice = createConnectionStore(
+      applyMiddleware([encodingMiddleware, codecMiddleware]),
+      [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection})],
+    );
+
+    const bob = createConnectionStore(
+      applyMiddleware([encodingMiddleware, codecMiddleware]),
+      [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection})],
+    );
+
+    alice.dispatch(createOffer('secret'));
+    await vi.waitFor(() => expect(selectFlow(alice.getState()).phase).toBe('offer-ready'));
+    const offerFlow = selectFlow(alice.getState()) as Extract<ConnectionFlow, {phase: 'offer-ready'}>;
+
+    bob.dispatch(joinOffer(offerFlow.code, 'secret'));
+    await vi.waitFor(() => expect(selectFlow(bob.getState()).phase).toBe('answer-ready'));
+    const answerFlow = selectFlow(bob.getState()) as Extract<ConnectionFlow, {phase: 'answer-ready'}>;
+
+    alice.dispatch(acceptAnswerCode(answerFlow.code));
+    await vi.waitFor(() => expect(selectPeers(alice.getState())).toHaveLength(1));
+
+    expect(selectFlow(alice.getState()).phase).toBe('idle');
+  });
 });

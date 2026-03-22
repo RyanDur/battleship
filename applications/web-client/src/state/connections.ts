@@ -207,7 +207,11 @@ const coreConnectionsReducer = (state: ConnectionsState, action: ConnectionsActi
       return {...state, flow: {phase: 'offer-failed'}};
 
     case 'PEER_CONNECTED':
-      return {...state, peers: [...state.peers, {id: action.peerId}]};
+      return {
+        ...state,
+        flow: 'peerId' in state.flow && state.flow.peerId === action.peerId ? {phase: 'idle' as const} : state.flow,
+        peers: [...state.peers, {id: action.peerId}],
+      };
 
     case 'PEER_DISCONNECTED':
       return {

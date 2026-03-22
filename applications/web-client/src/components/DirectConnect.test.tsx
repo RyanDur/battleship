@@ -4,8 +4,9 @@ import {DirectConnect} from './DirectConnect';
 import {ConnectionProvider} from '../state/ConnectionProvider';
 import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import {createOffer} from '../state/connectionActions';
+import {createOffer, peerConnected} from '../state/connectionActions';
 import {selectFlow} from '../state/connectionSelectors';
+import type {ConnectionFlow} from '../state/connections';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();
@@ -100,5 +101,28 @@ describe('DirectConnect', () => {
     await user.click(screen.getByRole('button', {name: /join/i}));
 
     await waitFor(() => expect(selectFlow(store.getState()).phase).toBe('joining'));
+  });
+
+  it('shows Create and Join buttons again after a connection completes', async () => {
+    const user = userEvent.setup();
+    const {store} = makeStore();
+    render(
+      <ConnectionProvider store={store}>
+        <DirectConnect serviceOnline={true}/>
+      </ConnectionProvider>
+    );
+
+    await user.click(screen.getByRole('button', {name: /create/i}));
+    await user.type(screen.getByLabelText(/passphrase/i), 'secret');
+    await user.click(screen.getByRole('button', {name: /generate/i}));
+    await waitFor(() => expect(selectFlow(store.getState()).phase).toBe('offer-ready'));
+
+    const flow = selectFlow(store.getState()) as Extract<ConnectionFlow, {phase: 'offer-ready'}>;
+    act(() => store.dispatch(peerConnected(flow.peerId)));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', {name: /create/i})).toBeInTheDocument();
+      expect(screen.getByRole('button', {name: /join/i})).toBeInTheDocument();
+    });
   });
 });

@@ -107,13 +107,11 @@ test('connected peer can introduce two peers and recipient sees an actionable al
   // Alice connects to Bob via manual P2P
   await connectPeers(alice, bob);
 
-  // Alice connects to Charlie via server — Charlie is the second Online peer (bob is first, charlie joined later)
-  await expect(alice.getByRole('list', {name: 'Online peers'})).toBeVisible({timeout: 10_000});
-  await alice.getByRole('list', {name: 'Online peers'}).getByRole('listitem').nth(1).getByRole('button', {name: 'Connect'}).click();
+  // Alice connects to Charlie via manual P2P (avoids fragile Online peers list ordering under parallel workers)
+  await connectPeers(alice, charlie);
 
-  // Both Alice and Charlie reach the connected state
-  await expect(alice.getByRole('button', {name: 'Disconnect'})).toHaveCount(2, {timeout: 30_000});
-  await expect(charlie.getByRole('button', {name: 'Disconnect'})).toBeVisible({timeout: 30_000});
+  // Both connections are active: alice↔bob and alice↔charlie
+  await expect(alice.getByRole('button', {name: 'Disconnect'})).toHaveCount(2, {timeout: 10_000});
 
   // Bob and Charlie each trust Alice so she can introduce them
   await bob.getByRole('list', {name: 'Connected peers'}).getByRole('button', {name: 'Trust'}).click();

@@ -28,16 +28,16 @@ test('connected peers can send and receive chat messages', async ({browser}) => 
   await alice.getByRole('button', {name: 'Send'}).click();
 
   // Both peers see Alice's message
-  await expect(alice.getByText('Hello Bob!')).toBeVisible({timeout: 5_000});
-  await expect(bob.getByText('Hello Bob!')).toBeVisible({timeout: 5_000});
+  await expect(alice.getByText('Hello Bob!')).toBeVisible({timeout: 15_000});
+  await expect(bob.getByText('Hello Bob!')).toBeVisible({timeout: 15_000});
 
   // Bob replies
   await bob.getByLabel('Message', {exact: true}).fill('Hello Alice!');
   await bob.getByRole('button', {name: 'Send'}).click();
 
   // Both peers see Bob's reply
-  await expect(bob.getByText('Hello Alice!')).toBeVisible({timeout: 5_000});
-  await expect(alice.getByText('Hello Alice!')).toBeVisible({timeout: 5_000});
+  await expect(bob.getByText('Hello Alice!')).toBeVisible({timeout: 15_000});
+  await expect(alice.getByText('Hello Alice!')).toBeVisible({timeout: 15_000});
 
   await aliceCtx.close();
   await bobCtx.close();

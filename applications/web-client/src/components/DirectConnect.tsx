@@ -29,6 +29,12 @@ export const DirectConnect = ({serviceOnline}: Props) => {
   const flow = toFlowPhase(useConnectionState(selectFlow));
 
   const [formMode, setFormMode] = useState<'none' | 'create' | 'join'>('none');
+  const [prevPhase, setPrevPhase] = useState(flow.phase);
+
+  if (prevPhase !== flow.phase) {
+    setPrevPhase(flow.phase);
+    if (flow.phase === 'idle') setFormMode('none');
+  }
   const [passphrase, setPassphrase] = useState('');
   const [offerCode, setOfferCode] = useState('');
   const [responseCode, setResponseCode] = useState('');
