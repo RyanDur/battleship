@@ -1,27 +1,5 @@
 import {test, expect} from '@playwright/test';
-import type {Page} from '@playwright/test';
-
-const connectPeers = async (alice: Page, bob: Page) => {
-  await alice.getByRole('button', {name: 'Create'}).click();
-  await alice.getByLabel('Passphrase').fill('secret');
-  await alice.getByRole('button', {name: 'Generate code'}).click();
-  await expect(alice.locator('code')).toBeVisible({timeout: 30_000});
-  const offerCode = await alice.locator('code').textContent();
-
-  await bob.getByRole('button', {name: 'Join'}).click();
-  await bob.getByLabel('Passphrase').fill('secret');
-  await bob.getByLabel('Offer code').fill(offerCode!);
-  await bob.getByRole('button', {name: 'Join'}).click();
-  await expect(bob.locator('code')).toBeVisible({timeout: 30_000});
-  const responseCode = await bob.locator('code').textContent();
-
-  await alice.getByLabel('Response code').fill(responseCode!);
-  await expect(alice.getByLabel('Response code')).toHaveValue(responseCode!);
-  await alice.locator('.direct-connect').getByRole('button', {name: 'Accept'}).click();
-
-  await expect(alice.getByRole('button', {name: 'Disconnect'})).toBeVisible({timeout: 30_000});
-  await expect(bob.getByRole('button', {name: 'Disconnect'})).toBeVisible({timeout: 30_000});
-};
+import {connectPeers} from './helpers';
 
 test('users see each other as available to connect when both are online', async ({browser}) => {
   test.setTimeout(30_000);
@@ -37,8 +15,8 @@ test('users see each other as available to connect when both are online', async 
   await expect(alice.getByText('Service online')).toBeVisible({timeout: 10_000});
   await expect(bob.getByText('Service online')).toBeVisible({timeout: 10_000});
 
-  await expect(alice.getByRole('list', {name: 'Online peers'})).toBeVisible({timeout: 10_000});
-  await expect(bob.getByRole('list', {name: 'Online peers'})).toBeVisible({timeout: 10_000});
+  await expect(alice.getByRole('list', {name: 'Online peers'}).getByRole('button', {name: 'Connect'}).first()).toBeVisible({timeout: 10_000});
+  await expect(bob.getByRole('list', {name: 'Online peers'}).getByRole('button', {name: 'Connect'}).first()).toBeVisible({timeout: 10_000});
 
   await aliceCtx.close();
   await bobCtx.close();
