@@ -1,10 +1,12 @@
 import {useEffect, useMemo, useState} from 'react';
+import {BoardSetup} from './components/BoardSetup';
 import {Comms} from './components/Comms';
 import {DirectConnect} from './components/DirectConnect';
 import {DownloadLink} from './components/DownloadLink';
 import {Fleet} from './components/Fleet';
 import {ServiceHealth} from './components/ServiceHealth';
 import type {Config} from './protocol/config';
+import type {Board} from './game/board';
 import {fetchDownloadUrl} from './protocol/download';
 import type {HeartbeatState} from './protocol/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
@@ -27,6 +29,7 @@ type Props = {config: Config};
 
 const App = ({config}: Props) => {
   const [selectedPeer, setSelectedPeer] = useState<SelectedPeer>(null);
+  const [confirmedBoard, setConfirmedBoard] = useState<Board | null>(null);
   const {state: heartbeat, retry} = useHeartbeat(config);
 
   const store = useMemo(() => {
@@ -54,7 +57,9 @@ const App = ({config}: Props) => {
       </header>
       <ConnectionProvider store={store}>
         <Fleet onSelectPeer={(id, name) => setSelectedPeer({id, name})}/>
-        <main className="hud-main"/>
+        <main className="hud-main">
+          {!confirmedBoard && <BoardSetup onConfirm={setConfirmedBoard}/>}
+        </main>
         <Comms peerId={selectedPeer?.id ?? null} peerName={selectedPeer?.name ?? null}/>
         <footer className="hud-footer">
           <DirectConnect serviceOnline={heartbeat.status === 'online'}/>
