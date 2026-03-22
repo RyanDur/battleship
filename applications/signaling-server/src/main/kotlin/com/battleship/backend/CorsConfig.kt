@@ -11,7 +11,7 @@ class CorsConfig(@Value("\${app.allowed-origins}") private val allowedOrigins: S
     override fun addCorsMappings(registry: CorsRegistry) {
         registry.addMapping("/**")
             .allowedOrigins(*allowedOrigins.split(",").toTypedArray())
-            .allowedMethods("GET")
+            .allowedMethods("GET", "POST")
             .allowCredentials(true)
     }
 }
