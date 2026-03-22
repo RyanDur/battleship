@@ -144,7 +144,7 @@ export const startSignaling = (
             .or(() => maybe(boardSavedDecoder.decode(parsed)).map(() => onEvent({type: 'BOARD_SAVED'})))
             .or(() => maybe(boardNotFoundDecoder.decode(parsed)).map(() => onEvent({type: 'BOARD_NOT_FOUND'})))
             .or(() => maybe(boardLoadedDecoder.decode(parsed)).map(msg => {
-              tryCatch(() => JSON.parse(msg.board) as Board, () => null)
+              tryCatch(() => JSON.parse(msg.board), () => null)
                 .onSuccess(board => { if (board) onEvent({type: 'BOARD_LOADED', board}); });
             }))
             .or(() => maybe(gameNotFoundDecoder.decode(parsed)).map(() => onEvent({type: 'GAME_NOT_FOUND'})))
