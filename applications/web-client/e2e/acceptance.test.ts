@@ -15,8 +15,8 @@ test('users see each other as available to connect when both are online', async 
   await expect(alice.getByText('Service online')).toBeVisible({timeout: 10_000});
   await expect(bob.getByText('Service online')).toBeVisible({timeout: 10_000});
 
-  await expect(alice.getByRole('list', {name: 'Online peers'}).getByRole('button', {name: 'Connect'}).first()).toBeVisible({timeout: 15_000});
-  await expect(bob.getByRole('list', {name: 'Online peers'}).getByRole('button', {name: 'Connect'}).first()).toBeVisible({timeout: 15_000});
+  await expect(alice.getByRole('list', {name: 'Online peers'}).getByRole('button', {name: 'Connect'}).first()).toBeVisible({timeout: 10_000});
+  await expect(bob.getByRole('list', {name: 'Online peers'}).getByRole('button', {name: 'Connect'}).first()).toBeVisible({timeout: 10_000});
 
   await aliceCtx.close();
   await bobCtx.close();
