@@ -111,7 +111,13 @@ class JpaPeerRelationshipGateway(
         }.toSet()
 
     override fun saveName(peerId: String, name: String) {
-        nameRepo.save(PeerName(peerId = peerId, name = name))
+        val existing = nameRepo.findById(peerId).orElse(null)
+        if (existing != null) {
+            existing.name = name
+            nameRepo.save(existing)
+        } else {
+            nameRepo.save(PeerName(peerId = peerId, name = name))
+        }
     }
 
     override fun findName(peerId: String): String? =
