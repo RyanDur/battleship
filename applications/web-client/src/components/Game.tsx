@@ -2,7 +2,6 @@ import {useState, useEffect, useRef} from 'react';
 import {useConnectionState, useConnectionStore} from '../state/useConnection';
 import {selectGameState} from '../state/connectionSelectors';
 import {fireShot as fireShotAction} from '../state/connectionActions';
-import type {GameState} from '../state/connections';
 
 const ROWS = Array.from({length: 10}, (_, i) => i + 1);
 const COLS = Array.from({length: 10}, (_, i) => i + 1);
@@ -32,11 +31,9 @@ export const Game = ({onNewGame}: Props) => {
 
   if (!state) return null;
 
-  const gameState: GameState = state;
+  const isOver = state.phase === 'player-won' || state.phase === 'computer-won';
 
-  const isOver = gameState.phase === 'player-won' || gameState.phase === 'computer-won';
-
-  const shotFor = (shots: GameState['playerShots'], row: number, col: number) =>
+  const shotFor = (shots: typeof state.playerShots, row: number, col: number) =>
     shots.find(s => s.cell.row === row && s.cell.col === col);
 
   return (
@@ -45,7 +42,7 @@ export const Game = ({onNewGame}: Props) => {
 
       {isOver && (
         <div className="game-over">
-          <h2>{gameState.phase === 'player-won' ? 'You win!' : 'Computer wins'}</h2>
+          <h2>{state.phase === 'player-won' ? 'You win!' : 'Computer wins'}</h2>
           <button className="control" onClick={onNewGame}>New game</button>
         </div>
       )}
@@ -53,7 +50,7 @@ export const Game = ({onNewGame}: Props) => {
       <section aria-label="Your fleet" className="game-board">
         {ROWS.flatMap(row =>
           COLS.map(col => {
-            const shot = shotFor(gameState.aiShots, row, col);
+            const shot = shotFor(state.aiShots, row, col);
             return (
               <button
                 key={`fleet-${row}-${col}`}
@@ -71,13 +68,13 @@ export const Game = ({onNewGame}: Props) => {
       <section aria-label="Tracking board" className="game-board">
         {ROWS.flatMap(row =>
           COLS.map(col => {
-            const shot = shotFor(gameState.playerShots, row, col);
+            const shot = shotFor(state.playerShots, row, col);
             return (
               <button
                 key={`track-${row}-${col}`}
                 aria-label={`Row ${row}, Column ${col}`}
                 className={`game-cell${shot ? ` ${shot.result}` : ''}`}
-                disabled={!!shot || isOver || gameState.phase !== 'player-turn'}
+                disabled={!!shot || isOver || state.phase !== 'player-turn'}
                 onClick={() => handleFire({row, col})}
               >
                 {shot?.result}

@@ -2,12 +2,10 @@ import * as Decoder from 'schemawax';
 import {maybe} from '../lib/maybe';
 import {tryCatch} from '../lib/result';
 import {asyncTryCatch} from '../lib/asyncResult';
-import type {PreviousPeer} from '../state/connections';
+import type {PreviousPeer, GameState, Shot, GamePhase} from '../state/connections';
+import type {Board} from '../game/board';
 
 export type OnlinePeer = {peerId: string; name: string}
-
-import type {GameState, Shot, GamePhase} from '../state/connections';
-import type {Board} from '../game/board';
 
 export type SignalingEvent =
   | {type: 'REGISTERED'}
@@ -98,13 +96,11 @@ const gameNotFoundDecoder = Decoder.object({required: {type: Decoder.literal('GA
 const cellDecoder = Decoder.object({required: {row: Decoder.number, col: Decoder.number}});
 const shipInfoDecoder = Decoder.object({required: {name: Decoder.string, size: Decoder.number}});
 const shotDecoder = Decoder.object({required: {cell: cellDecoder, result: Decoder.string}, optional: {ship: shipInfoDecoder}});
-const gameStateDecoder = Decoder.object({
-  required: {
-    type: Decoder.string,
-    playerShots: Decoder.array(shotDecoder),
-    aiShots: Decoder.array(shotDecoder),
-    phase: Decoder.string,
-  },
+const gameStartedDecoder = Decoder.object({
+  required: {type: Decoder.literal('GAME_STARTED'), playerShots: Decoder.array(shotDecoder), aiShots: Decoder.array(shotDecoder), phase: Decoder.string},
+});
+const gameStateMessageDecoder = Decoder.object({
+  required: {type: Decoder.literal('GAME_STATE'), playerShots: Decoder.array(shotDecoder), aiShots: Decoder.array(shotDecoder), phase: Decoder.string},
 });
 const fireResultDecoder = Decoder.object({
   required: {type: Decoder.literal('FIRE_RESULT'), playerShot: shotDecoder, phase: Decoder.string},
@@ -147,13 +143,17 @@ export const startSignaling = (
             .or(() => maybe(emailRevokedDecoder.decode(parsed)).map(msg => onEvent({type: 'EMAIL_REVOKED', fromPeerId: msg.fromPeerId})))
             .or(() => maybe(boardSavedDecoder.decode(parsed)).map(() => onEvent({type: 'BOARD_SAVED'})))
             .or(() => maybe(boardNotFoundDecoder.decode(parsed)).map(() => onEvent({type: 'BOARD_NOT_FOUND'})))
-            .or(() => maybe(boardLoadedDecoder.decode(parsed)).map(msg => onEvent({type: 'BOARD_LOADED', board: JSON.parse(msg.board) as Board})))
-            .or(() => maybe(gameNotFoundDecoder.decode(parsed)).map(() => onEvent({type: 'GAME_NOT_FOUND'})))
-            .or(() => maybe(gameStateDecoder.decode(parsed)).map(msg => {
-              const gameState = {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as GamePhase};
-              if (msg.type === 'GAME_STARTED') onEvent({type: 'GAME_STARTED', gameState});
-              else if (msg.type === 'GAME_STATE') onEvent({type: 'GAME_STATE', gameState});
+            .or(() => maybe(boardLoadedDecoder.decode(parsed)).map(msg => {
+              tryCatch(() => JSON.parse(msg.board) as Board, () => null)
+                .onSuccess(board => { if (board) onEvent({type: 'BOARD_LOADED', board}); });
             }))
+            .or(() => maybe(gameNotFoundDecoder.decode(parsed)).map(() => onEvent({type: 'GAME_NOT_FOUND'})))
+            .or(() => maybe(gameStartedDecoder.decode(parsed)).map(msg =>
+              onEvent({type: 'GAME_STARTED', gameState: {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as GamePhase}})
+            ))
+            .or(() => maybe(gameStateMessageDecoder.decode(parsed)).map(msg =>
+              onEvent({type: 'GAME_STATE', gameState: {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as GamePhase}})
+            ))
             .or(() => maybe(fireResultDecoder.decode(parsed)).map(msg => onEvent({
               type: 'FIRE_RESULT',
               playerShot: msg.playerShot as Shot,
