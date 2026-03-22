@@ -7,6 +7,7 @@ import {Fleet} from './components/Fleet';
 import {ServiceHealth} from './components/ServiceHealth';
 import type {Config} from './protocol/config';
 import type {Board} from './game/board';
+import {saveBoard, loadBoard} from './protocol/boardApi';
 import {fetchDownloadUrl} from './protocol/download';
 import type {HeartbeatState} from './protocol/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
@@ -30,6 +31,10 @@ type Props = {config: Config};
 const App = ({config}: Props) => {
   const [selectedPeer, setSelectedPeer] = useState<SelectedPeer>(null);
   const [confirmedBoard, setConfirmedBoard] = useState<Board | null>(null);
+
+  useEffect(() => {
+    loadBoard(config.serviceUrl).onSuccess(setConfirmedBoard);
+  }, [config.serviceUrl]);
   const {state: heartbeat, retry} = useHeartbeat(config);
 
   const store = useMemo(() => {
@@ -58,7 +63,11 @@ const App = ({config}: Props) => {
       <ConnectionProvider store={store}>
         <Fleet onSelectPeer={(id, name) => setSelectedPeer({id, name})}/>
         <main className="hud-main">
-          {!confirmedBoard && <BoardSetup onConfirm={setConfirmedBoard}/>}
+          {!confirmedBoard && (
+            <BoardSetup onConfirm={board => {
+              saveBoard(config.serviceUrl, board).onSuccess(() => setConfirmedBoard(board));
+            }}/>
+          )}
         </main>
         <Comms peerId={selectedPeer?.id ?? null} peerName={selectedPeer?.name ?? null}/>
         <footer className="hud-footer">
