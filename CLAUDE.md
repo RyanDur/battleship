@@ -21,7 +21,7 @@ make test
 cd applications/web-client && npm test
 
 # Single Vitest file
-cd applications/web-client && npx vitest run src/state/connectionStore.test.ts
+cd applications/web-client && npm run test:watch -- src/state/connectionStore.test.ts
 
 # Frontend lint only
 cd applications/web-client && npm run lint
@@ -30,8 +30,8 @@ cd applications/web-client && npm run lint
 ./gradlew :applications:signaling-server:bootJar
 cd applications/web-client && npm run e2e
 
-# Single Playwright test
-cd applications/web-client && npx playwright test e2e/acceptance.test.ts
+# Single Playwright test (requires backend jar already built)
+cd applications/web-client && npm run e2e:run -- e2e/acceptance.test.ts
 ```
 
 ## Architecture
