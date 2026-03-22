@@ -83,12 +83,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-text-muted);
-  list-style: none;
   user-select: none;
-}
-
-.fleet-summary::-webkit-details-marker {
-  display: none;
 }
 
 .fleet-details[open] .fleet-summary {
@@ -192,12 +187,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-text-muted);
-  list-style: none;
   user-select: none;
-}
-
-.comms-summary::-webkit-details-marker {
-  display: none;
 }
 
 .comms-details[open] .comms-summary {
@@ -267,12 +257,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-text-muted);
-  list-style: none;
   user-select: none;
-}
-
-.alerts-summary::-webkit-details-marker {
-  display: none;
 }
 
 .alerts-details[open] .alerts-summary {
