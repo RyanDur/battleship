@@ -1,4 +1,5 @@
-import type {OnlinePeer, PreviousPeer} from './connections';
+import type {OnlinePeer, PreviousPeer, GameState, Shot, GamePhase} from './connections';
+import type {Board} from '../game/board';
 
 export const createOffer = (passphrase: string) => ({type: 'CREATE_OFFER' as const, passphrase});
 export const offerSdpReady = (peerId: string, sdp: string) => ({type: 'OFFER_SDP_READY' as const, peerId, sdp});
@@ -68,3 +69,18 @@ export const savePeerEmail = (peerId: string, email: string) => ({type: 'SAVE_PE
 
 export const messageReceived = (peerId: string, text: string) => ({type: 'MESSAGE_RECEIVED' as const, peerId, text});
 export const sendMessage = (peerId: string, text: string) => ({type: 'SEND_MESSAGE' as const, peerId, text});
+
+export const saveBoard = (board: Board) => ({type: 'SAVE_BOARD' as const, board});
+export const boardSaved = () => ({type: 'BOARD_SAVED' as const});
+export const loadBoard = () => ({type: 'LOAD_BOARD' as const});
+export const boardLoaded = (board: Board) => ({type: 'BOARD_LOADED' as const, board});
+export const boardNotFound = () => ({type: 'BOARD_NOT_FOUND' as const});
+
+export const startGame = () => ({type: 'START_GAME' as const});
+export const gameStarted = (gameState: GameState) => ({type: 'GAME_STARTED' as const, gameState});
+export const fireShot = (row: number, col: number) => ({type: 'FIRE_SHOT' as const, row, col});
+export const fireResult = (playerShot: Shot, aiShot: Shot | null, phase: GamePhase) =>
+  ({type: 'FIRE_RESULT' as const, playerShot, aiShot, phase});
+export const loadGame = () => ({type: 'LOAD_GAME' as const});
+export const gameStateReceived = (gameState: GameState) => ({type: 'GAME_STATE' as const, gameState});
+export const gameNotFound = () => ({type: 'GAME_NOT_FOUND' as const});

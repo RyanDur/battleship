@@ -4,17 +4,18 @@ import {Comms} from './components/Comms';
 import {DirectConnect} from './components/DirectConnect';
 import {DownloadLink} from './components/DownloadLink';
 import {Fleet} from './components/Fleet';
+import {Game} from './components/Game';
 import {ServiceHealth} from './components/ServiceHealth';
 import type {Config} from './protocol/config';
-import type {Board} from './game/board';
-import {saveBoard, loadBoard} from './protocol/boardApi';
 import {fetchDownloadUrl} from './protocol/download';
 import type {HeartbeatState} from './protocol/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
 import {detectPlatform} from './protocol/platform';
 import {createConnectionStore, createHandlerListener, createSignalingListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './state/connectionStore';
-import {startSignaling, stopSignaling} from './state/connectionActions';
+import {startSignaling, stopSignaling, saveBoard, startGame} from './state/connectionActions';
 import {ConnectionProvider} from './state/ConnectionProvider';
+import {useConnectionState, useConnectionStore} from './state/useConnection';
+import {selectBoard, selectBoardLoading, selectGameState} from './state/connectionSelectors';
 
 const platform = detectPlatform(navigator.userAgent);
 
@@ -28,16 +29,20 @@ type SelectedPeer = {id: string; name: string | null} | null;
 
 type Props = {config: Config};
 
+const AppMain = () => {
+  const board = useConnectionState(selectBoard);
+  const boardLoading = useConnectionState(selectBoardLoading);
+  const gameState = useConnectionState(selectGameState);
+  const store = useConnectionStore();
+
+  if (boardLoading) return null;
+  if (!board) return <BoardSetup onConfirm={b => store.dispatch(saveBoard(b))}/>;
+  if (!gameState) return <button className="control" onClick={() => store.dispatch(startGame())}>Play vs AI</button>;
+  return <Game onNewGame={() => store.dispatch(startGame())}/>;
+};
+
 const App = ({config}: Props) => {
   const [selectedPeer, setSelectedPeer] = useState<SelectedPeer>(null);
-  const [confirmedBoard, setConfirmedBoard] = useState<Board | null>(null);
-  const [boardLoading, setBoardLoading] = useState(true);
-
-  useEffect(() => {
-    loadBoard(config.serviceUrl)
-      .onPending(setBoardLoading)
-      .onSuccess(setConfirmedBoard);
-  }, [config.serviceUrl]);
   const {state: heartbeat, retry} = useHeartbeat(config);
 
   const store = useMemo(() => {
@@ -66,11 +71,7 @@ const App = ({config}: Props) => {
       <ConnectionProvider store={store}>
         <Fleet onSelectPeer={(id, name) => setSelectedPeer({id, name})}/>
         <main className="hud-main">
-          {!boardLoading && !confirmedBoard && (
-            <BoardSetup onConfirm={board => {
-              saveBoard(config.serviceUrl, board).onSuccess(() => setConfirmedBoard(board));
-            }}/>
-          )}
+          <AppMain/>
         </main>
         <Comms peerId={selectedPeer?.id ?? null} peerName={selectedPeer?.name ?? null}/>
         <footer className="hud-footer">

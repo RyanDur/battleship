@@ -1,7 +1,7 @@
 import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction} from './connections';
 import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling} from './connectionSelectors';
-import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived} from './connectionActions';
+import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame} from './connectionActions';
 import type {PeerEvent} from '../types/worker-messages';
 import {encodeConnectionCode, decodeConnectionCode} from '../protocol/connection-code';
 import {createPeerHandler} from '../workers/connection.handler';
@@ -172,7 +172,8 @@ export const createSignalingListener = ({config}: SignalingListenerConfig): List
     return (action) => {
       if (action.type === 'START_SIGNALING') {
         handle = startSignaling(config, (event: SignalingEvent) => {
-          if (event.type === 'PEERS') dispatch(onlinePeersUpdated(event.peers));
+          if (event.type === 'REGISTERED') { dispatch(loadBoard()); dispatch(loadGame()); }
+          else if (event.type === 'PEERS') dispatch(onlinePeersUpdated(event.peers));
           else if (event.type === 'PEER_JOINED') dispatch(onlinePeerJoined(event.peerId, event.name));
           else if (event.type === 'PEER_LEFT') dispatch(onlinePeerLeft(event.peerId));
           else if (event.type === 'OFFER_RECEIVED') dispatch(serverOfferReceived(event.fromPeerId, event.name, event.sdp));
@@ -182,6 +183,13 @@ export const createSignalingListener = ({config}: SignalingListenerConfig): List
           else if (event.type === 'ICE_RESTART_ANSWER_RECEIVED') dispatch(iceRestartAnswerReceived(event.fromPeerId, event.sdp));
           else if (event.type === 'EMAIL_SHARED') dispatch(emailSharedReceived(event.fromPeerId, event.email));
           else if (event.type === 'EMAIL_REVOKED') dispatch(emailRevokedReceived(event.fromPeerId));
+          else if (event.type === 'BOARD_SAVED') dispatch(boardSaved());
+          else if (event.type === 'BOARD_LOADED') dispatch(boardLoaded(event.board));
+          else if (event.type === 'BOARD_NOT_FOUND') dispatch(boardNotFound());
+          else if (event.type === 'GAME_STARTED') dispatch(gameStarted(event.gameState));
+          else if (event.type === 'FIRE_RESULT') dispatch(fireResult(event.playerShot, event.aiShot, event.phase));
+          else if (event.type === 'GAME_STATE') dispatch(gameStateReceived(event.gameState));
+          else if (event.type === 'GAME_NOT_FOUND') dispatch(gameNotFound());
         });
       } else if (action.type === 'STOP_SIGNALING') {
         handle?.stop();
@@ -204,6 +212,16 @@ export const createSignalingListener = ({config}: SignalingListenerConfig): List
         handle?.send({type: 'UPDATE_EMAIL', email: action.email});
       } else if (action.type === 'SAVE_PEER_EMAIL') {
         handle?.send({type: 'SAVE_PEER_EMAIL', targetPeerId: action.peerId, email: action.email});
+      } else if (action.type === 'SAVE_BOARD') {
+        handle?.send({type: 'SAVE_BOARD', board: JSON.stringify(action.board)});
+      } else if (action.type === 'LOAD_BOARD') {
+        handle?.send({type: 'LOAD_BOARD'});
+      } else if (action.type === 'START_GAME') {
+        handle?.send({type: 'START_GAME'});
+      } else if (action.type === 'FIRE_SHOT') {
+        handle?.send({type: 'FIRE', row: action.row, col: action.col});
+      } else if (action.type === 'LOAD_GAME') {
+        handle?.send({type: 'LOAD_GAME'});
       }
     };
   };

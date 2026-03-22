@@ -6,7 +6,11 @@ import type {PreviousPeer} from '../state/connections';
 
 export type OnlinePeer = {peerId: string; name: string}
 
+import type {GameState, Shot, GamePhase} from '../state/connections';
+import type {Board} from '../game/board';
+
 export type SignalingEvent =
+  | {type: 'REGISTERED'}
   | {type: 'PEERS'; peers: OnlinePeer[]}
   | {type: 'PEER_JOINED'; peerId: string; name: string}
   | {type: 'PEER_LEFT'; peerId: string}
@@ -17,6 +21,13 @@ export type SignalingEvent =
   | {type: 'ICE_RESTART_ANSWER_RECEIVED'; fromPeerId: string; sdp: string}
   | {type: 'EMAIL_SHARED'; fromPeerId: string; email: string}
   | {type: 'EMAIL_REVOKED'; fromPeerId: string}
+  | {type: 'BOARD_SAVED'}
+  | {type: 'BOARD_LOADED'; board: Board}
+  | {type: 'BOARD_NOT_FOUND'}
+  | {type: 'GAME_STARTED'; gameState: GameState}
+  | {type: 'FIRE_RESULT'; playerShot: Shot; aiShot: Shot | null; phase: GamePhase}
+  | {type: 'GAME_STATE'; gameState: GameState}
+  | {type: 'GAME_NOT_FOUND'}
 
 export type SignalingHandle = {
   stop: () => void
@@ -29,6 +40,8 @@ export type SignalingConfig = {
   url: string
   name: string
 }
+
+const registeredDecoder = Decoder.object({required: {type: Decoder.literal('REGISTERED')}});
 
 const peerDecoder = Decoder.object({required: {peerId: Decoder.string, name: Decoder.string}});
 
@@ -77,6 +90,27 @@ const emailRevokedDecoder = Decoder.object({
   required: {type: Decoder.literal('EMAIL_REVOKED'), fromPeerId: Decoder.string},
 });
 
+const boardSavedDecoder = Decoder.object({required: {type: Decoder.literal('BOARD_SAVED')}});
+const boardNotFoundDecoder = Decoder.object({required: {type: Decoder.literal('BOARD_NOT_FOUND')}});
+const boardLoadedDecoder = Decoder.object({required: {type: Decoder.literal('BOARD_LOADED'), board: Decoder.string}});
+const gameNotFoundDecoder = Decoder.object({required: {type: Decoder.literal('GAME_NOT_FOUND')}});
+
+const cellDecoder = Decoder.object({required: {row: Decoder.number, col: Decoder.number}});
+const shipInfoDecoder = Decoder.object({required: {name: Decoder.string, size: Decoder.number}});
+const shotDecoder = Decoder.object({required: {cell: cellDecoder, result: Decoder.string}, optional: {ship: shipInfoDecoder}});
+const gameStateDecoder = Decoder.object({
+  required: {
+    type: Decoder.string,
+    playerShots: Decoder.array(shotDecoder),
+    aiShots: Decoder.array(shotDecoder),
+    phase: Decoder.string,
+  },
+});
+const fireResultDecoder = Decoder.object({
+  required: {type: Decoder.literal('FIRE_RESULT'), playerShot: shotDecoder, phase: Decoder.string},
+  optional: {aiShot: shotDecoder},
+});
+
 export const startSignaling = (
   config: SignalingConfig,
   onEvent: (event: SignalingEvent) => void
@@ -100,7 +134,8 @@ export const startSignaling = (
       if (gen !== generation) return;
       tryCatch(() => JSON.parse(event.data as string), () => 'invalid json')
         .onSuccess(parsed => {
-          maybe(peersDecoder.decode(parsed)).map(msg => onEvent({type: 'PEERS', peers: msg.peers}))
+          maybe(registeredDecoder.decode(parsed)).map(() => onEvent({type: 'REGISTERED'}))
+            .or(() => maybe(peersDecoder.decode(parsed)).map(msg => onEvent({type: 'PEERS', peers: msg.peers})))
             .or(() => maybe(peerJoinedDecoder.decode(parsed)).map(msg => onEvent({type: 'PEER_JOINED', peerId: msg.peerId, name: msg.name})))
             .or(() => maybe(peerLeftDecoder.decode(parsed)).map(msg => onEvent({type: 'PEER_LEFT', peerId: msg.peerId})))
             .or(() => maybe(offerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'OFFER_RECEIVED', fromPeerId: msg.fromPeerId, name: msg.name, sdp: msg.sdp})))
@@ -109,7 +144,22 @@ export const startSignaling = (
             .or(() => maybe(iceRestartReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'ICE_RESTART_RECEIVED', fromPeerId: msg.fromPeerId, sdp: msg.sdp})))
             .or(() => maybe(iceRestartAnswerReceivedDecoder.decode(parsed)).map(msg => onEvent({type: 'ICE_RESTART_ANSWER_RECEIVED', fromPeerId: msg.fromPeerId, sdp: msg.sdp})))
             .or(() => maybe(emailSharedDecoder.decode(parsed)).map(msg => onEvent({type: 'EMAIL_SHARED', fromPeerId: msg.fromPeerId, email: msg.email})))
-            .or(() => maybe(emailRevokedDecoder.decode(parsed)).map(msg => onEvent({type: 'EMAIL_REVOKED', fromPeerId: msg.fromPeerId})));
+            .or(() => maybe(emailRevokedDecoder.decode(parsed)).map(msg => onEvent({type: 'EMAIL_REVOKED', fromPeerId: msg.fromPeerId})))
+            .or(() => maybe(boardSavedDecoder.decode(parsed)).map(() => onEvent({type: 'BOARD_SAVED'})))
+            .or(() => maybe(boardNotFoundDecoder.decode(parsed)).map(() => onEvent({type: 'BOARD_NOT_FOUND'})))
+            .or(() => maybe(boardLoadedDecoder.decode(parsed)).map(msg => onEvent({type: 'BOARD_LOADED', board: JSON.parse(msg.board) as Board})))
+            .or(() => maybe(gameNotFoundDecoder.decode(parsed)).map(() => onEvent({type: 'GAME_NOT_FOUND'})))
+            .or(() => maybe(gameStateDecoder.decode(parsed)).map(msg => {
+              const gameState = {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as GamePhase};
+              if (msg.type === 'GAME_STARTED') onEvent({type: 'GAME_STARTED', gameState});
+              else if (msg.type === 'GAME_STATE') onEvent({type: 'GAME_STATE', gameState});
+            }))
+            .or(() => maybe(fireResultDecoder.decode(parsed)).map(msg => onEvent({
+              type: 'FIRE_RESULT',
+              playerShot: msg.playerShot as Shot,
+              aiShot: msg.aiShot ? msg.aiShot as Shot : null,
+              phase: msg.phase as GamePhase,
+            })));
         });
     };
 

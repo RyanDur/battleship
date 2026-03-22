@@ -18,3 +18,6 @@ export const selectIsCreatingOffer = (state: ConnectionsState) =>
   state.flow.phase === 'creating' || state.flow.phase === 'encoding-offer';
 
 export const selectMessages = (state: ConnectionsState) => state.messages;
+export const selectBoard = (state: ConnectionsState) => state.board;
+export const selectBoardLoading = (state: ConnectionsState) => state.boardLoading;
+export const selectGameState = (state: ConnectionsState) => state.gameState;

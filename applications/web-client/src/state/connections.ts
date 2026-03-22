@@ -1,3 +1,5 @@
+import type {Board} from '../game/board';
+
 export type Peer = {id: string; name?: string; trusted?: boolean; trustsMe?: boolean}
 
 export type OnlinePeer = {peerId: string; name: string}
@@ -5,6 +7,11 @@ export type OnlinePeer = {peerId: string; name: string}
 export type PreviousPeer = {peerId: string; name: string; online: boolean; email?: string}
 
 export type PendingIntroduction = {introId: string; from: string; peer: string}
+
+export type ShotResult = 'hit' | 'miss' | 'sunk'
+export type GamePhase = 'player-turn' | 'computer-turn' | 'player-won' | 'computer-won'
+export type Shot = {cell: {row: number; col: number}; result: ShotResult; ship?: {name: string; size: number}}
+export type GameState = {playerShots: Shot[]; aiShots: Shot[]; phase: GamePhase}
 
 export type ConnectionFlow =
   | {phase: 'idle'}
@@ -36,6 +43,9 @@ export type ConnectionsState = {
   previousPeers: PreviousPeer[]
   peerConnectionHealth: Record<string, 'stable' | 'unstable'>
   handlerState: HandlerState
+  board: Board | null
+  boardLoading: boolean
+  gameState: GameState | null
 }
 
 export type ConnectionsAction =
@@ -96,6 +106,18 @@ export type ConnectionsAction =
   | {type: 'SAVE_PEER_EMAIL'; peerId: string; email: string}
   | {type: 'MESSAGE_RECEIVED'; peerId: string; text: string}
   | {type: 'SEND_MESSAGE'; peerId: string; text: string}
+  | {type: 'SAVE_BOARD'; board: Board}
+  | {type: 'BOARD_SAVED'}
+  | {type: 'LOAD_BOARD'}
+  | {type: 'BOARD_LOADED'; board: Board}
+  | {type: 'BOARD_NOT_FOUND'}
+  | {type: 'START_GAME'}
+  | {type: 'GAME_STARTED'; gameState: GameState}
+  | {type: 'FIRE_SHOT'; row: number; col: number}
+  | {type: 'FIRE_RESULT'; playerShot: Shot; aiShot: Shot | null; phase: GamePhase}
+  | {type: 'LOAD_GAME'}
+  | {type: 'GAME_STATE'; gameState: GameState}
+  | {type: 'GAME_NOT_FOUND'}
 
 const handlerInitialState: HandlerState = {
   signalingToPeer: {},
@@ -115,6 +137,9 @@ export const initialState: ConnectionsState = {
   previousPeers: [],
   peerConnectionHealth: {},
   handlerState: handlerInitialState,
+  board: null,
+  boardLoading: true,
+  gameState: null,
 };
 
 const handlerReducer = (state: HandlerState, action: ConnectionsAction): HandlerState => {
@@ -288,6 +313,33 @@ const coreConnectionsReducer = (state: ConnectionsState, action: ConnectionsActi
 
     case 'PEER_CONNECTION_RESTORED':
       return {...state, peerConnectionHealth: {...state.peerConnectionHealth, [action.peerId]: 'stable'}};
+
+    case 'LOAD_BOARD':
+      return {...state, boardLoading: true};
+
+    case 'BOARD_LOADED':
+      return {...state, board: action.board, boardLoading: false};
+
+    case 'BOARD_NOT_FOUND':
+      return {...state, board: null, boardLoading: false};
+
+    case 'SAVE_BOARD':
+      return {...state, board: action.board};
+
+    case 'GAME_STARTED':
+    case 'GAME_STATE':
+      return {...state, gameState: action.gameState};
+
+    case 'FIRE_RESULT': {
+      const gameState = state.gameState;
+      if (!gameState) return state;
+      const playerShots = [...gameState.playerShots, action.playerShot];
+      const aiShots = action.aiShot ? [...gameState.aiShots, action.aiShot] : gameState.aiShots;
+      return {...state, gameState: {...gameState, playerShots, aiShots, phase: action.phase}};
+    }
+
+    case 'GAME_NOT_FOUND':
+      return {...state, gameState: null};
 
     default:
       return state;
