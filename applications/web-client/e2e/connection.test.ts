@@ -12,8 +12,8 @@ test('two peers complete the full offer/answer connection flow', async ({browser
   await alice.goto('/battleship/');
   await bob.goto('/battleship/');
 
-  await expect(alice.getByText('Service online')).
-  await expect(bob.getByText('Service online')).
+  await expect(alice.getByText('Service online')).toBeVisible({timeout: 10_000});
+  await expect(bob.getByText('Service online')).toBeVisible({timeout: 10_000});
 
   await connectPeers(alice, bob);
 

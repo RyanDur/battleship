@@ -12,11 +12,11 @@ test('users see each other as available to connect when both are online', async 
   await alice.goto('/battleship/');
   await bob.goto('/battleship/');
 
-  await expect(alice.getByText('Service online')).
-  await expect(bob.getByText('Service online')).
+  await expect(alice.getByText('Service online')).toBeVisible({timeout: 10_000});
+  await expect(bob.getByText('Service online')).toBeVisible({timeout: 10_000});
 
-  await expect(alice.getByRole('list', {name: 'Online peers'}).getByRole('button', {name: 'Connect'}).first()).
-  await expect(bob.getByRole('list', {name: 'Online peers'}).getByRole('button', {name: 'Connect'}).first()).
+  await expect(alice.getByRole('list', {name: 'Online peers'}).getByRole('button', {name: 'Connect'}).first()).toBeVisible({timeout: 10_000});
+  await expect(bob.getByRole('list', {name: 'Online peers'}).getByRole('button', {name: 'Connect'}).first()).toBeVisible({timeout: 10_000});
 
   await aliceCtx.close();
   await bobCtx.close();
@@ -33,8 +33,8 @@ test('unread message count appears on Comms when a message arrives and chat is c
   await alice.goto('/battleship/');
   await bob.goto('/battleship/');
 
-  await expect(alice.getByText('Service online')).
-  await expect(bob.getByText('Service online')).
+  await expect(alice.getByText('Service online')).toBeVisible({timeout: 10_000});
+  await expect(bob.getByText('Service online')).toBeVisible({timeout: 10_000});
 
   await connectPeers(alice, bob);
 
@@ -67,8 +67,8 @@ test('Fleet reflects immediately when a connected peer disconnects', async ({bro
   await alice.goto('/battleship/');
   await bob.goto('/battleship/');
 
-  await expect(alice.getByText('Service online')).
-  await expect(bob.getByText('Service online')).
+  await expect(alice.getByText('Service online')).toBeVisible({timeout: 10_000});
+  await expect(bob.getByText('Service online')).toBeVisible({timeout: 10_000});
 
   await connectPeers(alice, bob);
 
@@ -79,7 +79,7 @@ test('Fleet reflects immediately when a connected peer disconnects', async ({bro
   await bob.getByRole('button', {name: 'Disconnect'}).click();
 
   // Alice's Fleet no longer shows any connected peers
-  await expect(alice.getByRole('list', {name: 'Connected peers'})).not.
+  await expect(alice.getByRole('list', {name: 'Connected peers'})).not.toBeVisible({timeout: 10_000});
 
   await aliceCtx.close();
   await bobCtx.close();
@@ -100,9 +100,9 @@ test('connected peer can introduce two peers and recipient sees an actionable al
   await bob.goto('/battleship/');
   await charlie.goto('/battleship/');
 
-  await expect(alice.getByText('Service online')).
-  await expect(bob.getByText('Service online')).
-  await expect(charlie.getByText('Service online')).
+  await expect(alice.getByText('Service online')).toBeVisible({timeout: 10_000});
+  await expect(bob.getByText('Service online')).toBeVisible({timeout: 10_000});
+  await expect(charlie.getByText('Service online')).toBeVisible({timeout: 10_000});
 
   // Alice connects to Bob via manual P2P
   await connectPeers(alice, bob);
@@ -111,21 +111,21 @@ test('connected peer can introduce two peers and recipient sees an actionable al
   await connectPeers(alice, charlie);
 
   // Both connections are active: alice↔bob and alice↔charlie
-  await expect(alice.getByRole('button', {name: 'Disconnect'})).toHaveCount(2);
+  await expect(alice.getByRole('button', {name: 'Disconnect'})).toHaveCount(2, {timeout: 10_000});
 
   // Bob and Charlie each trust Alice so she can introduce them
   await bob.getByRole('list', {name: 'Connected peers'}).getByRole('button', {name: 'Trust'}).click();
   await charlie.getByRole('list', {name: 'Connected peers'}).getByRole('button', {name: 'Trust'}).click();
 
   // Alice sees both trust indicators appear in her Fleet
-  await expect(alice.locator('.fleet-peer-trust')).toHaveCount(2);
+  await expect(alice.locator('.fleet-peer-trust')).toHaveCount(2, {timeout: 5_000});
 
   // Alice introduces her first trusted peer to the other
   await alice.getByRole('button', {name: 'Introduce'}).first().click();
   await alice.getByRole('button', {name: /introduce to/i}).click();
 
   // Charlie receives the introduction alert with Accept and Decline actions
-  await expect(charlie.locator('[aria-label="Alerts"]').getByText(/wants to introduce/i)).
+  await expect(charlie.locator('[aria-label="Alerts"]').getByText(/wants to introduce/i)).toBeVisible({timeout: 10_000});
   await expect(charlie.locator('[aria-label="Alerts"]').getByRole('button', {name: 'Accept'})).toBeVisible();
   await expect(charlie.locator('[aria-label="Alerts"]').getByRole('button', {name: 'Decline'})).toBeVisible();
 

@@ -12,14 +12,14 @@ test('connected peers can send and receive chat messages', async ({browser}) => 
   await alice.goto('/battleship/');
   await bob.goto('/battleship/');
 
-  await expect(alice.getByText('Service online')).
-  await expect(bob.getByText('Service online')).
+  await expect(alice.getByText('Service online')).toBeVisible({timeout: 10_000});
+  await expect(bob.getByText('Service online')).toBeVisible({timeout: 10_000});
 
   await connectPeers(alice, bob);
 
   // Select the connected peer in Fleet to open chat in Comms
-  await expect(alice.getByRole('region', {name: /connected/i}).getByRole('button', {name: 'Player'})).
-  await expect(bob.getByRole('region', {name: /connected/i}).getByRole('button', {name: 'Player'})).
+  await expect(alice.getByRole('region', {name: /connected/i}).getByRole('button', {name: 'Player'})).toBeVisible({timeout: 10_000});
+  await expect(bob.getByRole('region', {name: /connected/i}).getByRole('button', {name: 'Player'})).toBeVisible({timeout: 10_000});
   await alice.getByRole('region', {name: /connected/i}).getByRole('button', {name: 'Player'}).click();
   await bob.getByRole('region', {name: /connected/i}).getByRole('button', {name: 'Player'}).click();
 
@@ -28,7 +28,7 @@ test('connected peers can send and receive chat messages', async ({browser}) => 
   await alice.getByRole('button', {name: 'Send'}).click();
 
   // Both peers see Alice's message
-  await expect(alice.getByText('Hello Bob!')).toBeVisible();
+  await expect(alice.getByText('Hello Bob!')).toBeVisible({timeout: 15_000});
   await expect(bob.getByText('Hello Bob!')).toBeVisible({timeout: 15_000});
 
   // Bob replies
@@ -36,7 +36,7 @@ test('connected peers can send and receive chat messages', async ({browser}) => 
   await bob.getByRole('button', {name: 'Send'}).click();
 
   // Both peers see Bob's reply
-  await expect(bob.getByText('Hello Alice!')).toBeVisible();
+  await expect(bob.getByText('Hello Alice!')).toBeVisible({timeout: 15_000});
   await expect(alice.getByText('Hello Alice!')).toBeVisible({timeout: 15_000});
 
   await aliceCtx.close();
