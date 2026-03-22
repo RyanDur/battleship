@@ -2,17 +2,10 @@ import * as Decoder from 'schemawax';
 import {maybe} from '../lib/maybe';
 import {asyncResult, asyncTryCatch, asyncSuccess, asyncFailure, type AsyncResult} from '../lib/asyncResult';
 import type {Platform} from './platform';
+import {HttpError} from './http';
 
 export const RELEASES_PAGE = 'https://github.com/RyanDur/battleship/releases/latest';
 
-export class HttpError extends Error {
-  readonly status: number;
-  constructor(status: number) {
-    super(`HTTP ${status}`);
-    this.name = 'HttpError';
-    this.status = status;
-  }
-}
 const API_URL = 'https://api.github.com/repos/RyanDur/battleship/releases/latest';
 
 const PLATFORM_EXTENSION: Partial<Record<Platform, string>> = {

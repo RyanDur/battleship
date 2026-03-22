@@ -1,14 +1,6 @@
 import {asyncResult, asyncTryCatch, asyncSuccess, asyncFailure, type AsyncResult} from '../lib/asyncResult';
 import type {Board} from '../game/board';
-
-export class HttpError extends Error {
-  readonly status: number;
-  constructor(status: number) {
-    super(`HTTP ${status}`);
-    this.name = 'HttpError';
-    this.status = status;
-  }
-}
+import {HttpError} from './http';
 
 export const saveBoard = (serviceUrl: string, board: Board): AsyncResult<void, Error> =>
   asyncResult<Response, Error>(fetch(`${serviceUrl}/board`, {
