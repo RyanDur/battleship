@@ -17,6 +17,7 @@ html {
 body {
   min-height: 100dvh;
   line-height: 1.5;
+  overflow-wrap: break-word;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -26,12 +27,16 @@ img, picture, video, canvas, svg {
   max-width: 100%;
 }
 
-input, button, textarea, select {
+input, button, textarea, select, code, pre {
   font: inherit;
 }
 
-p, h1, h2, h3, h4, h5, h6 {
-  overflow-wrap: break-word;
+summary {
+  list-style: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
 }
 
 ol, ul {
