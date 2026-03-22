@@ -1,78 +1,94 @@
 package com.battleship.backend
 
 import com.battleship.backend.signaling.GameBoardGateway
-import jakarta.servlet.http.Cookie
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.http.MediaType
-import org.springframework.test.web.servlet.MockMvc
-import org.springframework.test.web.servlet.get
-import org.springframework.test.web.servlet.post
+import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.web.socket.TextMessage
+import org.springframework.web.socket.WebSocketHttpHeaders
+import org.springframework.web.socket.WebSocketSession
+import org.springframework.web.socket.client.standard.StandardWebSocketClient
+import org.springframework.web.socket.handler.TextWebSocketHandler
+import java.net.URI
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.TimeUnit
 
-@SpringBootTest(properties = ["spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1"])
-@AutoConfigureMockMvc
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = ["spring.datasource.url=jdbc:h2:mem:boardtest;DB_CLOSE_DELAY=-1"],
+)
 class BoardFeatureTest {
 
-    @Autowired
-    lateinit var mockMvc: MockMvc
+    @LocalServerPort
+    private var port: Int = 0
 
     @Autowired
     lateinit var gateway: GameBoardGateway
 
+    private val mapper = jacksonObjectMapper()
     private val boardJson = """{"placed":[{"ship":{"name":"Carrier","size":5},"position":{"row":1,"col":1},"orientation":"horizontal"}]}"""
 
-    @Test
-    fun `POST board saves the board for the peer`() {
-        mockMvc.post("/board") {
-            contentType = MediaType.TEXT_PLAIN
-            content = boardJson
-            cookie(Cookie("peerId", "alice"))
-        }.andExpect {
-            status { isOk() }
+    private fun connect(peerId: String): Pair<WebSocketSession, ArrayBlockingQueue<Map<String, Any>>> {
+        val messages = ArrayBlockingQueue<Map<String, Any>>(20)
+        val headers = WebSocketHttpHeaders().apply {
+            set("Origin", "http://localhost:5173")
+            set("Cookie", "peerId=$peerId")
         }
+        val session = StandardWebSocketClient().execute(
+            object : TextWebSocketHandler() {
+                override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
+                    messages.add(mapper.readValue(message.payload))
+                }
+            },
+            headers,
+            URI("ws://127.0.0.1:$port/ws/signaling")
+        ).get(5, TimeUnit.SECONDS)
+        return session to messages
+    }
 
-        assertEquals(boardJson, gateway.find("alice"))
+    private fun send(session: WebSocketSession, payload: Map<String, Any>) =
+        session.sendMessage(TextMessage(mapper.writeValueAsString(payload)))
+
+    @Test
+    fun `SAVE_BOARD persists board and responds with BOARD_SAVED`() {
+        val (session, messages) = connect("board-alice")
+
+        send(session, mapOf("type" to "SAVE_BOARD", "board" to boardJson))
+
+        val response = messages.poll(2, TimeUnit.SECONDS)
+        assertEquals("BOARD_SAVED", response?.get("type"))
+        assertEquals(boardJson, gateway.find("board-alice"))
+
+        session.close()
     }
 
     @Test
-    fun `GET board returns 404 when no board saved`() {
-        mockMvc.get("/board") {
-            cookie(Cookie("peerId", "no-board-peer"))
-        }.andExpect {
-            status { isNotFound() }
-        }
+    fun `LOAD_BOARD returns BOARD_LOADED with saved board`() {
+        gateway.save("board-bob", boardJson)
+        val (session, messages) = connect("board-bob")
+
+        send(session, mapOf("type" to "LOAD_BOARD"))
+
+        val response = messages.poll(2, TimeUnit.SECONDS)
+        assertEquals("BOARD_LOADED", response?.get("type"))
+        assertEquals(boardJson, response?.get("board"))
+
+        session.close()
     }
 
     @Test
-    fun `GET board returns the saved board data`() {
-        gateway.save("bob", boardJson)
+    fun `LOAD_BOARD returns BOARD_NOT_FOUND when no board saved`() {
+        val (session, messages) = connect("board-nobody")
 
-        val result = mockMvc.get("/board") {
-            cookie(Cookie("peerId", "bob"))
-        }.andExpect {
-            status { isOk() }
-        }.andReturn()
+        send(session, mapOf("type" to "LOAD_BOARD"))
 
-        assertEquals(boardJson, result.response.contentAsString)
-    }
+        val response = messages.poll(2, TimeUnit.SECONDS)
+        assertEquals("BOARD_NOT_FOUND", response?.get("type"))
 
-    @Test
-    fun `GET board returns 401 when no peerId cookie`() {
-        mockMvc.get("/board").andExpect {
-            status { isUnauthorized() }
-        }
-    }
-
-    @Test
-    fun `POST board returns 401 when no peerId cookie`() {
-        mockMvc.post("/board") {
-            contentType = MediaType.TEXT_PLAIN
-            content = boardJson
-        }.andExpect {
-            status { isUnauthorized() }
-        }
+        session.close()
     }
 }

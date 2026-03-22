@@ -1,6 +1,7 @@
 package com.battleship.backend.signaling
 
 import com.battleship.shared.tryCatch
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.springframework.stereotype.Component
@@ -11,7 +12,12 @@ import org.springframework.web.socket.handler.TextWebSocketHandler
 import java.util.concurrent.ConcurrentHashMap
 
 @Component
-class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandler() {
+class SignalingHandler(
+    private val registry: PeerRegistry,
+    private val boardGateway: GameBoardGateway,
+    private val gameGateway: GameSessionGateway,
+    private val objectMapper: ObjectMapper,
+) : TextWebSocketHandler() {
 
     private val mapper = jacksonObjectMapper()
     private val sessionToPeer = ConcurrentHashMap<String, String>()
@@ -37,6 +43,11 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
             "STOP_SHARING_EMAIL" -> handleStopSharingEmail(session, payload)
             "UPDATE_EMAIL" -> handleUpdateEmail(session, payload)
             "SAVE_PEER_EMAIL" -> handleSavePeerEmail(session, payload)
+            "SAVE_BOARD" -> handleSaveBoard(session, payload)
+            "LOAD_BOARD" -> handleLoadBoard(session)
+            "START_GAME" -> handleStartGame(session)
+            "FIRE" -> handleFire(session, payload)
+            "LOAD_GAME" -> handleLoadGame(session)
         }
     }
 
@@ -140,6 +151,80 @@ class SignalingHandler(private val registry: PeerRegistry) : TextWebSocketHandle
         val email = payload["email"] as? String ?: return
         registry.savePeerEmail(peerId, targetPeerId, email)
     }
+
+    private fun handleSaveBoard(session: WebSocketSession, payload: Map<String, Any>) {
+        val peerId = peerId(session) ?: return
+        val board = payload["board"] as? String ?: return
+        boardGateway.save(peerId, board)
+        send(session, mapOf("type" to "BOARD_SAVED"))
+    }
+
+    private fun handleLoadBoard(session: WebSocketSession) {
+        val peerId = peerId(session) ?: return
+        val board = boardGateway.find(peerId)
+        if (board != null) {
+            send(session, mapOf("type" to "BOARD_LOADED", "board" to board))
+        } else {
+            send(session, mapOf("type" to "BOARD_NOT_FOUND"))
+        }
+    }
+
+    private fun handleStartGame(session: WebSocketSession) {
+        val peerId = peerId(session) ?: return
+        val boardJson = boardGateway.find(peerId)
+        if (boardJson == null) {
+            send(session, mapOf("type" to "GAME_ERROR", "reason" to "no board saved"))
+            return
+        }
+        val playerBoard = objectMapper.readValue(boardJson, Board::class.java)
+        val state = GameState(playerBoard = playerBoard, aiBoard = createRandomBoard())
+        gameGateway.save(peerId, state)
+        send(session, state.toResponse("GAME_STARTED"))
+    }
+
+    private fun handleFire(session: WebSocketSession, payload: Map<String, Any>) {
+        val peerId = peerId(session) ?: return
+        val state = gameGateway.find(peerId)
+        if (state == null) {
+            send(session, mapOf("type" to "GAME_ERROR", "reason" to "no game in progress"))
+            return
+        }
+        if (state.phase != GamePhase.PLAYER_TURN) {
+            send(session, mapOf("type" to "GAME_ERROR", "reason" to "not player turn"))
+            return
+        }
+        val row = (payload["row"] as? Int) ?: return
+        val col = (payload["col"] as? Int) ?: return
+        val cell = Cell(row, col)
+        val afterPlayer = fireAt(state, cell)
+        val playerShot = afterPlayer.playerShots.last()
+        val afterAi = if (afterPlayer.phase == GamePhase.COMPUTER_TURN) {
+            val aiCell = nextAiShot(afterPlayer.aiShots.map { it.cell })
+            aiFireAt(afterPlayer, aiCell)
+        } else afterPlayer
+        gameGateway.save(peerId, afterAi)
+        val aiShot = if (afterAi.aiShots.size > state.aiShots.size) afterAi.aiShots.last() else null
+        val result = mutableMapOf<String, Any>(
+            "type" to "FIRE_RESULT",
+            "playerShot" to objectMapper.convertValue(playerShot, Map::class.java),
+            "phase" to afterAi.phase.toApiString(),
+        )
+        aiShot?.let { result["aiShot"] = objectMapper.convertValue(it, Map::class.java) }
+        send(session, result)
+    }
+
+    private fun handleLoadGame(session: WebSocketSession) {
+        val peerId = peerId(session) ?: return
+        val state = gameGateway.find(peerId)
+        if (state != null) {
+            send(session, state.toResponse("GAME_STATE"))
+        } else {
+            send(session, mapOf("type" to "GAME_NOT_FOUND"))
+        }
+    }
+
+    private fun peerId(session: WebSocketSession): String? =
+        session.attributes["peerId"] as? String
 
     private fun send(session: WebSocketSession, payload: Map<String, Any>) =
         tryCatch({ if (session.isOpen) session.sendMessage(TextMessage(mapper.writeValueAsString(payload))) }) { it }
