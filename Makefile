@@ -3,7 +3,8 @@
 start: server client
 
 server:
-	./gradlew :applications:signaling-server:bootRun &
+	@printf '{"version":"dev","serviceUrl":"http://localhost:8082"}' > applications/web-client/public/config.json
+	SERVER_PORT=8082 DB_URL="jdbc:h2:file:$(HOME)/.battleship/dev-data;AUTO_SERVER=TRUE" ./gradlew :applications:signaling-server:bootRun &
 
 client:
 	cd applications/web-client && npm run dev &
