@@ -103,6 +103,24 @@ describe('DirectConnect', () => {
     await waitFor(() => expect(selectFlow(store.getState()).phase).toBe('joining'));
   });
 
+  it('shows Copied feedback and writes to clipboard when Copy is clicked', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {value: {writeText}, configurable: true});
+
+    const {store} = renderDirectConnect();
+
+    await user.click(screen.getByRole('button', {name: /create/i}));
+    await user.type(screen.getByLabelText(/passphrase/i), 'secret');
+    await user.click(screen.getByRole('button', {name: /generate/i}));
+    await waitFor(() => expect(selectFlow(store.getState()).phase).toBe('offer-ready'));
+
+    await user.click(screen.getByRole('button', {name: /copy/i}));
+
+    await waitFor(() => expect(screen.getByText(/copied!/i)).toBeInTheDocument());
+    expect(writeText).toHaveBeenCalledWith(expect.any(String));
+  });
+
   it('shows Create and Join buttons again after a connection completes', async () => {
     const user = userEvent.setup();
     const {store} = makeStore();

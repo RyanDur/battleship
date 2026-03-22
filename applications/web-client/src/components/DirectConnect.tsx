@@ -3,6 +3,7 @@ import {useConnectionState, useConnectionStore} from '../state/useConnection';
 import type {ConnectionFlow} from '../state/connections';
 import {selectFlow} from '../state/connectionSelectors';
 import {acceptAnswerCode, cancelOffer, createOffer, joinOffer} from '../state/connectionActions';
+import {asyncTryCatch} from '../lib/asyncResult';
 
 type FlowPhase =
   | {phase: 'idle'}
@@ -38,6 +39,11 @@ export const DirectConnect = ({serviceOnline}: Props) => {
   const [passphrase, setPassphrase] = useState('');
   const [offerCode, setOfferCode] = useState('');
   const [responseCode, setResponseCode] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const copyToClipboard = (code: string) =>
+    asyncTryCatch(() => navigator.clipboard.writeText(code))
+      .onSuccess(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
 
   if (!serviceOnline) return null;
 
@@ -46,6 +52,9 @@ export const DirectConnect = ({serviceOnline}: Props) => {
       <section className="direct-connect">
         <p className="direct-connect-label">Share this code with the other person:</p>
         <code className="direct-connect-code">{flow.code}</code>
+        <button className="control" type="button" onClick={() => copyToClipboard(flow.code)}>
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
         <form onSubmit={e => { e.preventDefault(); store.dispatch(acceptAnswerCode(responseCode)); }}>
           <label htmlFor="response-code">Response code</label>
           <input
@@ -65,6 +74,9 @@ export const DirectConnect = ({serviceOnline}: Props) => {
       <section className="direct-connect">
         <p className="direct-connect-label">Share this response code with the other person:</p>
         <code className="direct-connect-code">{flow.code}</code>
+        <button className="control" type="button" onClick={() => copyToClipboard(flow.code)}>
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
       </section>
     );
   }
