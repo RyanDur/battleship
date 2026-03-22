@@ -148,7 +148,6 @@ describe('isComplete', () => {
   });
 });
 
-
 describe('isCellOccupied', () => {
   it('returns false for a cell on an empty board', () => {
     expect(isCellOccupied(emptyBoard, {row: 1, col: 1})).toBe(false);
