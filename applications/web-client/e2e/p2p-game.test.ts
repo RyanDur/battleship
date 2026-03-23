@@ -48,13 +48,14 @@ test('two connected peers can play a complete P2P game of Battleship', async ({b
   // Alice claims first turn — coin flip determines who actually goes first
   await alice.getByRole('button', {name: /go first/i}).click();
 
-  // Wait for the coin flip to resolve — one peer gets "Your turn", the other "Waiting"
+  // Wait for the coin flip to resolve — both peers get a turn assignment
   const aliceStatus = alice.locator('.game-announcement');
   const bobStatus = bob.locator('.game-announcement');
-  await expect(aliceStatus.or(bobStatus).first()).toContainText(/your turn|waiting/i, {timeout: 10_000});
+  await expect(aliceStatus).toContainText(/your turn|waiting/i, {timeout: 10_000});
+  await expect(bobStatus).toContainText(/your turn|waiting/i, {timeout: 10_000});
 
   // Determine who goes first based on the coin flip result
-  const aliceGoesFirst = await aliceStatus.textContent().then(t => /your turn/i.test(t ?? ''));
+  const aliceGoesFirst = /your turn/i.test((await aliceStatus.textContent()) ?? '');
   const [firstPlayer, secondPlayer] = aliceGoesFirst ? [alice, bob] : [bob, alice];
 
   await expect(firstPlayer.locator('.game-announcement')).toContainText(/your turn/i);
