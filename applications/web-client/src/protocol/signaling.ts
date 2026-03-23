@@ -26,6 +26,8 @@ export type SignalingEvent =
   | {type: 'FIRE_RESULT'; playerShot: Shot; aiShot: Shot | null; phase: GamePhase}
   | {type: 'GAME_STATE'; gameState: GameState}
   | {type: 'GAME_NOT_FOUND'}
+  | {type: 'P2P_GAME_LOADED'; gameState: string}
+  | {type: 'P2P_GAME_NOT_FOUND'}
 
 export type SignalingHandle = {
   stop: () => void
@@ -92,6 +94,8 @@ const boardSavedDecoder = Decoder.object({required: {type: Decoder.literal('BOAR
 const boardNotFoundDecoder = Decoder.object({required: {type: Decoder.literal('BOARD_NOT_FOUND')}});
 const boardLoadedDecoder = Decoder.object({required: {type: Decoder.literal('BOARD_LOADED'), board: Decoder.string}});
 const gameNotFoundDecoder = Decoder.object({required: {type: Decoder.literal('GAME_NOT_FOUND')}});
+const p2pGameLoadedDecoder = Decoder.object({required: {type: Decoder.literal('P2P_GAME_LOADED'), gameState: Decoder.string}});
+const p2pGameNotFoundDecoder = Decoder.object({required: {type: Decoder.literal('P2P_GAME_NOT_FOUND')}});
 
 const cellDecoder = Decoder.object({required: {row: Decoder.number, col: Decoder.number}});
 const shipInfoDecoder = Decoder.object({required: {name: Decoder.string, size: Decoder.number}});
@@ -148,6 +152,8 @@ export const startSignaling = (
                 .onSuccess(board => { if (board) onEvent({type: 'BOARD_LOADED', board}); });
             }))
             .or(() => maybe(gameNotFoundDecoder.decode(parsed)).map(() => onEvent({type: 'GAME_NOT_FOUND'})))
+            .or(() => maybe(p2pGameLoadedDecoder.decode(parsed)).map(msg => onEvent({type: 'P2P_GAME_LOADED', gameState: msg.gameState})))
+            .or(() => maybe(p2pGameNotFoundDecoder.decode(parsed)).map(() => onEvent({type: 'P2P_GAME_NOT_FOUND'})))
             .or(() => maybe(gameStartedDecoder.decode(parsed)).map(msg =>
               onEvent({type: 'GAME_STARTED', gameState: {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as GamePhase}})
             ))
