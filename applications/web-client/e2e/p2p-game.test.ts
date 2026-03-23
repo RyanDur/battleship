@@ -45,23 +45,29 @@ test('two connected peers can play a complete P2P game of Battleship', async ({b
   // Both see the turn selection UI once both boards are committed
   await expect(alice.getByRole('button', {name: /go first/i})).toBeVisible({timeout: 10_000});
 
-  // Alice claims first turn
+  // Alice claims first turn — coin flip determines who actually goes first
   await alice.getByRole('button', {name: /go first/i}).click();
 
-  // Alice's game view shows it is her turn
-  await expect(alice.getByRole('status')).toContainText(/your turn/i, {timeout: 10_000});
+  // Wait for the coin flip to resolve — one peer gets "Your turn", the other "Waiting"
+  const aliceStatus = alice.locator('.game-announcement');
+  const bobStatus = bob.locator('.game-announcement');
+  await expect(aliceStatus.or(bobStatus).first()).toContainText(/your turn|waiting/i, {timeout: 10_000});
 
-  // Bob's game view shows he is waiting
-  await expect(bob.getByRole('status')).toContainText(/waiting/i, {timeout: 10_000});
+  // Determine who goes first based on the coin flip result
+  const aliceGoesFirst = await aliceStatus.textContent().then(t => /your turn/i.test(t ?? ''));
+  const [firstPlayer, secondPlayer] = aliceGoesFirst ? [alice, bob] : [bob, alice];
 
-  // Alice fires a shot at Bob's fleet
-  await alice.getByRole('region', {name: /tracking board/i}).getByRole('button', {name: 'Row 1, Column 1'}).click();
+  await expect(firstPlayer.locator('.game-announcement')).toContainText(/your turn/i);
+  await expect(secondPlayer.locator('.game-announcement')).toContainText(/waiting/i);
 
-  // Bob's fleet shows the incoming shot
-  await expect(bob.getByRole('region', {name: /your fleet/i})).toContainText(/miss|hit/i, {timeout: 10_000});
+  // The first player fires a shot
+  await firstPlayer.getByRole('region', {name: /tracking board/i}).getByRole('button', {name: 'Row 1, Column 1'}).click();
 
-  // Now it is Bob's turn
-  await expect(bob.getByRole('status')).toContainText(/your turn/i, {timeout: 10_000});
+  // Second player's fleet shows the incoming shot
+  await expect(secondPlayer.getByRole('region', {name: /your fleet/i})).toContainText(/miss|hit/i, {timeout: 10_000});
+
+  // Now it is the second player's turn
+  await expect(secondPlayer.locator('.game-announcement')).toContainText(/your turn/i, {timeout: 10_000});
 
   await aliceCtx.close();
   await bobCtx.close();
