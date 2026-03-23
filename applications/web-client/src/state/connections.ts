@@ -486,7 +486,7 @@ const p2pGameReducer = (game: P2pGame | null, action: ConnectionsAction): P2pGam
       return {...game, phase: 'state-mismatch'};
 
     case 'OPPONENT_BOARD_REVEALED':
-      if (!game) return game;
+      if (!game || game.phase !== 'game-over' || game.winner !== 'me') return game;
       return {...game, opponentBoard: action.board, boardVerified: action.verified};
 
     case 'CLEAR_P2P_GAME':

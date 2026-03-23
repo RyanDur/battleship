@@ -40,6 +40,7 @@ export const Game = ({onNewGame}: Props) => {
 
   const isOver = gameView.phase === 'won' || gameView.phase === 'lost';
   const isP2pInProgress = !!p2pGame && !isOver;
+  const revealedBoard = gameView.phase === 'won' ? p2pGame?.opponentBoard ?? null : null;
   const turnStatus = gameView.phase === 'my-turn' ? 'Your turn' : gameView.phase === 'their-turn' ? 'Waiting for opponent' : '';
   const statusText = announcement || turnStatus;
 
@@ -61,15 +62,15 @@ export const Game = ({onNewGame}: Props) => {
             ? <h2>{gameView.opponentName} forfeited. You win!</h2>
             : <h2>{gameView.phase === 'won' ? 'You win!' : `${gameView.opponentName} wins`}</h2>
           }
-          {gameView.phase === 'won' && p2pGame?.opponentBoard && (
+          {revealedBoard && (
             <>
               <p className="board-verification">
-                {p2pGame.boardVerified ? 'Board verified' : 'Board hash mismatch'}
+                {p2pGame?.boardVerified ? 'Board verified' : 'Board hash mismatch'}
               </p>
               <section aria-label="Opponent's fleet" className="game-board">
                 {ROWS.flatMap(row =>
                   COLS.map(col => {
-                    const occupied = p2pGame.opponentBoard!.placed.some(ps =>
+                    const occupied = revealedBoard.placed.some(ps =>
                       occupiedCells(ps).some(c => c.row === row && c.col === col)
                     );
                     return (

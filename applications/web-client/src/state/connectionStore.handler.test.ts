@@ -566,4 +566,37 @@ describe('P2P board reveal at game over', () => {
       expect(selectP2pGame(alice.getState())?.boardVerified).toBe(true);
     });
   });
+
+  it("boardVerified is false when board does not match committed hash", async () => {
+    const pair = makePair();
+    const {alice, bob} = await setupP2pGame(pair);
+
+    bob.dispatch(boardLoaded(fullBoard));
+    alice.dispatch(boardLoaded({placed: []}));
+
+    const aliceGame = selectP2pGame(alice.getState())!;
+    alice.dispatch(p2pGameLoaded({...aliceGame, opponentBoardHash: 'wrong-hash'}));
+
+    for (let i = 0; i < fleetCells.length; i++) {
+      const {row, col} = fleetCells[i];
+      alice.dispatch(p2pFire(row, col));
+      await vi.waitFor(() => {
+        const phase = selectP2pGame(alice.getState())?.phase;
+        expect(phase === 'their-turn' || phase === 'game-over').toBe(true);
+      });
+      if (selectP2pGame(alice.getState())?.phase === 'game-over') break;
+      bob.dispatch(p2pFire(10, i + 1));
+      await vi.waitFor(() => {
+        const phase = selectP2pGame(alice.getState())?.phase;
+        expect(phase === 'my-turn' || phase === 'game-over').toBe(true);
+      });
+      if (selectP2pGame(alice.getState())?.phase === 'game-over') break;
+    }
+
+    await vi.waitFor(() => {
+      expect(selectP2pGame(alice.getState())?.phase).toBe('game-over');
+      expect(selectP2pGame(alice.getState())?.opponentBoard).not.toBeNull();
+      expect(selectP2pGame(alice.getState())?.boardVerified).toBe(false);
+    });
+  });
 });

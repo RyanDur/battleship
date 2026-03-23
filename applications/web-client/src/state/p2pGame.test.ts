@@ -4,7 +4,7 @@ import {
   p2pBoardReady, opponentBoardReady, turnOrderDecided,
   p2pFireResult, opponentFired,
   p2pGameOver, forfeitGame, opponentForfeited,
-  p2pStateMismatch, peerDisconnected, clearP2pGame,
+  p2pStateMismatch, peerDisconnected, clearP2pGame, opponentBoardRevealed,
 } from './connectionActions';
 import {selectP2pGame} from './connectionSelectors';
 import type {Shot} from './connections';
@@ -240,6 +240,12 @@ describe('P2P game', () => {
       const store = makeInProgressStore();
       store.dispatch(p2pStateMismatch());
       expect(selectP2pGame(store.getState())?.phase).toBe('state-mismatch');
+    });
+
+    it('OPPONENT_BOARD_REVEALED while game is in progress is ignored', () => {
+      const store = makeInProgressStore();
+      store.dispatch(opponentBoardRevealed({placed: []}, true));
+      expect(selectP2pGame(store.getState())?.opponentBoard).toBeNull();
     });
   });
 });

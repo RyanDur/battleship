@@ -499,9 +499,10 @@ export const createPeerHandler = (deps: Deps): Handler => {
           .map(msg => {
             const game = selectP2pGame(deps.getState());
             if (!game || game.winner !== 'me') return;
-            hashBoard(msg.board as Board).onSuccess(hash => {
-              deps.dispatch(opponentBoardRevealed(msg.board as Board, hash === game.opponentBoardHash));
-            });
+            const board = msg.board as Board;
+            hashBoard(board)
+              .onSuccess(hash => deps.dispatch(opponentBoardRevealed(board, hash === game.opponentBoardHash)))
+              .onFailure(() => deps.dispatch(opponentBoardRevealed(board, false)));
           }))
         .or(() => maybe(gameStateSyncDecoder.decode(parsed))
           .map(msg => {
