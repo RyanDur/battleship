@@ -3,6 +3,7 @@ import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
 import type {ConnectionFlow} from './connections';
 import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage, challengePeer, acceptChallenge, p2pBoardReady, turnOrderDecided, claimFirstTurn, takeFirstTurn, boardLoaded, p2pGameLoaded, p2pFire} from './connectionActions';
+import {hashBoard} from '../game/hashBoard';
 import type {Board} from '../game/board';
 import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections, selectMessages, selectP2pGame} from './connectionSelectors';
 
@@ -507,5 +508,62 @@ describe('P2P fire guards', () => {
     bob.dispatch(p2pFire(1, 1));
     await new Promise(r => setTimeout(r, 50));
     expect(selectP2pGame(alice.getState())?.opponentShots).toHaveLength(0);
+  });
+});
+
+describe('P2P board reveal at game over', () => {
+  const fullBoard: Board = {
+    placed: [
+      {ship: {name: 'Carrier', size: 5}, position: {row: 1, col: 1}, orientation: 'horizontal'},
+      {ship: {name: 'Battleship', size: 4}, position: {row: 2, col: 1}, orientation: 'horizontal'},
+      {ship: {name: 'Cruiser', size: 3}, position: {row: 3, col: 1}, orientation: 'horizontal'},
+      {ship: {name: 'Submarine', size: 3}, position: {row: 4, col: 1}, orientation: 'horizontal'},
+      {ship: {name: 'Destroyer', size: 2}, position: {row: 5, col: 1}, orientation: 'horizontal'},
+    ],
+  };
+  const fleetCells = [
+    ...Array.from({length: 5}, (_, i) => ({row: 1, col: i + 1})),
+    ...Array.from({length: 4}, (_, i) => ({row: 2, col: i + 1})),
+    ...Array.from({length: 3}, (_, i) => ({row: 3, col: i + 1})),
+    ...Array.from({length: 3}, (_, i) => ({row: 4, col: i + 1})),
+    ...Array.from({length: 2}, (_, i) => ({row: 5, col: i + 1})),
+  ];
+
+  it("winner receives opponent's board with verified hash after sinking the fleet", async () => {
+    const pair = makePair();
+    const {alice, bob} = await setupP2pGame(pair);
+
+    bob.dispatch(boardLoaded(fullBoard));
+    alice.dispatch(boardLoaded({placed: []}));
+
+    // Set Alice's opponentBoardHash to the real hash of Bob's board so verification passes
+    const bobHash = await hashBoard(fullBoard).mapEither(h => h, () => '');
+    const aliceGame = selectP2pGame(alice.getState())!;
+    alice.dispatch(p2pGameLoaded({...aliceGame, opponentBoardHash: bobHash}));
+
+    // Confirm opponentBoard is null while game is in progress
+    expect(selectP2pGame(alice.getState())?.opponentBoard).toBeNull();
+
+    for (let i = 0; i < fleetCells.length; i++) {
+      const {row, col} = fleetCells[i];
+      alice.dispatch(p2pFire(row, col));
+      await vi.waitFor(() => {
+        const phase = selectP2pGame(alice.getState())?.phase;
+        expect(phase === 'their-turn' || phase === 'game-over').toBe(true);
+      });
+      if (selectP2pGame(alice.getState())?.phase === 'game-over') break;
+      bob.dispatch(p2pFire(10, i + 1));
+      await vi.waitFor(() => {
+        const phase = selectP2pGame(alice.getState())?.phase;
+        expect(phase === 'my-turn' || phase === 'game-over').toBe(true);
+      });
+      if (selectP2pGame(alice.getState())?.phase === 'game-over') break;
+    }
+
+    await vi.waitFor(() => {
+      expect(selectP2pGame(alice.getState())?.phase).toBe('game-over');
+      expect(selectP2pGame(alice.getState())?.opponentBoard).not.toBeNull();
+      expect(selectP2pGame(alice.getState())?.boardVerified).toBe(true);
+    });
   });
 });

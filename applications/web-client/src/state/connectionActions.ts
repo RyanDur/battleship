@@ -110,3 +110,4 @@ export const p2pStateSync = (opponentId: string, myShots: Shot[], opponentShots:
   ({type: 'P2P_STATE_SYNC' as const, opponentId, myShots, opponentShots, phase});
 export const p2pStateMismatch = () => ({type: 'P2P_STATE_MISMATCH' as const});
 export const clearP2pGame = () => ({type: 'CLEAR_P2P_GAME' as const});
+export const opponentBoardRevealed = (board: Board, verified: boolean) => ({type: 'OPPONENT_BOARD_REVEALED' as const, board, verified});

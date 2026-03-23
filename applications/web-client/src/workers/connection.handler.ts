@@ -5,7 +5,9 @@ import { asyncResult, asyncTryCatch } from '../lib/asyncResult';
 import type { PeerCommand, PeerEvent } from '../types/worker-messages';
 import type { ConnectionsState, ConnectionsAction, Shot } from '../state/connections';
 import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer, selectP2pGame, selectBoard} from '../state/connectionSelectors';
-import {challengeReceived, acceptChallenge, declineChallenge, cancelChallenge, opponentBoardReady, turnOrderDecided, p2pFireResult, opponentFired, p2pGameOver, opponentForfeited, p2pStateMismatch, p2pStateSync} from '../state/connectionActions';
+import {challengeReceived, acceptChallenge, declineChallenge, cancelChallenge, opponentBoardReady, turnOrderDecided, p2pFireResult, opponentFired, p2pGameOver, opponentForfeited, p2pStateMismatch, p2pStateSync, opponentBoardRevealed} from '../state/connectionActions';
+import {hashBoard} from '../game/hashBoard';
+import type {Board} from '../game/board';
 import {occupiedCells, isCellOccupied} from '../game/board';
 import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed} from '../state/connectionActions';
 
@@ -74,6 +76,20 @@ const p2pFireResultDecoder = Decoder.object({
   optional: {ship: p2pShipInfoDecoder},
 });
 const gameForfeitDecoder = Decoder.object({required: {type: Decoder.literal('GAME_FORFEIT')}});
+const p2pOrientationDecoder = Decoder.oneOf(Decoder.literal('horizontal'), Decoder.literal('vertical'));
+const p2pPlacedShipDecoder = Decoder.object({
+  required: {
+    ship: Decoder.object({required: {name: Decoder.string, size: Decoder.number}}),
+    position: Decoder.object({required: {row: Decoder.number, col: Decoder.number}}),
+    orientation: p2pOrientationDecoder,
+  },
+});
+const gameOverDecoder = Decoder.object({
+  required: {
+    type: Decoder.literal('GAME_OVER'),
+    board: Decoder.object({required: {placed: Decoder.array(p2pPlacedShipDecoder)}}),
+  },
+});
 const p2pShotDecoder = Decoder.object({
   required: {cell: p2pCellDecoder, result: shotResultDecoder},
   optional: {ship: p2pShipInfoDecoder},
@@ -461,6 +477,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
             const updatedOpponentShots = [...game.opponentShots, shot];
             if (isFleetSunk(updatedOpponentShots)) {
               deps.dispatch(p2pGameOver('opponent'));
+              dataChannels.get(peerId)?.send(JSON.stringify({type: 'GAME_OVER', board}));
             }
           }))
         .or(() => maybe(p2pFireResultDecoder.decode(parsed))
@@ -478,6 +495,14 @@ export const createPeerHandler = (deps: Deps): Handler => {
           }))
         .or(() => maybe(gameForfeitDecoder.decode(parsed))
           .map(() => deps.dispatch(opponentForfeited())))
+        .or(() => maybe(gameOverDecoder.decode(parsed))
+          .map(msg => {
+            const game = selectP2pGame(deps.getState());
+            if (!game || game.winner !== 'me') return;
+            hashBoard(msg.board as Board).onSuccess(hash => {
+              deps.dispatch(opponentBoardRevealed(msg.board as Board, hash === game.opponentBoardHash));
+            });
+          }))
         .or(() => maybe(gameStateSyncDecoder.decode(parsed))
           .map(msg => {
             const game = selectP2pGame(deps.getState());

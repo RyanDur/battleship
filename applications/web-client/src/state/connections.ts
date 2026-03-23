@@ -35,6 +35,8 @@ export type P2pGame = {
   opponentBoardReady: boolean
   winner: 'me' | 'opponent' | null
   forfeited?: true
+  opponentBoard: Board | null
+  boardVerified: boolean | null
 }
 
 export type GameView = {
@@ -174,6 +176,7 @@ export type ConnectionsAction =
   | {type: 'P2P_STATE_SYNC'; opponentId: string; myShots: Shot[]; opponentShots: Shot[]; phase: P2pGamePhase}
   | {type: 'P2P_STATE_MISMATCH'}
   | {type: 'CLEAR_P2P_GAME'}
+  | {type: 'OPPONENT_BOARD_REVEALED'; board: Board; verified: boolean}
 
 const handlerInitialState: HandlerState = {
   signalingToPeer: {},
@@ -413,6 +416,8 @@ const p2pGameInitial: P2pGame = {
   myBoardReady: false,
   opponentBoardReady: false,
   winner: null,
+  opponentBoard: null,
+  boardVerified: null,
 };
 
 const p2pGameReducer = (game: P2pGame | null, action: ConnectionsAction): P2pGame | null => {
@@ -479,6 +484,10 @@ const p2pGameReducer = (game: P2pGame | null, action: ConnectionsAction): P2pGam
     case 'P2P_STATE_MISMATCH':
       if (!game) return game;
       return {...game, phase: 'state-mismatch'};
+
+    case 'OPPONENT_BOARD_REVEALED':
+      if (!game) return game;
+      return {...game, opponentBoard: action.board, boardVerified: action.verified};
 
     case 'CLEAR_P2P_GAME':
       return null;
