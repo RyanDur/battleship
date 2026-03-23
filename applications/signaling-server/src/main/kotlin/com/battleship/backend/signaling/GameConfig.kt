@@ -14,4 +14,8 @@ class GameConfig {
     @Bean
     fun gameSessionGateway(repo: GameSessionJpaRepository, objectMapper: ObjectMapper): GameSessionGateway =
         JpaGameSessionGateway(repo, objectMapper)
+
+    @Bean
+    fun p2pGameGateway(repo: P2pGameStateJpaRepository): P2pGameGateway =
+        JpaP2pGameGateway(repo)
 }

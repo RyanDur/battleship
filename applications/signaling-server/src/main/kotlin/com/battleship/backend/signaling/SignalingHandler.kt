@@ -16,6 +16,7 @@ class SignalingHandler(
     private val registry: PeerRegistry,
     private val boardGateway: GameBoardGateway,
     private val gameGateway: GameSessionGateway,
+    private val p2pGameGateway: P2pGameGateway,
     private val objectMapper: ObjectMapper,
 ) : TextWebSocketHandler() {
 
@@ -48,6 +49,8 @@ class SignalingHandler(
             "START_GAME" -> handleStartGame(session)
             "FIRE" -> handleFire(session, payload)
             "LOAD_GAME" -> handleLoadGame(session)
+            "SAVE_P2P_GAME" -> handleSaveP2pGame(session, payload)
+            "LOAD_P2P_GAME" -> handleLoadP2pGame(session, payload)
         }
     }
 
@@ -220,6 +223,24 @@ class SignalingHandler(
             send(session, state.toResponse("GAME_STATE"))
         } else {
             send(session, mapOf("type" to "GAME_NOT_FOUND"))
+        }
+    }
+
+    private fun handleSaveP2pGame(session: WebSocketSession, payload: Map<String, Any>) {
+        val peerId = peerId(session) ?: return
+        val opponentId = payload["opponentId"] as? String ?: return
+        val gameState = payload["gameState"] as? String ?: return
+        p2pGameGateway.save(peerId, opponentId, gameState)
+    }
+
+    private fun handleLoadP2pGame(session: WebSocketSession, payload: Map<String, Any>) {
+        val peerId = peerId(session) ?: return
+        val opponentId = payload["opponentId"] as? String ?: return
+        val gameState = p2pGameGateway.find(peerId, opponentId)
+        if (gameState != null) {
+            send(session, mapOf("type" to "P2P_GAME_LOADED", "gameState" to gameState))
+        } else {
+            send(session, mapOf("type" to "P2P_GAME_NOT_FOUND"))
         }
     }
 
