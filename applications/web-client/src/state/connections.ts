@@ -13,6 +13,36 @@ export type GamePhase = 'player-turn' | 'computer-turn' | 'player-won' | 'comput
 export type Shot = {cell: {row: number; col: number}; result: ShotResult; ship?: {name: string; size: number}}
 export type GameState = {playerShots: Shot[]; aiShots: Shot[]; phase: GamePhase}
 
+export type P2pGamePhase =
+  | 'challenged'
+  | 'challenge-received'
+  | 'placing'
+  | 'selecting-turn'
+  | 'my-turn'
+  | 'their-turn'
+  | 'game-over'
+  | 'disconnected'
+  | 'state-mismatch'
+
+export type P2pGame = {
+  opponentId: string
+  phase: P2pGamePhase
+  myBoardHash: string
+  opponentBoardHash: string | null
+  myShots: Shot[]
+  opponentShots: Shot[]
+  myBoardReady: boolean
+  opponentBoardReady: boolean
+  winner: 'me' | 'opponent' | null
+}
+
+export type GameView = {
+  myShots: Shot[]
+  opponentShots: Shot[]
+  phase: 'my-turn' | 'their-turn' | 'won' | 'lost'
+  opponentName: string
+}
+
 export type ConnectionFlow =
   | {phase: 'idle'}
   | {phase: 'creating'; passphrase: string}
@@ -46,6 +76,7 @@ export type ConnectionsState = {
   board: Board | null
   boardLoading: boolean
   gameState: GameState | null
+  p2pGame: P2pGame | null
 }
 
 export type ConnectionsAction =
@@ -118,6 +149,28 @@ export type ConnectionsAction =
   | {type: 'LOAD_GAME'}
   | {type: 'GAME_STATE'; gameState: GameState}
   | {type: 'GAME_NOT_FOUND'}
+  | {type: 'CHALLENGE_PEER'; opponentId: string}
+  | {type: 'CHALLENGE_RECEIVED'; opponentId: string}
+  | {type: 'ACCEPT_CHALLENGE'}
+  | {type: 'DECLINE_CHALLENGE'}
+  | {type: 'CANCEL_CHALLENGE'}
+  | {type: 'P2P_BOARD_READY'; boardHash: string}
+  | {type: 'OPPONENT_BOARD_READY'; boardHash: string}
+  | {type: 'CLAIM_FIRST_TURN'}
+  | {type: 'COIN_FLIP_COMMIT'; hash: string}
+  | {type: 'COIN_FLIP_REVEAL'; value: number}
+  | {type: 'TURN_ORDER_DECIDED'; iGoFirst: boolean}
+  | {type: 'P2P_FIRE'; row: number; col: number}
+  | {type: 'P2P_FIRE_RESULT'; shot: Shot}
+  | {type: 'OPPONENT_FIRED'; shot: Shot}
+  | {type: 'P2P_GAME_OVER'; winner: 'me' | 'opponent'}
+  | {type: 'FORFEIT_GAME'}
+  | {type: 'OPPONENT_FORFEITED'}
+  | {type: 'SAVE_P2P_GAME'}
+  | {type: 'LOAD_P2P_GAME'; opponentId: string}
+  | {type: 'P2P_GAME_LOADED'; gameState: P2pGame}
+  | {type: 'P2P_STATE_SYNC'; opponentId: string; myShots: Shot[]; opponentShots: Shot[]; phase: P2pGamePhase}
+  | {type: 'P2P_STATE_MISMATCH'}
 
 const handlerInitialState: HandlerState = {
   signalingToPeer: {},
@@ -140,6 +193,7 @@ export const initialState: ConnectionsState = {
   board: null,
   boardLoading: true,
   gameState: null,
+  p2pGame: null,
 };
 
 const handlerReducer = (state: HandlerState, action: ConnectionsAction): HandlerState => {
@@ -346,7 +400,89 @@ const coreConnectionsReducer = (state: ConnectionsState, action: ConnectionsActi
   }
 };
 
+const p2pGameInitial: P2pGame = {
+  opponentId: '',
+  phase: 'challenged',
+  myBoardHash: '',
+  opponentBoardHash: null,
+  myShots: [],
+  opponentShots: [],
+  myBoardReady: false,
+  opponentBoardReady: false,
+  winner: null,
+};
+
+const p2pGameReducer = (game: P2pGame | null, action: ConnectionsAction): P2pGame | null => {
+  switch (action.type) {
+    case 'CHALLENGE_PEER':
+      return {...p2pGameInitial, phase: 'challenged', opponentId: action.opponentId};
+
+    case 'CHALLENGE_RECEIVED':
+      return {...p2pGameInitial, phase: 'challenge-received', opponentId: action.opponentId};
+
+    case 'ACCEPT_CHALLENGE':
+      if (!game) return game;
+      return {...game, phase: 'placing'};
+
+    case 'DECLINE_CHALLENGE':
+    case 'CANCEL_CHALLENGE':
+      return null;
+
+    case 'P2P_BOARD_READY': {
+      if (!game) return game;
+      const updated = {...game, myBoardReady: true, myBoardHash: action.boardHash};
+      return updated.opponentBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
+    }
+
+    case 'OPPONENT_BOARD_READY': {
+      if (!game) return game;
+      const updated = {...game, opponentBoardReady: true, opponentBoardHash: action.boardHash};
+      return updated.myBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
+    }
+
+    case 'TURN_ORDER_DECIDED':
+      if (!game) return game;
+      return {...game, phase: action.iGoFirst ? 'my-turn' : 'their-turn'};
+
+    case 'P2P_FIRE_RESULT':
+      if (!game) return game;
+      return {...game, myShots: [...game.myShots, action.shot], phase: 'their-turn'};
+
+    case 'OPPONENT_FIRED':
+      if (!game) return game;
+      return {...game, opponentShots: [...game.opponentShots, action.shot], phase: 'my-turn'};
+
+    case 'P2P_GAME_OVER':
+      if (!game) return game;
+      return {...game, phase: 'game-over', winner: action.winner};
+
+    case 'FORFEIT_GAME':
+      if (!game) return game;
+      return {...game, phase: 'game-over', winner: 'opponent'};
+
+    case 'OPPONENT_FORFEITED':
+      if (!game) return game;
+      return {...game, phase: 'game-over', winner: 'me'};
+
+    case 'P2P_GAME_LOADED':
+      return action.gameState;
+
+    case 'P2P_STATE_MISMATCH':
+      if (!game) return game;
+      return {...game, phase: 'state-mismatch'};
+
+    case 'PEER_DISCONNECTED':
+      if (!game || game.opponentId !== action.peerId) return game;
+      if (game.phase === 'game-over' || game.phase === 'disconnected' || game.phase === 'state-mismatch') return game;
+      return {...game, phase: 'disconnected'};
+
+    default:
+      return game;
+  }
+};
+
 export const connectionsReducer = (state: ConnectionsState, action: ConnectionsAction): ConnectionsState => ({
   ...coreConnectionsReducer(state, action),
   handlerState: handlerReducer(state.handlerState, action),
+  p2pGame: p2pGameReducer(state.p2pGame, action),
 });

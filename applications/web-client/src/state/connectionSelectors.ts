@@ -1,4 +1,4 @@
-import type {ConnectionsState} from './connections';
+import type {ConnectionsState, GameView} from './connections';
 
 export const selectFlow = (state: ConnectionsState) => state.flow;
 export const selectPeers = (state: ConnectionsState) => state.peers;
@@ -21,3 +21,23 @@ export const selectMessages = (state: ConnectionsState) => state.messages;
 export const selectBoard = (state: ConnectionsState) => state.board;
 export const selectBoardLoading = (state: ConnectionsState) => state.boardLoading;
 export const selectGameState = (state: ConnectionsState) => state.gameState;
+export const selectP2pGame = (state: ConnectionsState) => state.p2pGame;
+
+export const selectGameView = (state: ConnectionsState, peerName?: string): GameView | null => {
+  const {gameState, p2pGame, peers} = state;
+  if (p2pGame && (p2pGame.phase === 'my-turn' || p2pGame.phase === 'their-turn' || p2pGame.phase === 'game-over')) {
+    const opponentName = peerName ?? peers.find(p => p.id === p2pGame.opponentId)?.name ?? 'Opponent';
+    const phase = p2pGame.phase === 'game-over'
+      ? (p2pGame.winner === 'me' ? 'won' : 'lost')
+      : p2pGame.phase;
+    return {myShots: p2pGame.myShots, opponentShots: p2pGame.opponentShots, phase, opponentName};
+  }
+  if (gameState) {
+    const phase = gameState.phase === 'player-won' ? 'won'
+      : gameState.phase === 'computer-won' ? 'lost'
+      : gameState.phase === 'player-turn' ? 'my-turn'
+      : 'their-turn';
+    return {myShots: gameState.playerShots, opponentShots: gameState.aiShots, phase, opponentName: 'Computer'};
+  }
+  return null;
+};
