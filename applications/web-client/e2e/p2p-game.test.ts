@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test';
-import {connectPeers, placeAllShips} from './helpers';
+import {connectPeers, placeAllShips, sinkFleet} from './helpers';
 
 test('two connected peers can play a complete P2P game of Battleship', async ({browser}) => {
   test.setTimeout(120_000);
@@ -248,6 +248,54 @@ test('player can forfeit a P2P game and opponent sees a forfeit message', async 
   // Bob sees game over with "[Alice] forfeited. You win!" message
   await expect(bob.locator('.game-over')).toBeVisible({timeout: 10_000});
   await expect(bob.locator('.game-over')).toContainText(/forfeited/i);
+
+  await aliceCtx.close();
+  await bobCtx.close();
+});
+
+test("winner sees opponent's board revealed and verified at game over", async ({browser}) => {
+  test.setTimeout(180_000);
+
+  const aliceCtx = await browser.newContext();
+  const bobCtx = await browser.newContext();
+  const alice = await aliceCtx.newPage();
+  const bob = await bobCtx.newPage();
+
+  await alice.goto('/battleship/');
+  await bob.goto('/battleship/');
+
+  await expect(alice.getByText('Service online')).toBeVisible();
+  await expect(bob.getByText('Service online')).toBeVisible();
+
+  await placeAllShips(alice);
+  await alice.getByRole('button', {name: /confirm placement/i}).click();
+  await placeAllShips(bob);
+  await bob.getByRole('button', {name: /confirm placement/i}).click();
+
+  await connectPeers(alice, bob);
+
+  await alice.getByRole('list', {name: 'Connected peers'}).getByRole('button', {name: 'Challenge'}).click();
+  await bob.locator('[aria-label="Alerts"]').getByRole('button', {name: 'Accept'}).click();
+
+  await alice.getByRole('button', {name: /use this board/i}).click();
+  await bob.getByRole('button', {name: /use this board/i}).click();
+
+  await expect(alice.getByRole('button', {name: /go first/i})).toBeVisible({timeout: 10_000});
+  await alice.getByRole('button', {name: /go first/i}).click();
+
+  await expect(alice.locator('.game-announcement')).toContainText(/your turn/i, {timeout: 10_000});
+  await expect(bob.locator('.game-announcement')).toContainText(/waiting/i, {timeout: 10_000});
+
+  // Alice sinks all of Bob's ships
+  await sinkFleet(alice, bob);
+
+  // Alice (winner) sees game over with Bob's board revealed and verified
+  await expect(alice.locator('.game-over')).toBeVisible({timeout: 10_000});
+  await expect(alice.getByRole('region', {name: /opponent's fleet/i})).toBeVisible({timeout: 10_000});
+  await expect(alice.locator('.game-over')).toContainText(/board verified/i);
+
+  // Bob (loser) sees game over — no board reveal needed on loser's screen
+  await expect(bob.locator('.game-over')).toBeVisible({timeout: 10_000});
 
   await aliceCtx.close();
   await bobCtx.close();

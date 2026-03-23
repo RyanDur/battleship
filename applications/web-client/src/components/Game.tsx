@@ -2,6 +2,7 @@ import {useState, useEffect, useRef} from 'react';
 import {useConnectionState, useConnectionStore} from '../state/useConnection';
 import {selectGameView, selectP2pGame} from '../state/connectionSelectors';
 import {fireShot, p2pFire, forfeitGame} from '../state/connectionActions';
+import {occupiedCells} from '../game/board';
 
 const ROWS = Array.from({length: 10}, (_, i) => i + 1);
 const COLS = Array.from({length: 10}, (_, i) => i + 1);
@@ -60,6 +61,30 @@ export const Game = ({onNewGame}: Props) => {
             ? <h2>{gameView.opponentName} forfeited. You win!</h2>
             : <h2>{gameView.phase === 'won' ? 'You win!' : `${gameView.opponentName} wins`}</h2>
           }
+          {gameView.phase === 'won' && p2pGame?.opponentBoard && (
+            <>
+              <p className="board-verification">
+                {p2pGame.boardVerified ? 'Board verified' : 'Board hash mismatch'}
+              </p>
+              <section aria-label="Opponent's fleet" className="game-board">
+                {ROWS.flatMap(row =>
+                  COLS.map(col => {
+                    const occupied = p2pGame.opponentBoard!.placed.some(ps =>
+                      occupiedCells(ps).some(c => c.row === row && c.col === col)
+                    );
+                    return (
+                      <button
+                        key={`reveal-${row}-${col}`}
+                        aria-label={`Row ${row}, Column ${col}`}
+                        className={`game-cell${occupied ? ' hit' : ''}`}
+                        disabled
+                      />
+                    );
+                  })
+                )}
+              </section>
+            </>
+          )}
           <button className="control" onClick={onNewGame}>New game</button>
         </div>
       )}
