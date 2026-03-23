@@ -62,7 +62,7 @@ test('two connected peers can play a complete P2P game of Battleship', async ({b
   await expect(secondPlayer.locator('.game-announcement')).toContainText(/waiting/i);
 
   // The first player fires a shot
-  await firstPlayer.getByRole('region', {name: /tracking board/i}).getByRole('button', {name: 'Row 1, Column 1'}).click();
+  await firstPlayer.getByRole('region', {name: /tracking board/i}).getByRole('button', {name: 'Row 1, Column 1', exact: true}).click();
 
   // Second player's fleet shows the incoming shot
   await expect(secondPlayer.getByRole('region', {name: /your fleet/i})).toContainText(/miss|hit/i, {timeout: 10_000});
