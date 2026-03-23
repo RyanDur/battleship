@@ -33,16 +33,19 @@ export const sinkFleet = async (attacker: Page, defender: Page) => {
   for (const {row, col} of FLEET_CELLS) {
     await attacker.getByRole('region', {name: /tracking board/i})
       .getByRole('button', {name: `Row ${row}, Column ${col}`, exact: true}).click();
-    await expect(defender.locator('.game-announcement')).toContainText(/your turn|won|lost/i, {timeout: 10_000});
-    const defenderText = await defender.locator('.game-announcement').textContent() ?? '';
-    if (/won|lost/i.test(defenderText)) break;
+    // React may batch OPPONENT_FIRED + P2P_GAME_OVER into one render, skipping the
+    // "Your turn" intermediate state. Wait for either the defender's turn or game over.
+    const defenderHasTurn = defender.locator('.game-announcement').filter({hasText: /your turn/i});
+    const attackerGameOver = attacker.locator('.game-over');
+    await defenderHasTurn.or(attackerGameOver).waitFor({timeout: 10_000});
+    if (await attackerGameOver.isVisible()) break;
     // Defender fires a miss using a unique cell (rows 6-10 are never fleet cells)
     const missRow = 10 - Math.floor(missIndex / 10);
     const missCol = (missIndex % 10) + 1;
     missIndex++;
     await defender.getByRole('region', {name: /tracking board/i})
       .getByRole('button', {name: `Row ${missRow}, Column ${missCol}`, exact: true}).click();
-    await expect(attacker.locator('.game-announcement')).toContainText(/your turn|won|lost/i, {timeout: 10_000});
+    await expect(attacker.locator('.game-announcement')).toContainText(/your turn/i, {timeout: 10_000});
   }
 };
 
