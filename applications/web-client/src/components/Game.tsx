@@ -1,7 +1,7 @@
 import {useState, useEffect, useRef} from 'react';
 import {useConnectionState, useConnectionStore} from '../state/useConnection';
 import {selectGameView, selectP2pGame} from '../state/connectionSelectors';
-import {fireShot, p2pFire} from '../state/connectionActions';
+import {fireShot, p2pFire, forfeitGame} from '../state/connectionActions';
 
 const ROWS = Array.from({length: 10}, (_, i) => i + 1);
 const COLS = Array.from({length: 10}, (_, i) => i + 1);
@@ -15,6 +15,7 @@ export const Game = ({onNewGame}: Props) => {
   const p2pGame = useConnectionState(selectP2pGame);
   const store = useConnectionStore();
   const [announcement, setAnnouncement] = useState('');
+  const [confirmForfeit, setConfirmForfeit] = useState(false);
   const prevShotCountRef = useRef(0);
 
   useEffect(() => {
@@ -37,11 +38,17 @@ export const Game = ({onNewGame}: Props) => {
   if (!gameView) return null;
 
   const isOver = gameView.phase === 'won' || gameView.phase === 'lost';
+  const isP2pInProgress = !!p2pGame && !isOver;
   const turnStatus = gameView.phase === 'my-turn' ? 'Your turn' : gameView.phase === 'their-turn' ? 'Waiting for opponent' : '';
   const statusText = announcement || turnStatus;
 
   const shotFor = (shots: typeof gameView.myShots, row: number, col: number) =>
     shots.find(s => s.cell.row === row && s.cell.col === col);
+
+  const handleForfeitConfirm = () => {
+    store.dispatch(forfeitGame());
+    setConfirmForfeit(false);
+  };
 
   return (
     <div className="game">
@@ -49,9 +56,18 @@ export const Game = ({onNewGame}: Props) => {
 
       {isOver && (
         <div className="game-over">
-          <h2>{gameView.phase === 'won' ? 'You win!' : `${gameView.opponentName} wins`}</h2>
+          {p2pGame?.forfeited
+            ? <h2>{gameView.opponentName} forfeited. You win!</h2>
+            : <h2>{gameView.phase === 'won' ? 'You win!' : `${gameView.opponentName} wins`}</h2>
+          }
           <button className="control" onClick={onNewGame}>New game</button>
         </div>
+      )}
+
+      {isP2pInProgress && (
+        confirmForfeit
+          ? <button className="control" onClick={handleForfeitConfirm}>Are you sure?</button>
+          : <button className="control" onClick={() => setConfirmForfeit(true)}>Forfeit</button>
       )}
 
       <section aria-label="Your fleet" className="game-board">

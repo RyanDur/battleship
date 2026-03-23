@@ -34,6 +34,7 @@ export type P2pGame = {
   myBoardReady: boolean
   opponentBoardReady: boolean
   winner: 'me' | 'opponent' | null
+  forfeited?: true
 }
 
 export type GameView = {
@@ -463,7 +464,7 @@ const p2pGameReducer = (game: P2pGame | null, action: ConnectionsAction): P2pGam
 
     case 'OPPONENT_FORFEITED':
       if (!game) return game;
-      return {...game, phase: 'game-over', winner: 'me'};
+      return {...game, phase: 'game-over', winner: 'me', forfeited: true};
 
     case 'P2P_GAME_LOADED': {
       const resumable = action.gameState.phase === 'my-turn' || action.gameState.phase === 'their-turn';

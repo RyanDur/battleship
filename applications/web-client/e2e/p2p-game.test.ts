@@ -198,3 +198,60 @@ test('challenger sees Waiting status and can cancel a pending challenge', async 
   await aliceCtx.close();
   await bobCtx.close();
 });
+
+test('player can forfeit a P2P game and opponent sees a forfeit message', async ({browser}) => {
+  test.setTimeout(120_000);
+
+  const aliceCtx = await browser.newContext();
+  const bobCtx = await browser.newContext();
+  const alice = await aliceCtx.newPage();
+  const bob = await bobCtx.newPage();
+
+  await alice.goto('/battleship/');
+  await bob.goto('/battleship/');
+
+  await expect(alice.getByText('Service online')).toBeVisible();
+  await expect(bob.getByText('Service online')).toBeVisible();
+
+  // Both players place ships and get into a game
+  await placeAllShips(alice);
+  await alice.getByRole('button', {name: /confirm placement/i}).click();
+  await placeAllShips(bob);
+  await bob.getByRole('button', {name: /confirm placement/i}).click();
+
+  await connectPeers(alice, bob);
+
+  await alice.getByRole('list', {name: 'Connected peers'}).getByRole('button', {name: 'Challenge'}).click();
+  await bob.locator('[aria-label="Alerts"]').getByRole('button', {name: 'Accept'}).click();
+
+  await alice.getByRole('button', {name: /use this board/i}).click();
+  await bob.getByRole('button', {name: /use this board/i}).click();
+
+  // Wait for turn selection and claim first turn
+  await expect(alice.getByRole('button', {name: /go first/i})).toBeVisible({timeout: 10_000});
+  await alice.getByRole('button', {name: /go first/i}).click();
+
+  // Wait for the game to start (coin flip resolves)
+  await expect(alice.locator('.game-announcement')).toContainText(/your turn|waiting/i, {timeout: 10_000});
+  await expect(bob.locator('.game-announcement')).toContainText(/your turn|waiting/i, {timeout: 10_000});
+
+  // Forfeit button is visible during gameplay
+  await expect(alice.getByRole('button', {name: /forfeit/i})).toBeVisible();
+
+  // Alice clicks forfeit — sees confirmation step
+  await alice.getByRole('button', {name: /^forfeit/i}).click();
+  await expect(alice.getByRole('button', {name: /are you sure/i})).toBeVisible();
+
+  // Alice confirms the forfeit
+  await alice.getByRole('button', {name: /are you sure/i}).click();
+
+  // Alice sees game over as the loser
+  await expect(alice.locator('.game-over')).toBeVisible({timeout: 10_000});
+
+  // Bob sees game over with "[Alice] forfeited. You win!" message
+  await expect(bob.locator('.game-over')).toBeVisible({timeout: 10_000});
+  await expect(bob.locator('.game-over')).toContainText(/forfeited/i);
+
+  await aliceCtx.close();
+  await bobCtx.close();
+});

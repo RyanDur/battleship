@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import {Game} from './Game';
 import {ConnectionProvider} from '../state/ConnectionProvider';
 import {createConnectionStore} from '../state/connectionStore';
-import {gameStarted, fireResult} from '../state/connectionActions';
+import {gameStarted, fireResult, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided, opponentForfeited} from '../state/connectionActions';
 import type {GameState, Shot} from '../state/connections';
 
 const emptyGameState: GameState = {playerShots: [], aiShots: [], phase: 'player-turn'};
@@ -127,5 +127,55 @@ describe('Game', () => {
     await waitFor(() => screen.getByRole('button', {name: /new game/i}));
     await user.click(screen.getByRole('button', {name: /new game/i}));
     expect(called).toBe(true);
+  });
+
+  it('does not show forfeit button in AI game', () => {
+    renderGame();
+    expect(screen.queryByRole('button', {name: /forfeit/i})).not.toBeInTheDocument();
+  });
+});
+
+describe('P2P game forfeit', () => {
+  const renderP2pGame = (iGoFirst: boolean, onNewGame = () => {}) => {
+    const store = createConnectionStore();
+    act(() => {
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(acceptChallenge());
+      store.dispatch(p2pBoardReady('abc123'));
+      store.dispatch(opponentBoardReady('def456'));
+      store.dispatch(turnOrderDecided(iGoFirst));
+    });
+    render(
+      <ConnectionProvider store={store}>
+        <Game onNewGame={onNewGame}/>
+      </ConnectionProvider>
+    );
+    return store;
+  };
+
+  it('shows forfeit button during p2p gameplay', () => {
+    renderP2pGame(true);
+    expect(screen.getByRole('button', {name: /^forfeit/i})).toBeInTheDocument();
+  });
+
+  it('shows confirmation after clicking forfeit', async () => {
+    const user = userEvent.setup();
+    renderP2pGame(true);
+    await user.click(screen.getByRole('button', {name: /^forfeit/i}));
+    expect(screen.getByRole('button', {name: /are you sure/i})).toBeInTheDocument();
+  });
+
+  it('forfeiting dispatches FORFEIT_GAME and transitions to game-over as loser', async () => {
+    const user = userEvent.setup();
+    renderP2pGame(true);
+    await user.click(screen.getByRole('button', {name: /^forfeit/i}));
+    await user.click(screen.getByRole('button', {name: /are you sure/i}));
+    await waitFor(() => expect(screen.getByRole('heading', {name: /wins/i})).toBeInTheDocument());
+  });
+
+  it('shows Player forfeited message when opponent forfeits', async () => {
+    const store = renderP2pGame(false);
+    act(() => { store.dispatch(opponentForfeited()); });
+    await waitFor(() => expect(screen.getByText(/forfeited/i)).toBeInTheDocument());
   });
 });
