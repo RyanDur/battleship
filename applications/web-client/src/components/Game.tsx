@@ -24,6 +24,7 @@ export const Game = ({onNewGame}: Props) => {
     const newShots = gameView.myShots.slice(prevShotCountRef.current);
     const sunk = newShots.find(s => s.result === 'sunk' && s.ship);
     if (sunk?.ship) setAnnouncement(`${sunk.ship.name} sunk!`);
+    else setAnnouncement('');
     prevShotCountRef.current = gameView.myShots.length;
   }, [gameView]);
 
