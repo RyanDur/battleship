@@ -158,6 +158,7 @@ export type ConnectionsAction =
   | {type: 'P2P_BOARD_READY'; boardHash: string}
   | {type: 'OPPONENT_BOARD_READY'; boardHash: string}
   | {type: 'CLAIM_FIRST_TURN'}
+  | {type: 'TAKE_FIRST_TURN'}
   | {type: 'COIN_FLIP_COMMIT'; hash: string}
   | {type: 'COIN_FLIP_REVEAL'; value: number}
   | {type: 'TURN_ORDER_DECIDED'; iGoFirst: boolean}

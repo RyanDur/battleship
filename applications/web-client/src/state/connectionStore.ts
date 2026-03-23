@@ -3,7 +3,7 @@ import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction, P2pGame} from './connections';
 import {tryCatch} from '../lib/result';
 import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling, selectP2pGame} from './connectionSelectors';
-import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, p2pGameLoaded, saveP2pGame, loadP2pGame} from './connectionActions';
+import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, p2pGameLoaded, saveP2pGame, loadP2pGame, turnOrderDecided} from './connectionActions';
 import type {PeerEvent} from '../types/worker-messages';
 import {encodeConnectionCode, decodeConnectionCode} from '../protocol/connection-code';
 import {createPeerHandler} from '../workers/connection.handler';
@@ -154,6 +154,10 @@ export const createHandlerListener = ({name, createPeerConnection}: HandlerListe
         else if (action.type === 'DECLINE_CHALLENGE') send({type: 'GAME_DECLINE'});
         else if (action.type === 'CANCEL_CHALLENGE') send({type: 'GAME_CANCEL'});
         else if (action.type === 'P2P_BOARD_READY') send({type: 'BOARD_READY', boardHash: action.boardHash});
+        else if (action.type === 'TAKE_FIRST_TURN') {
+          send({type: 'GAME_FIRST_TURN'});
+          dispatch(turnOrderDecided(true));
+        }
         else if (action.type === 'CLAIM_FIRST_TURN') {
           handler.handleCommand({type: 'START_COIN_FLIP', peerId: opponentId});
         }

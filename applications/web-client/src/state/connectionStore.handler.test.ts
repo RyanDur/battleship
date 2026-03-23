@@ -2,7 +2,7 @@ import {createConnectionStore, createHandlerListener, encodingMiddleware, codecM
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
 import type {ConnectionFlow} from './connections';
-import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage, challengePeer, acceptChallenge, p2pBoardReady, turnOrderDecided, claimFirstTurn, boardLoaded, p2pGameLoaded, p2pFire} from './connectionActions';
+import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage, challengePeer, acceptChallenge, p2pBoardReady, turnOrderDecided, claimFirstTurn, takeFirstTurn, boardLoaded, p2pGameLoaded, p2pFire} from './connectionActions';
 import type {Board} from '../game/board';
 import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections, selectMessages, selectP2pGame} from './connectionSelectors';
 
@@ -426,6 +426,30 @@ describe('coin flip turn selection', () => {
     const aPhase = selectP2pGame(alice.getState())?.phase;
     const bPhase = selectP2pGame(bob.getState())?.phase;
     expect(aPhase).not.toBe(bPhase); // one goes first, the other second
+  });
+});
+
+describe('direct turn claim', () => {
+  it('Go first gives the clicker my-turn and the opponent their-turn', async () => {
+    const {alice, bob, connect} = makePair();
+    await connect();
+    const alicePeerIdOnBob = selectPeers(bob.getState())[0].id;
+    bob.dispatch(challengePeer(alicePeerIdOnBob));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('challenge-received'));
+    alice.dispatch(acceptChallenge());
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('placing'));
+    alice.dispatch(p2pBoardReady('a-hash'));
+    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.opponentBoardReady).toBe(true));
+    bob.dispatch(p2pBoardReady('b-hash'));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('selecting-turn'));
+    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.phase).toBe('selecting-turn'));
+
+    alice.dispatch(takeFirstTurn());
+
+    await vi.waitFor(() => {
+      expect(selectP2pGame(alice.getState())?.phase).toBe('my-turn');
+      expect(selectP2pGame(bob.getState())?.phase).toBe('their-turn');
+    });
   });
 });
 

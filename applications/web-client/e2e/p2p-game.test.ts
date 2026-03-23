@@ -45,18 +45,15 @@ test('two connected peers can play a complete P2P game of Battleship', async ({b
   // Both see the turn selection UI once both boards are committed
   await expect(alice.getByRole('button', {name: /go first/i})).toBeVisible({timeout: 10_000});
 
-  // Alice claims first turn — coin flip determines who actually goes first
+  // Alice claims first turn directly — she goes first, Bob waits
   await alice.getByRole('button', {name: /go first/i}).click();
 
-  // Wait for the coin flip to resolve — both peers get a turn assignment
   const aliceStatus = alice.locator('.game-announcement');
   const bobStatus = bob.locator('.game-announcement');
-  await expect(aliceStatus).toContainText(/your turn|waiting/i, {timeout: 10_000});
-  await expect(bobStatus).toContainText(/your turn|waiting/i, {timeout: 10_000});
+  await expect(aliceStatus).toContainText(/your turn/i, {timeout: 10_000});
+  await expect(bobStatus).toContainText(/waiting/i, {timeout: 10_000});
 
-  // Determine who goes first based on the coin flip result
-  const aliceGoesFirst = /your turn/i.test((await aliceStatus.textContent()) ?? '');
-  const [firstPlayer, secondPlayer] = aliceGoesFirst ? [alice, bob] : [bob, alice];
+  const [firstPlayer, secondPlayer] = [alice, bob];
 
   await expect(firstPlayer.locator('.game-announcement')).toContainText(/your turn/i);
   await expect(secondPlayer.locator('.game-announcement')).toContainText(/waiting/i);
@@ -251,6 +248,52 @@ test('player can forfeit a P2P game and opponent sees a forfeit message', async 
   // Bob sees game over with "[Alice] forfeited. You win!" message
   await expect(bob.locator('.game-over')).toBeVisible({timeout: 10_000});
   await expect(bob.locator('.game-over')).toContainText(/forfeited/i);
+
+  await aliceCtx.close();
+  await bobCtx.close();
+});
+
+test('player can flip a coin for turn order and the result is randomly assigned', async ({browser}) => {
+  test.setTimeout(120_000);
+
+  const aliceCtx = await browser.newContext();
+  const bobCtx = await browser.newContext();
+  const alice = await aliceCtx.newPage();
+  const bob = await bobCtx.newPage();
+
+  await alice.goto('/battleship/');
+  await bob.goto('/battleship/');
+
+  await expect(alice.getByText('Service online')).toBeVisible();
+  await expect(bob.getByText('Service online')).toBeVisible();
+
+  await placeAllShips(alice);
+  await alice.getByRole('button', {name: /confirm placement/i}).click();
+  await placeAllShips(bob);
+  await bob.getByRole('button', {name: /confirm placement/i}).click();
+
+  await connectPeers(alice, bob);
+
+  await alice.getByRole('list', {name: 'Connected peers'}).getByRole('button', {name: 'Challenge'}).click();
+  await bob.locator('[aria-label="Alerts"]').getByRole('button', {name: 'Accept'}).click();
+
+  await alice.getByRole('button', {name: /use this board/i}).click();
+  await bob.getByRole('button', {name: /use this board/i}).click();
+
+  // Both see the Flip coin button in the turn selection UI
+  await expect(alice.getByRole('button', {name: /flip coin/i})).toBeVisible({timeout: 10_000});
+
+  // Alice flips the coin — commitment protocol assigns turns randomly
+  await alice.getByRole('button', {name: /flip coin/i}).click();
+
+  // Both peers receive a turn assignment (one gets Your turn, the other Waiting)
+  await expect(alice.locator('.game-announcement')).toContainText(/your turn|waiting/i, {timeout: 10_000});
+  await expect(bob.locator('.game-announcement')).toContainText(/your turn|waiting/i, {timeout: 10_000});
+
+  // The two assignments are opposite
+  const aliceText = await alice.locator('.game-announcement').textContent() ?? '';
+  const bobText = await bob.locator('.game-announcement').textContent() ?? '';
+  expect(/your turn/i.test(aliceText)).not.toBe(/your turn/i.test(bobText));
 
   await aliceCtx.close();
   await bobCtx.close();

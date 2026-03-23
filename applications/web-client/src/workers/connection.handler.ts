@@ -62,6 +62,7 @@ const gameAcceptDecoder = Decoder.object({required: {type: Decoder.literal('GAME
 const gameDeclineDecoder = Decoder.object({required: {type: Decoder.literal('GAME_DECLINE')}});
 const gameCancelDecoder = Decoder.object({required: {type: Decoder.literal('GAME_CANCEL')}});
 const boardReadyDecoder = Decoder.object({required: {type: Decoder.literal('BOARD_READY'), boardHash: Decoder.string}});
+const gameFirstTurnDecoder = Decoder.object({required: {type: Decoder.literal('GAME_FIRST_TURN')}});
 const coinFlipCommitDecoder = Decoder.object({required: {type: Decoder.literal('COIN_FLIP_COMMIT'), hash: Decoder.string}});
 const coinFlipRevealDecoder = Decoder.object({required: {type: Decoder.literal('COIN_FLIP_REVEAL'), value: Decoder.number}});
 const p2pFireDecoder = Decoder.object({required: {type: Decoder.literal('FIRE'), row: Decoder.number, col: Decoder.number}});
@@ -404,6 +405,8 @@ export const createPeerHandler = (deps: Deps): Handler => {
           .map(() => deps.dispatch(cancelChallenge())))
         .or(() => maybe(boardReadyDecoder.decode(parsed))
           .map(msg => deps.dispatch(opponentBoardReady(msg.boardHash))))
+        .or(() => maybe(gameFirstTurnDecoder.decode(parsed))
+          .map(() => deps.dispatch(turnOrderDecided(false))))
         .or(() => maybe(coinFlipCommitDecoder.decode(parsed))
           .map(msg => {
             const existing = pendingCoinFlips.get(peerId);
