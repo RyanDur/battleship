@@ -34,11 +34,13 @@ export const sinkFleet = async (attacker: Page, defender: Page) => {
     await attacker.getByRole('region', {name: /tracking board/i})
       .getByRole('button', {name: `Row ${row}, Column ${col}`, exact: true}).click();
     // React may batch OPPONENT_FIRED + P2P_GAME_OVER into one render, skipping the
-    // "Your turn" intermediate state. Wait for either the defender's turn or game over.
-    const defenderHasTurn = defender.locator('.game-announcement').filter({hasText: /your turn/i});
-    const attackerGameOver = attacker.locator('.game-over');
-    await defenderHasTurn.or(attackerGameOver).waitFor({timeout: 10_000});
-    if (await attackerGameOver.isVisible()) break;
+    // "Your turn" intermediate state. Poll both pages since .or() requires same frame.
+    await expect(async () => {
+      const defenderTurn = await defender.locator('.game-announcement').filter({hasText: /your turn/i}).isVisible();
+      const gameOver = await attacker.locator('.game-over').isVisible();
+      expect(defenderTurn || gameOver).toBe(true);
+    }).toPass({timeout: 10_000});
+    if (await attacker.locator('.game-over').isVisible()) break;
     // Defender fires a miss using a unique cell (rows 6-10 are never fleet cells)
     const missRow = 10 - Math.floor(missIndex / 10);
     const missCol = (missIndex % 10) + 1;
