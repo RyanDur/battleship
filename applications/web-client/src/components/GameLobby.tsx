@@ -3,7 +3,11 @@ import {selectP2pGame, selectPeers, selectBoard} from '../state/connectionSelect
 import {p2pBoardReady, claimFirstTurn} from '../state/connectionActions';
 import {hashBoard} from '../game/hashBoard';
 
-export const GameLobby = () => {
+type Props = {
+  onSetupBoard: () => void;
+};
+
+export const GameLobby = ({onSetupBoard}: Props) => {
   const p2pGame = useConnectionState(selectP2pGame);
   const peers = useConnectionState(selectPeers);
   const board = useConnectionState(selectBoard);
@@ -23,7 +27,12 @@ export const GameLobby = () => {
       {p2pGame.phase === 'placing' && (
         <>
           {!p2pGame.myBoardReady && (
-            <button className="control" onClick={handleUseBoard}>Use this board</button>
+            board
+              ? <>
+                  <button className="control" onClick={handleUseBoard}>Use this board</button>
+                  <button className="control" onClick={onSetupBoard}>Re-place ships</button>
+                </>
+              : <button className="control" onClick={onSetupBoard}>Place ships</button>
           )}
           {p2pGame.myBoardReady && !p2pGame.opponentBoardReady && (
             <p className="lobby-status">Waiting for {opponentName}...</p>

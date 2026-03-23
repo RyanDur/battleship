@@ -36,10 +36,12 @@ const AppMain = () => {
   const p2pGame = useConnectionState(selectP2pGame);
   const gameView = useConnectionState(selectGameView);
   const store = useConnectionStore();
+  const [settingUpBoard, setSettingUpBoard] = useState(false);
 
   if (boardLoading) return null;
-  if (!board) return <BoardSetup onConfirm={b => store.dispatch(saveBoard(b))}/>;
-  if (p2pGame && (p2pGame.phase === 'placing' || p2pGame.phase === 'selecting-turn')) return <GameLobby/>;
+  if (!p2pGame && !board) return <BoardSetup onConfirm={b => store.dispatch(saveBoard(b))}/>;
+  if (settingUpBoard) return <BoardSetup onConfirm={b => { store.dispatch(saveBoard(b)); setSettingUpBoard(false); }}/>;
+  if (p2pGame && (p2pGame.phase === 'placing' || p2pGame.phase === 'selecting-turn')) return <GameLobby onSetupBoard={() => setSettingUpBoard(true)}/>;
   if (gameView) return <Game onNewGame={() => store.dispatch(p2pGame ? clearP2pGame() : startGame())}/>;
   return <button className="control" onClick={() => store.dispatch(startGame())}>Play vs AI</button>;
 };

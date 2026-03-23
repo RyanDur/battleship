@@ -74,6 +74,98 @@ test('two connected peers can play a complete P2P game of Battleship', async ({b
   await bobCtx.close();
 });
 
+test('player can re-place ships from the game lobby', async ({browser}) => {
+  test.setTimeout(90_000);
+
+  const aliceCtx = await browser.newContext();
+  const bobCtx = await browser.newContext();
+  const alice = await aliceCtx.newPage();
+  const bob = await bobCtx.newPage();
+
+  await alice.goto('/battleship/');
+  await bob.goto('/battleship/');
+
+  await expect(alice.getByText('Service online')).toBeVisible();
+  await expect(bob.getByText('Service online')).toBeVisible();
+
+  // Alice places ships before the challenge
+  await placeAllShips(alice);
+  await alice.getByRole('button', {name: /confirm placement/i}).click();
+
+  await connectPeers(alice, bob);
+
+  // Alice challenges Bob
+  await alice.getByRole('list', {name: 'Connected peers'}).getByRole('button', {name: 'Challenge'}).click();
+  await bob.locator('[aria-label="Alerts"]').getByRole('button', {name: 'Accept'}).click();
+
+  // Both see the game lobby
+  await expect(alice.getByRole('region', {name: /game vs/i})).toBeVisible({timeout: 10_000});
+
+  // Alice sees both "Use this board" and "Re-place ships"
+  await expect(alice.getByRole('button', {name: /use this board/i})).toBeVisible();
+  await expect(alice.getByRole('button', {name: /re-place ships/i})).toBeVisible();
+
+  // Alice re-places ships
+  await alice.getByRole('button', {name: /re-place ships/i}).click();
+
+  // Alice sees the board setup screen
+  await expect(alice.getByRole('button', {name: /^carrier/i})).toBeVisible({timeout: 5_000});
+
+  // Alice places new ships and confirms
+  await placeAllShips(alice);
+  await alice.getByRole('button', {name: /confirm placement/i}).click();
+
+  // Alice is back in the lobby
+  await expect(alice.getByRole('region', {name: /game vs/i})).toBeVisible({timeout: 5_000});
+  await expect(alice.getByRole('button', {name: /use this board/i})).toBeVisible();
+
+  await aliceCtx.close();
+  await bobCtx.close();
+});
+
+test('player with no board sees Place ships in the lobby', async ({browser}) => {
+  test.setTimeout(90_000);
+
+  const aliceCtx = await browser.newContext();
+  const bobCtx = await browser.newContext();
+  const alice = await aliceCtx.newPage();
+  const bob = await bobCtx.newPage();
+
+  await alice.goto('/battleship/');
+  await bob.goto('/battleship/');
+
+  await expect(alice.getByText('Service online')).toBeVisible();
+  await expect(bob.getByText('Service online')).toBeVisible();
+
+  // Bob has a board, Alice does not
+  await placeAllShips(bob);
+  await bob.getByRole('button', {name: /confirm placement/i}).click();
+
+  await connectPeers(alice, bob);
+
+  // Bob challenges Alice (who has no board)
+  await bob.getByRole('list', {name: 'Connected peers'}).getByRole('button', {name: 'Challenge'}).click();
+  await alice.locator('[aria-label="Alerts"]').getByRole('button', {name: 'Accept'}).click();
+
+  // Alice sees the lobby with "Place ships" instead of "Use this board"
+  await expect(alice.getByRole('region', {name: /game vs/i})).toBeVisible({timeout: 10_000});
+  await expect(alice.getByRole('button', {name: /place ships/i})).toBeVisible();
+  await expect(alice.getByRole('button', {name: /use this board/i})).not.toBeVisible();
+
+  // Alice places ships from the lobby
+  await alice.getByRole('button', {name: /place ships/i}).click();
+  await expect(alice.getByRole('button', {name: /^carrier/i})).toBeVisible({timeout: 5_000});
+  await placeAllShips(alice);
+  await alice.getByRole('button', {name: /confirm placement/i}).click();
+
+  // Alice is back in the lobby with "Use this board"
+  await expect(alice.getByRole('region', {name: /game vs/i})).toBeVisible({timeout: 5_000});
+  await expect(alice.getByRole('button', {name: /use this board/i})).toBeVisible();
+
+  await aliceCtx.close();
+  await bobCtx.close();
+});
+
 test('challenger sees Waiting status and can cancel a pending challenge', async ({browser}) => {
   test.setTimeout(90_000);
 
