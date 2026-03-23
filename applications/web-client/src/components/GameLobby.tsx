@@ -2,7 +2,6 @@ import {useConnectionState, useConnectionStore} from '../state/useConnection';
 import {selectP2pGame, selectPeers, selectBoard} from '../state/connectionSelectors';
 import {p2pBoardReady, claimFirstTurn} from '../state/connectionActions';
 import {hashBoard} from '../game/hashBoard';
-import {asyncTryCatch} from '../lib/asyncResult';
 
 export const GameLobby = () => {
   const p2pGame = useConnectionState(selectP2pGame);
@@ -16,8 +15,7 @@ export const GameLobby = () => {
 
   const handleUseBoard = () => {
     if (!board) return;
-    asyncTryCatch(() => hashBoard(board))
-      .onSuccess(hash => store.dispatch(p2pBoardReady(hash)));
+    hashBoard(board).onSuccess(hash => store.dispatch(p2pBoardReady(hash)));
   };
 
   return (

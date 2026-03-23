@@ -12,8 +12,7 @@ const PeerCard = ({peer, otherTrustingPeers, unstable, onSelect}: {peer: Peer; o
   const [introducing, setIntroducing] = useState(false);
   const showIntroduceButton = peer.trustsMe && otherTrustingPeers.length > 0;
   const isChallenging = p2pGame?.opponentId === peer.id && p2pGame?.phase === 'challenged';
-  const inGame = p2pGame !== null && p2pGame.opponentId !== peer.id;
-  const showChallenge = !p2pGame && !isChallenging;
+  const showChallenge = !p2pGame;
 
   return (
     <article className="fleet-peer-card">
@@ -34,7 +33,7 @@ const PeerCard = ({peer, otherTrustingPeers, unstable, onSelect}: {peer: Peer; o
           Introduce to {other.name ?? 'Unknown'}
         </button>
       ))}
-      {showChallenge && !inGame && (
+      {showChallenge && (
         <button className="control" onClick={() => store.dispatch(challengePeer(peer.id))}>Challenge</button>
       )}
       {isChallenging && (

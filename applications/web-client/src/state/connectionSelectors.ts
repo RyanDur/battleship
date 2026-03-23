@@ -23,10 +23,10 @@ export const selectBoardLoading = (state: ConnectionsState) => state.boardLoadin
 export const selectGameState = (state: ConnectionsState) => state.gameState;
 export const selectP2pGame = (state: ConnectionsState) => state.p2pGame;
 
-export const selectGameView = (state: ConnectionsState, peerName?: string): GameView | null => {
+export const selectGameView = (state: ConnectionsState): GameView | null => {
   const {gameState, p2pGame, peers} = state;
   if (p2pGame && (p2pGame.phase === 'my-turn' || p2pGame.phase === 'their-turn' || p2pGame.phase === 'game-over')) {
-    const opponentName = peerName ?? peers.find(p => p.id === p2pGame.opponentId)?.name ?? 'Opponent';
+    const opponentName = peers.find(p => p.id === p2pGame.opponentId)?.name ?? 'Opponent';
     const phase = p2pGame.phase === 'game-over'
       ? (p2pGame.winner === 'me' ? 'won' : 'lost')
       : p2pGame.phase;

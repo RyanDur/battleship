@@ -455,11 +455,8 @@ export const createPeerHandler = (deps: Deps): Handler => {
             };
             deps.dispatch(p2pFireResult(shot));
             const game = selectP2pGame(deps.getState());
-            if (game) {
-              const updatedMyShots = [...game.myShots, shot];
-              if (isFleetSunk(updatedMyShots)) {
-                deps.dispatch(p2pGameOver('me'));
-              }
+            if (game && isFleetSunk(game.myShots)) {
+              deps.dispatch(p2pGameOver('me'));
             }
           }))
         .or(() => maybe(gameForfeitDecoder.decode(parsed))
@@ -470,7 +467,6 @@ export const createPeerHandler = (deps: Deps): Handler => {
             if (!game) return;
             const myShots = msg.myShots as Shot[];
             const opponentShots = msg.opponentShots as Shot[];
-            const phase = msg.phase as Parameters<typeof p2pStateSync>[3];
             const shotsMatch =
               myShots.length === game.opponentShots.length &&
               opponentShots.length === game.myShots.length;
