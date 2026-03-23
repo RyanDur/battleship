@@ -406,7 +406,17 @@ export const createPeerHandler = (deps: Deps): Handler => {
         .or(() => maybe(boardReadyDecoder.decode(parsed))
           .map(msg => deps.dispatch(opponentBoardReady(msg.boardHash))))
         .or(() => maybe(gameFirstTurnDecoder.decode(parsed))
-          .map(() => deps.dispatch(turnOrderDecided(false))))
+          .map(() => {
+            const game = selectP2pGame(deps.getState());
+            if (!game) return;
+            if (game.phase === 'selecting-turn') {
+              deps.dispatch(turnOrderDecided(false));
+            } else if (game.phase === 'my-turn') {
+              // Both claimed first simultaneously — offerer yields to answerer
+              const isOfferer = selectOffererPeerIds(deps.getState()).includes(peerId);
+              if (isOfferer) deps.dispatch(turnOrderDecided(false));
+            }
+          }))
         .or(() => maybe(coinFlipCommitDecoder.decode(parsed))
           .map(msg => {
             const existing = pendingCoinFlips.get(peerId);
