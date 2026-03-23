@@ -171,6 +171,7 @@ export type ConnectionsAction =
   | {type: 'P2P_GAME_LOADED'; gameState: P2pGame}
   | {type: 'P2P_STATE_SYNC'; opponentId: string; myShots: Shot[]; opponentShots: Shot[]; phase: P2pGamePhase}
   | {type: 'P2P_STATE_MISMATCH'}
+  | {type: 'CLEAR_P2P_GAME'}
 
 const handlerInitialState: HandlerState = {
   signalingToPeer: {},
@@ -464,12 +465,21 @@ const p2pGameReducer = (game: P2pGame | null, action: ConnectionsAction): P2pGam
       if (!game) return game;
       return {...game, phase: 'game-over', winner: 'me'};
 
-    case 'P2P_GAME_LOADED':
-      return action.gameState;
+    case 'P2P_GAME_LOADED': {
+      const resumable = action.gameState.phase === 'my-turn' || action.gameState.phase === 'their-turn';
+      if (!resumable) return game;
+      // Preserve current opponentId (live peer in this session); restore shots and phase from saved state
+      // winner is always null for resumable phases — the decoder strips it to avoid null/string mismatch
+      const base = {...action.gameState, winner: null as P2pGame['winner']};
+      return game ? {...base, opponentId: game.opponentId} : base;
+    }
 
     case 'P2P_STATE_MISMATCH':
       if (!game) return game;
       return {...game, phase: 'state-mismatch'};
+
+    case 'CLEAR_P2P_GAME':
+      return null;
 
     case 'PEER_DISCONNECTED':
       if (!game || game.opponentId !== action.peerId) return game;

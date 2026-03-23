@@ -108,3 +108,4 @@ export const p2pGameLoaded = (gameState: P2pGame) => ({type: 'P2P_GAME_LOADED' a
 export const p2pStateSync = (opponentId: string, myShots: Shot[], opponentShots: Shot[], phase: P2pGamePhase) =>
   ({type: 'P2P_STATE_SYNC' as const, opponentId, myShots, opponentShots, phase});
 export const p2pStateMismatch = () => ({type: 'P2P_STATE_MISMATCH' as const});
+export const clearP2pGame = () => ({type: 'CLEAR_P2P_GAME' as const});

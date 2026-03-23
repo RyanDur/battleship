@@ -4,7 +4,7 @@ import {
   p2pBoardReady, opponentBoardReady, turnOrderDecided,
   p2pFireResult, opponentFired,
   p2pGameOver, forfeitGame, opponentForfeited,
-  p2pStateMismatch, peerDisconnected,
+  p2pStateMismatch, peerDisconnected, clearP2pGame,
 } from './connectionActions';
 import {selectP2pGame} from './connectionSelectors';
 import type {Shot} from './connections';
@@ -184,6 +184,32 @@ describe('P2P game', () => {
       const store = makeInProgressStore();
       store.dispatch(opponentForfeited());
       expect(selectP2pGame(store.getState())).toMatchObject({phase: 'game-over', winner: 'me'});
+    });
+  });
+
+  describe('clearing game', () => {
+    it('CLEAR_P2P_GAME resets p2pGame to null from game-over', () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(acceptChallenge());
+      store.dispatch(p2pBoardReady('abc123'));
+      store.dispatch(opponentBoardReady('def456'));
+      store.dispatch(turnOrderDecided(true));
+      store.dispatch(p2pGameOver('me'));
+      store.dispatch(clearP2pGame());
+      expect(selectP2pGame(store.getState())).toBeNull();
+    });
+
+    it('CLEAR_P2P_GAME resets p2pGame to null from disconnected', () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(acceptChallenge());
+      store.dispatch(p2pBoardReady('abc123'));
+      store.dispatch(opponentBoardReady('def456'));
+      store.dispatch(turnOrderDecided(true));
+      store.dispatch(peerDisconnected('peer-bob'));
+      store.dispatch(clearP2pGame());
+      expect(selectP2pGame(store.getState())).toBeNull();
     });
   });
 

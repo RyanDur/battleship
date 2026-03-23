@@ -13,7 +13,7 @@ import type {HeartbeatState} from './protocol/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
 import {detectPlatform} from './protocol/platform';
 import {createConnectionStore, createHandlerListener, createSignalingListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './state/connectionStore';
-import {startSignaling, stopSignaling, saveBoard, startGame} from './state/connectionActions';
+import {startSignaling, stopSignaling, saveBoard, startGame, clearP2pGame} from './state/connectionActions';
 import {ConnectionProvider} from './state/ConnectionProvider';
 import {useConnectionState, useConnectionStore} from './state/useConnection';
 import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './state/connectionSelectors';
@@ -40,7 +40,7 @@ const AppMain = () => {
   if (boardLoading) return null;
   if (!board) return <BoardSetup onConfirm={b => store.dispatch(saveBoard(b))}/>;
   if (p2pGame && (p2pGame.phase === 'placing' || p2pGame.phase === 'selecting-turn')) return <GameLobby/>;
-  if (gameView) return <Game onNewGame={() => store.dispatch(startGame())}/>;
+  if (gameView) return <Game onNewGame={() => store.dispatch(p2pGame ? clearP2pGame() : startGame())}/>;
   return <button className="control" onClick={() => store.dispatch(startGame())}>Play vs AI</button>;
 };
 

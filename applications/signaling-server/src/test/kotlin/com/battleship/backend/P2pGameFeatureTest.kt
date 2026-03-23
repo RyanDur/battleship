@@ -17,6 +17,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler
 import java.net.URI
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -32,6 +33,15 @@ class P2pGameFeatureTest {
 
     private val mapper = jacksonObjectMapper()
     private val gameStateJson = """{"phase":"my-turn","myShots":[],"opponentShots":[]}"""
+
+    private fun <T> waitFor(timeoutMs: Long = 2000, intervalMs: Long = 20, condition: () -> T?): T {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            condition()?.let { return it }
+            Thread.sleep(intervalMs)
+        }
+        throw TimeoutException("Condition not met within ${timeoutMs}ms")
+    }
 
     private fun connect(peerId: String): Pair<WebSocketSession, ArrayBlockingQueue<Map<String, Any>>> {
         val messages = ArrayBlockingQueue<Map<String, Any>>(20)
@@ -61,7 +71,7 @@ class P2pGameFeatureTest {
         send(session, mapOf("type" to "SAVE_P2P_GAME", "opponentId" to "p2p-bob", "gameState" to gameStateJson))
 
         // Use gateway directly to verify persistence
-        Thread.sleep(500)
+        waitFor { gateway.find("p2p-alice", "p2p-bob") }
         assertEquals(gameStateJson, gateway.find("p2p-alice", "p2p-bob"))
         assertEquals(gameStateJson, gateway.find("p2p-bob", "p2p-alice"))
 

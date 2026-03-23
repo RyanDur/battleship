@@ -2,8 +2,9 @@ import {createConnectionStore, createHandlerListener, encodingMiddleware, codecM
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
 import type {ConnectionFlow} from './connections';
-import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage} from './connectionActions';
-import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections, selectMessages} from './connectionSelectors';
+import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage, challengePeer, acceptChallenge, p2pBoardReady, turnOrderDecided, claimFirstTurn, boardLoaded, p2pGameLoaded, p2pFire} from './connectionActions';
+import type {Board} from '../game/board';
+import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections, selectMessages, selectP2pGame} from './connectionSelectors';
 
 const makeRelayMiddleware = (myName: string, mySigId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
   (_deps) => (next) => (action) => {
@@ -376,5 +377,82 @@ describe('createHandlerMiddleware (store)', () => {
     await vi.waitFor(() => expect(selectPeers(alice.getState())).toHaveLength(1));
 
     expect(selectFlow(alice.getState()).phase).toBe('idle');
+  });
+});
+
+const setupP2pGame = async (pair: Awaited<ReturnType<typeof makePair>>) => {
+  const {alice, bob, connect} = pair;
+  await connect();
+  const alicePeerId = selectPeers(bob.getState())[0].id;
+  bob.dispatch(challengePeer(alicePeerId));
+  await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('challenge-received'));
+  alice.dispatch(acceptChallenge());
+  await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('placing'));
+  alice.dispatch(p2pBoardReady('alice-hash'));
+  await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.opponentBoardReady).toBe(true));
+  bob.dispatch(p2pBoardReady('bob-hash'));
+  await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('selecting-turn'));
+  alice.dispatch(turnOrderDecided(true));
+  bob.dispatch(turnOrderDecided(false));
+  return {alice, bob};
+};
+
+describe('coin flip turn selection', () => {
+  it('both players claiming first results in opposite turn assignments', async () => {
+    const {alice, bob, connect} = makePair();
+    await connect();
+    const alicePeerIdOnBob = selectPeers(bob.getState())[0].id;
+    bob.dispatch(challengePeer(alicePeerIdOnBob));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('challenge-received'));
+    alice.dispatch(acceptChallenge());
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('placing'));
+    alice.dispatch(p2pBoardReady('a-hash'));
+    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.opponentBoardReady).toBe(true));
+    bob.dispatch(p2pBoardReady('b-hash'));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('selecting-turn'));
+    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.phase).toBe('selecting-turn'));
+
+    // Both claim first simultaneously — coin flip resolves to opposite turns
+    alice.dispatch(claimFirstTurn());
+    bob.dispatch(claimFirstTurn());
+
+    await vi.waitFor(() => {
+      const aPhase = selectP2pGame(alice.getState())?.phase;
+      const bPhase = selectP2pGame(bob.getState())?.phase;
+      expect(aPhase === 'my-turn' || aPhase === 'their-turn').toBe(true);
+      expect(bPhase === 'my-turn' || bPhase === 'their-turn').toBe(true);
+    });
+
+    const aPhase = selectP2pGame(alice.getState())?.phase;
+    const bPhase = selectP2pGame(bob.getState())?.phase;
+    expect(aPhase).not.toBe(bPhase); // one goes first, the other second
+  });
+});
+
+describe('P2P fire guards', () => {
+  it('duplicate incoming FIRE at the same cell is ignored — opponentShots stays at 1', async () => {
+    const pair = makePair();
+    const {alice, bob} = await setupP2pGame(pair);
+    const emptyBoard: Board = {placed: []};
+    alice.dispatch(boardLoaded(emptyBoard));
+    // Put alice in their-turn with one prior shot at (3,4) already in opponentShots
+    const currentGame = selectP2pGame(alice.getState())!;
+    alice.dispatch(p2pGameLoaded({...currentGame, phase: 'their-turn', opponentShots: [{cell: {row: 3, col: 4}, result: 'miss' as const}]}));
+
+    // Bob fires at (3,4) again — duplicate guard blocks it
+    bob.dispatch(p2pFire(3, 4));
+    await new Promise(r => setTimeout(r, 50));
+    expect(selectP2pGame(alice.getState())?.opponentShots).toHaveLength(1);
+  });
+
+  it('FIRE received when not their-turn is ignored', async () => {
+    const pair = makePair();
+    const {alice, bob} = await setupP2pGame(pair);
+    // Alice is my-turn after setupP2pGame; give her a board so the phase guard is the only blocker
+    alice.dispatch(boardLoaded({placed: []}));
+
+    bob.dispatch(p2pFire(1, 1));
+    await new Promise(r => setTimeout(r, 50));
+    expect(selectP2pGame(alice.getState())?.opponentShots).toHaveLength(0);
   });
 });

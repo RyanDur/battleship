@@ -62,29 +62,27 @@ const gameAcceptDecoder = Decoder.object({required: {type: Decoder.literal('GAME
 const gameDeclineDecoder = Decoder.object({required: {type: Decoder.literal('GAME_DECLINE')}});
 const gameCancelDecoder = Decoder.object({required: {type: Decoder.literal('GAME_CANCEL')}});
 const boardReadyDecoder = Decoder.object({required: {type: Decoder.literal('BOARD_READY'), boardHash: Decoder.string}});
-const claimFirstDecoder = Decoder.object({required: {type: Decoder.literal('CLAIM_FIRST')}});
 const coinFlipCommitDecoder = Decoder.object({required: {type: Decoder.literal('COIN_FLIP_COMMIT'), hash: Decoder.string}});
 const coinFlipRevealDecoder = Decoder.object({required: {type: Decoder.literal('COIN_FLIP_REVEAL'), value: Decoder.number}});
 const p2pFireDecoder = Decoder.object({required: {type: Decoder.literal('FIRE'), row: Decoder.number, col: Decoder.number}});
 const p2pCellDecoder = Decoder.object({required: {row: Decoder.number, col: Decoder.number}});
 const p2pShipInfoDecoder = Decoder.object({required: {name: Decoder.string, size: Decoder.number}});
+const shotResultDecoder = Decoder.oneOf(Decoder.literal('hit'), Decoder.literal('miss'), Decoder.literal('sunk'));
 const p2pFireResultDecoder = Decoder.object({
-  required: {type: Decoder.literal('FIRE_RESULT'), row: Decoder.number, col: Decoder.number, result: Decoder.string},
+  required: {type: Decoder.literal('FIRE_RESULT'), row: Decoder.number, col: Decoder.number, result: shotResultDecoder},
   optional: {ship: p2pShipInfoDecoder},
 });
 const gameForfeitDecoder = Decoder.object({required: {type: Decoder.literal('GAME_FORFEIT')}});
+const p2pShotDecoder = Decoder.object({
+  required: {cell: p2pCellDecoder, result: shotResultDecoder},
+  optional: {ship: p2pShipInfoDecoder},
+});
 const gameStateSyncDecoder = Decoder.object({
   required: {
     type: Decoder.literal('GAME_STATE_SYNC'),
     phase: Decoder.string,
-    myShots: Decoder.array(Decoder.object({
-      required: {cell: p2pCellDecoder, result: Decoder.string},
-      optional: {ship: p2pShipInfoDecoder},
-    })),
-    opponentShots: Decoder.array(Decoder.object({
-      required: {cell: p2pCellDecoder, result: Decoder.string},
-      optional: {ship: p2pShipInfoDecoder},
-    })),
+    myShots: Decoder.array(p2pShotDecoder),
+    opponentShots: Decoder.array(p2pShotDecoder),
   },
 });
 
@@ -234,7 +232,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
   const connections = new Map<string, RTCPeerConnection>();
   const dataChannels = new Map<string, RTCDataChannel>();
 
-  type PendingCoinFlip = {opponentHash: string; myValue: number; iInitiated: boolean}
+  type PendingCoinFlip = {opponentHash: string; myValue: number; myHash: string; iInitiated: boolean; revealSent: boolean}
   const pendingCoinFlips = new Map<string, PendingCoinFlip>();
 
   type PendingIntro = {
@@ -406,28 +404,32 @@ export const createPeerHandler = (deps: Deps): Handler => {
           .map(() => deps.dispatch(cancelChallenge())))
         .or(() => maybe(boardReadyDecoder.decode(parsed))
           .map(msg => deps.dispatch(opponentBoardReady(msg.boardHash))))
-        .or(() => maybe(claimFirstDecoder.decode(parsed))
-          .map(() => {
-            const game = selectP2pGame(deps.getState());
-            if (!game || game.phase === 'my-turn' || game.phase === 'their-turn') return;
-            const iAmOfferer = selectOffererPeerIds(deps.getState()).includes(peerId);
-            deps.dispatch(turnOrderDecided(iAmOfferer));
-          }))
         .or(() => maybe(coinFlipCommitDecoder.decode(parsed))
           .map(msg => {
-            const myValue = Math.floor(Math.random() * 0xFFFFFFFF);
-            pendingCoinFlips.set(peerId, {opponentHash: msg.hash, myValue, iInitiated: false});
-            dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: myValue}));
+            const existing = pendingCoinFlips.get(peerId);
+            if (existing?.iInitiated) {
+              // Simultaneous: both sent COMMIT. Use hash comparison to assign roles deterministically.
+              const iInitiated = existing.myHash < msg.hash;
+              pendingCoinFlips.set(peerId, {...existing, opponentHash: msg.hash, iInitiated, revealSent: true});
+              dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: existing.myValue}));
+            } else {
+              const myValue = Math.floor(Math.random() * 0xFFFFFFFF);
+              const myHash = myValue.toString(16);
+              pendingCoinFlips.set(peerId, {opponentHash: msg.hash, myValue, myHash, iInitiated: false, revealSent: true});
+              dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: myValue}));
+            }
           }))
         .or(() => maybe(coinFlipRevealDecoder.decode(parsed))
           .map(msg => {
             const flip = pendingCoinFlips.get(peerId);
             if (!flip) return;
             pendingCoinFlips.delete(peerId);
-            if (flip.iInitiated) {
+            if (flip.iInitiated && !flip.revealSent) {
               dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: flip.myValue}));
             }
-            const iGoFirst = ((flip.myValue ^ msg.value) % 2) === 0;
+            const merged = flip.myValue ^ msg.value;
+            // Initiator and non-initiator evaluate oppositely to guarantee different turn assignments
+            const iGoFirst = flip.iInitiated ? (merged % 2) === 0 : (merged % 2) !== 0;
             deps.dispatch(turnOrderDecided(iGoFirst));
           }))
         .or(() => maybe(p2pFireDecoder.decode(parsed))
@@ -435,6 +437,8 @@ export const createPeerHandler = (deps: Deps): Handler => {
             const game = selectP2pGame(deps.getState());
             const board = selectBoard(deps.getState());
             if (!game || !board) return;
+            if (game.phase !== 'their-turn') return;
+            if (game.opponentShots.some(s => s.cell.row === msg.row && s.cell.col === msg.col)) return;
             const shot = resolveP2pShot(board, game.opponentShots, {row: msg.row, col: msg.col});
             deps.dispatch(opponentFired(shot));
             dataChannels.get(peerId)?.send(JSON.stringify({
@@ -450,8 +454,8 @@ export const createPeerHandler = (deps: Deps): Handler => {
           .map(msg => {
             const shot: Shot = {
               cell: {row: msg.row, col: msg.col},
-              result: msg.result as Shot['result'],
-              ...(msg.ship ? {ship: msg.ship as Shot['ship']} : {}),
+              result: msg.result,
+              ...(msg.ship ? {ship: msg.ship} : {}),
             };
             deps.dispatch(p2pFireResult(shot));
             const game = selectP2pGame(deps.getState());
@@ -593,6 +597,13 @@ export const createPeerHandler = (deps: Deps): Handler => {
       }
       case 'SEND_TO_PEER': {
         dataChannels.get(command.peerId)?.send(JSON.stringify(command.message));
+        break;
+      }
+      case 'START_COIN_FLIP': {
+        const myValue = Math.floor(Math.random() * 0xFFFFFFFF);
+        const myHash = myValue.toString(16);
+        pendingCoinFlips.set(command.peerId, {opponentHash: '', myValue, myHash, iInitiated: true, revealSent: false});
+        dataChannels.get(command.peerId)?.send(JSON.stringify({type: 'COIN_FLIP_COMMIT', hash: myHash}));
         break;
       }
     }
