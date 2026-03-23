@@ -25,6 +25,9 @@ tasks.named<Jar>("jar") {
 tasks.test {
     useJUnitPlatform()
     systemProperty("APP_VERSION", project.version.toString())
+    testLogging {
+        events = setOf(org.gradle.api.tasks.testing.logging.TestLogEvent.FAILED)
+    }
 }
 
 tasks.processResources {
