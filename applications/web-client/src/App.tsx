@@ -5,6 +5,7 @@ import {DirectConnect} from './components/DirectConnect';
 import {DownloadLink} from './components/DownloadLink';
 import {Fleet} from './components/Fleet';
 import {Game} from './components/Game';
+import {GameLobby} from './components/GameLobby';
 import {ServiceHealth} from './components/ServiceHealth';
 import type {Config} from './protocol/config';
 import {fetchDownloadUrl} from './protocol/download';
@@ -15,7 +16,7 @@ import {createConnectionStore, createHandlerListener, createSignalingListener, e
 import {startSignaling, stopSignaling, saveBoard, startGame} from './state/connectionActions';
 import {ConnectionProvider} from './state/ConnectionProvider';
 import {useConnectionState, useConnectionStore} from './state/useConnection';
-import {selectBoard, selectBoardLoading, selectGameState} from './state/connectionSelectors';
+import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './state/connectionSelectors';
 
 const platform = detectPlatform(navigator.userAgent);
 
@@ -32,13 +33,15 @@ type Props = {config: Config};
 const AppMain = () => {
   const board = useConnectionState(selectBoard);
   const boardLoading = useConnectionState(selectBoardLoading);
-  const gameState = useConnectionState(selectGameState);
+  const p2pGame = useConnectionState(selectP2pGame);
+  const gameView = useConnectionState(selectGameView);
   const store = useConnectionStore();
 
   if (boardLoading) return null;
   if (!board) return <BoardSetup onConfirm={b => store.dispatch(saveBoard(b))}/>;
-  if (!gameState) return <button className="control" onClick={() => store.dispatch(startGame())}>Play vs AI</button>;
-  return <Game onNewGame={() => store.dispatch(startGame())}/>;
+  if (p2pGame && (p2pGame.phase === 'placing' || p2pGame.phase === 'selecting-turn')) return <GameLobby/>;
+  if (gameView) return <Game onNewGame={() => store.dispatch(startGame())}/>;
+  return <button className="control" onClick={() => store.dispatch(startGame())}>Play vs AI</button>;
 };
 
 const App = ({config}: Props) => {

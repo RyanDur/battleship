@@ -1,12 +1,19 @@
 import {useConnectionState, useConnectionStore} from '../state/useConnection';
-import {selectPendingIntroductions} from '../state/connectionSelectors';
-import {acceptIntroduction, declineIntroduction} from '../state/connectionActions';
+import {selectPendingIntroductions, selectP2pGame, selectPeers} from '../state/connectionSelectors';
+import {acceptIntroduction, declineIntroduction, acceptChallenge, declineChallenge} from '../state/connectionActions';
 
 export const Alerts = () => {
   const store = useConnectionStore();
   const pendingIntroductions = useConnectionState(selectPendingIntroductions);
+  const p2pGame = useConnectionState(selectP2pGame);
+  const peers = useConnectionState(selectPeers);
 
-  const count = pendingIntroductions.length;
+  const challengeReceived = p2pGame?.phase === 'challenge-received' ? p2pGame : null;
+  const challengerName = challengeReceived
+    ? (peers.find(p => p.id === challengeReceived.opponentId)?.name ?? 'Someone')
+    : null;
+
+  const count = pendingIntroductions.length + (challengeReceived ? 1 : 0);
 
   return (
     <details className="alerts-details" open aria-label="Alerts">
@@ -17,6 +24,15 @@ export const Alerts = () => {
 
       {count > 0 && (
         <ul className="alerts-list">
+          {challengeReceived && (
+            <li key="challenge">
+              <article className="alerts-alert">
+                {challengerName} wants to play you
+                <button className="control" onClick={() => store.dispatch(acceptChallenge())}>Accept</button>
+                <button className="control" onClick={() => store.dispatch(declineChallenge())}>Decline</button>
+              </article>
+            </li>
+          )}
           {pendingIntroductions.map(intro => (
             <li key={intro.introId}>
               <article className="alerts-alert">
