@@ -29,16 +29,19 @@ const FLEET_CELLS = [
 ];
 
 export const sinkFleet = async (attacker: Page, defender: Page) => {
+  let missIndex = 0;
   for (const {row, col} of FLEET_CELLS) {
     await attacker.getByRole('region', {name: /tracking board/i})
       .getByRole('button', {name: `Row ${row}, Column ${col}`, exact: true}).click();
     await expect(defender.locator('.game-announcement')).toContainText(/your turn|won|lost/i, {timeout: 10_000});
     const defenderText = await defender.locator('.game-announcement').textContent() ?? '';
     if (/won|lost/i.test(defenderText)) break;
-    // Defender fires a miss (Row 10) then it's attacker's turn again
-    const missCol = col; // use same col to avoid re-clicking
+    // Defender fires a miss using a unique cell (rows 6-10 are never fleet cells)
+    const missRow = 10 - Math.floor(missIndex / 10);
+    const missCol = (missIndex % 10) + 1;
+    missIndex++;
     await defender.getByRole('region', {name: /tracking board/i})
-      .getByRole('button', {name: `Row 10, Column ${missCol}`, exact: true}).click();
+      .getByRole('button', {name: `Row ${missRow}, Column ${missCol}`, exact: true}).click();
     await expect(attacker.locator('.game-announcement')).toContainText(/your turn|won|lost/i, {timeout: 10_000});
   }
 };
