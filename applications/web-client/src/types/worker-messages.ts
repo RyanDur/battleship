@@ -14,6 +14,7 @@ export type PeerCommand =
   | { type: 'SERVER_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string }
   | { type: 'ICE_RESTART_RECEIVED'; signalingPeerId: string; sdp: string }
   | { type: 'ICE_RESTART_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string }
+  | { type: 'SEND_TO_PEER'; peerId: string; message: Record<string, unknown> }
 
 export type PeerEvent =
   | { type: 'OFFER_CREATED'; peerId: string; sdp: string }

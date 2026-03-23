@@ -1,7 +1,8 @@
 import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction} from './connections';
 import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling} from './connectionSelectors';
-import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame} from './connectionActions';
+import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, turnOrderDecided} from './connectionActions';
+import {selectP2pGame} from './connectionSelectors';
 import type {PeerEvent} from '../types/worker-messages';
 import {encodeConnectionCode, decodeConnectionCode} from '../protocol/connection-code';
 import {createPeerHandler} from '../workers/connection.handler';
@@ -111,7 +112,7 @@ export const createHandlerListener = ({name, createPeerConnection}: HandlerListe
     const emit = makeHandlerEmit(dispatch, getState);
     const handler = createPeerHandler({name, createPeerConnection, emit, dispatch, getState});
 
-    return (action, {prevState}) => {
+    return (action, {prevState, state}) => {
       if (action.type === 'CREATE_OFFER') handler.handleCommand({type: 'CREATE_OFFER'});
       else if (action.type === 'ACCEPT_OFFER') handler.handleCommand({type: 'ACCEPT_OFFER', sdp: action.sdp});
       else if (action.type === 'ACCEPT_ANSWER') handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: action.peerId, sdp: action.sdp});
@@ -129,8 +130,32 @@ export const createHandlerListener = ({name, createPeerConnection}: HandlerListe
       else if (action.type === 'ICE_RESTART_ANSWER_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
       else if (action.type === 'SEND_MESSAGE') handler.handleCommand({type: 'SEND_MESSAGE', peerId: action.peerId, text: action.text});
       else if (action.type === 'PEER_DISCONNECTED') handler.cleanup(action.peerId);
+      else {
+        const game = selectP2pGame(state);
+        const opponentId = game?.opponentId ?? (action.type === 'CHALLENGE_PEER' ? action.opponentId : null);
+        if (!opponentId) return;
+        const send = (message: Record<string, unknown>) =>
+          handler.handleCommand({type: 'SEND_TO_PEER', peerId: opponentId, message});
+        if (action.type === 'CHALLENGE_PEER') send({type: 'GAME_CHALLENGE'});
+        else if (action.type === 'ACCEPT_CHALLENGE') send({type: 'GAME_ACCEPT'});
+        else if (action.type === 'DECLINE_CHALLENGE') send({type: 'GAME_DECLINE'});
+        else if (action.type === 'CANCEL_CHALLENGE') send({type: 'GAME_CANCEL'});
+        else if (action.type === 'P2P_BOARD_READY') send({type: 'BOARD_READY', boardHash: action.boardHash});
+        else if (action.type === 'CLAIM_FIRST_TURN') {
+          send({type: 'CLAIM_FIRST'});
+          dispatch(turnOrderDecided(true));
+        }
+        else if (action.type === 'COIN_FLIP_COMMIT') send({type: 'COIN_FLIP_COMMIT', hash: action.hash});
+        else if (action.type === 'COIN_FLIP_REVEAL') send({type: 'COIN_FLIP_REVEAL', value: action.value});
+        else if (action.type === 'P2P_FIRE') send({type: 'FIRE', row: action.row, col: action.col});
+        else if (action.type === 'FORFEIT_GAME') send({type: 'GAME_FORFEIT'});
+        else if (action.type === 'P2P_STATE_SYNC') {
+          send({type: 'GAME_STATE_SYNC', myShots: action.myShots, opponentShots: action.opponentShots, phase: action.phase});
+        }
+      }
     };
   };
+
 
 export const encodingMiddleware: MiddlewareFactory =
   ({dispatch, getState}) => (next) =>

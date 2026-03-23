@@ -3,8 +3,10 @@ import { maybe } from '../lib/maybe';
 import { tryCatch } from '../lib/result';
 import { asyncResult, asyncTryCatch } from '../lib/asyncResult';
 import type { PeerCommand, PeerEvent } from '../types/worker-messages';
-import type { ConnectionsState, ConnectionsAction } from '../state/connections';
-import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer} from '../state/connectionSelectors';
+import type { ConnectionsState, ConnectionsAction, Shot } from '../state/connections';
+import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer, selectP2pGame, selectBoard} from '../state/connectionSelectors';
+import {challengeReceived, acceptChallenge, declineChallenge, cancelChallenge, opponentBoardReady, turnOrderDecided, p2pFireResult, opponentFired, p2pGameOver, opponentForfeited, p2pStateMismatch, p2pStateSync} from '../state/connectionActions';
+import {occupiedCells, isCellOccupied} from '../game/board';
 import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed} from '../state/connectionActions';
 
 const introduceDecoder = Decoder.object({
@@ -54,6 +56,54 @@ const introductionExpiredDecoder = Decoder.object({
 const chatDecoder = Decoder.object({
   required: { type: Decoder.literal('CHAT'), text: Decoder.string },
 });
+
+const gameChallengeDecoder = Decoder.object({required: {type: Decoder.literal('GAME_CHALLENGE')}});
+const gameAcceptDecoder = Decoder.object({required: {type: Decoder.literal('GAME_ACCEPT')}});
+const gameDeclineDecoder = Decoder.object({required: {type: Decoder.literal('GAME_DECLINE')}});
+const gameCancelDecoder = Decoder.object({required: {type: Decoder.literal('GAME_CANCEL')}});
+const boardReadyDecoder = Decoder.object({required: {type: Decoder.literal('BOARD_READY'), boardHash: Decoder.string}});
+const claimFirstDecoder = Decoder.object({required: {type: Decoder.literal('CLAIM_FIRST')}});
+const coinFlipCommitDecoder = Decoder.object({required: {type: Decoder.literal('COIN_FLIP_COMMIT'), hash: Decoder.string}});
+const coinFlipRevealDecoder = Decoder.object({required: {type: Decoder.literal('COIN_FLIP_REVEAL'), value: Decoder.number}});
+const p2pFireDecoder = Decoder.object({required: {type: Decoder.literal('FIRE'), row: Decoder.number, col: Decoder.number}});
+const p2pCellDecoder = Decoder.object({required: {row: Decoder.number, col: Decoder.number}});
+const p2pShipInfoDecoder = Decoder.object({required: {name: Decoder.string, size: Decoder.number}});
+const p2pFireResultDecoder = Decoder.object({
+  required: {type: Decoder.literal('FIRE_RESULT'), row: Decoder.number, col: Decoder.number, result: Decoder.string},
+  optional: {ship: p2pShipInfoDecoder},
+});
+const gameForfeitDecoder = Decoder.object({required: {type: Decoder.literal('GAME_FORFEIT')}});
+const gameStateSyncDecoder = Decoder.object({
+  required: {
+    type: Decoder.literal('GAME_STATE_SYNC'),
+    phase: Decoder.string,
+    myShots: Decoder.array(Decoder.object({
+      required: {cell: p2pCellDecoder, result: Decoder.string},
+      optional: {ship: p2pShipInfoDecoder},
+    })),
+    opponentShots: Decoder.array(Decoder.object({
+      required: {cell: p2pCellDecoder, result: Decoder.string},
+      optional: {ship: p2pShipInfoDecoder},
+    })),
+  },
+});
+
+const TOTAL_SHIPS = 5;
+const isFleetSunk = (shots: Shot[]): boolean =>
+  new Set(shots.filter(s => s.result === 'sunk' && s.ship).map(s => s.ship!.name)).size >= TOTAL_SHIPS;
+
+const resolveP2pShot = (board: NonNullable<ReturnType<typeof selectBoard>>, prevShots: Shot[], cell: {row: number; col: number}): Shot => {
+  const hit = isCellOccupied(board, cell);
+  if (!hit) return {cell, result: 'miss'};
+  const placedShip = board.placed.find(p => occupiedCells(p).some(c => c.row === cell.row && c.col === cell.col));
+  if (!placedShip) return {cell, result: 'hit'};
+  const allCells = occupiedCells(placedShip);
+  const hitCells = [...prevShots.map(s => s.cell), cell];
+  const isSunk = allCells.every(c => hitCells.some(h => h.row === c.row && h.col === c.col));
+  return isSunk
+    ? {cell, result: 'sunk', ship: {name: placedShip.ship.name, size: placedShip.ship.size}}
+    : {cell, result: 'hit'};
+};
 
 type Deps = {
   name: string
@@ -183,6 +233,9 @@ const acceptIceRestartOffer = (pc: RTCPeerConnection, signalingPeerId: string, r
 export const createPeerHandler = (deps: Deps): Handler => {
   const connections = new Map<string, RTCPeerConnection>();
   const dataChannels = new Map<string, RTCDataChannel>();
+
+  type PendingCoinFlip = {opponentHash: string; myValue: number; iInitiated: boolean}
+  const pendingCoinFlips = new Map<string, PendingCoinFlip>();
 
   type PendingIntro = {
     peerId1: string
@@ -335,7 +388,98 @@ export const createPeerHandler = (deps: Deps): Handler => {
         .or(() => maybe(introductionExpiredDecoder.decode(parsed))
           .map(msg => cleanupIntro(msg.introId, 'INTRODUCTION_EXPIRED')))
         .or(() => maybe(chatDecoder.decode(parsed))
-          .map(msg => deps.emit({ type: 'MESSAGE_RECEIVED', peerId, text: msg.text })));
+          .map(msg => deps.emit({ type: 'MESSAGE_RECEIVED', peerId, text: msg.text })))
+        .or(() => maybe(gameChallengeDecoder.decode(parsed))
+          .map(() => {
+            const game = selectP2pGame(deps.getState());
+            if (game) {
+              dataChannels.get(peerId)?.send(JSON.stringify({type: 'GAME_DECLINE', reason: 'busy'}));
+            } else {
+              deps.dispatch(challengeReceived(peerId));
+            }
+          }))
+        .or(() => maybe(gameAcceptDecoder.decode(parsed))
+          .map(() => deps.dispatch(acceptChallenge())))
+        .or(() => maybe(gameDeclineDecoder.decode(parsed))
+          .map(() => deps.dispatch(declineChallenge())))
+        .or(() => maybe(gameCancelDecoder.decode(parsed))
+          .map(() => deps.dispatch(cancelChallenge())))
+        .or(() => maybe(boardReadyDecoder.decode(parsed))
+          .map(msg => deps.dispatch(opponentBoardReady(msg.boardHash))))
+        .or(() => maybe(claimFirstDecoder.decode(parsed))
+          .map(() => {
+            const game = selectP2pGame(deps.getState());
+            if (!game || game.phase === 'my-turn' || game.phase === 'their-turn') return;
+            const iAmOfferer = selectOffererPeerIds(deps.getState()).includes(peerId);
+            deps.dispatch(turnOrderDecided(iAmOfferer));
+          }))
+        .or(() => maybe(coinFlipCommitDecoder.decode(parsed))
+          .map(msg => {
+            const myValue = Math.floor(Math.random() * 0xFFFFFFFF);
+            pendingCoinFlips.set(peerId, {opponentHash: msg.hash, myValue, iInitiated: false});
+            dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: myValue}));
+          }))
+        .or(() => maybe(coinFlipRevealDecoder.decode(parsed))
+          .map(msg => {
+            const flip = pendingCoinFlips.get(peerId);
+            if (!flip) return;
+            pendingCoinFlips.delete(peerId);
+            if (flip.iInitiated) {
+              dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: flip.myValue}));
+            }
+            const iGoFirst = ((flip.myValue ^ msg.value) % 2) === 0;
+            deps.dispatch(turnOrderDecided(iGoFirst));
+          }))
+        .or(() => maybe(p2pFireDecoder.decode(parsed))
+          .map(msg => {
+            const game = selectP2pGame(deps.getState());
+            const board = selectBoard(deps.getState());
+            if (!game || !board) return;
+            const shot = resolveP2pShot(board, game.opponentShots, {row: msg.row, col: msg.col});
+            deps.dispatch(opponentFired(shot));
+            dataChannels.get(peerId)?.send(JSON.stringify({
+              type: 'FIRE_RESULT', row: msg.row, col: msg.col, result: shot.result,
+              ...(shot.ship ? {ship: shot.ship} : {}),
+            }));
+            const updatedOpponentShots = [...game.opponentShots, shot];
+            if (isFleetSunk(updatedOpponentShots)) {
+              deps.dispatch(p2pGameOver('opponent'));
+            }
+          }))
+        .or(() => maybe(p2pFireResultDecoder.decode(parsed))
+          .map(msg => {
+            const shot: Shot = {
+              cell: {row: msg.row, col: msg.col},
+              result: msg.result as Shot['result'],
+              ...(msg.ship ? {ship: msg.ship as Shot['ship']} : {}),
+            };
+            deps.dispatch(p2pFireResult(shot));
+            const game = selectP2pGame(deps.getState());
+            if (game) {
+              const updatedMyShots = [...game.myShots, shot];
+              if (isFleetSunk(updatedMyShots)) {
+                deps.dispatch(p2pGameOver('me'));
+              }
+            }
+          }))
+        .or(() => maybe(gameForfeitDecoder.decode(parsed))
+          .map(() => deps.dispatch(opponentForfeited())))
+        .or(() => maybe(gameStateSyncDecoder.decode(parsed))
+          .map(msg => {
+            const game = selectP2pGame(deps.getState());
+            if (!game) return;
+            const myShots = msg.myShots as Shot[];
+            const opponentShots = msg.opponentShots as Shot[];
+            const phase = msg.phase as Parameters<typeof p2pStateSync>[3];
+            const shotsMatch =
+              myShots.length === game.opponentShots.length &&
+              opponentShots.length === game.myShots.length;
+            if (shotsMatch) {
+              deps.dispatch(p2pStateSync(game.opponentId, game.myShots, game.opponentShots, game.phase));
+            } else {
+              deps.dispatch(p2pStateMismatch());
+            }
+          }));
     },
   };
 
@@ -449,6 +593,10 @@ export const createPeerHandler = (deps: Deps): Handler => {
         if (!localPeerId) break;
         const pc = connections.get(localPeerId);
         if (pc) asyncTryCatch(() => pc.setRemoteDescription({type: 'answer', sdp: command.sdp}));
+        break;
+      }
+      case 'SEND_TO_PEER': {
+        dataChannels.get(command.peerId)?.send(JSON.stringify(command.message));
         break;
       }
     }
