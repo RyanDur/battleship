@@ -11,7 +11,7 @@ export type PendingIntroduction = {introId: string; from: string; peer: string}
 export type ShotResult = 'hit' | 'miss' | 'sunk'
 export type GamePhase = 'player-turn' | 'computer-turn' | 'player-won' | 'computer-won'
 export type Shot = {cell: {row: number; col: number}; result: ShotResult; ship?: {name: string; size: number}}
-export type GameState = {playerShots: Shot[]; aiShots: Shot[]; phase: GamePhase}
+export type GameState = {playerShots: Shot[]; aiShots: Shot[]; phase: GamePhase; announcement: string}
 
 export type P2pGamePhase =
   | 'challenged'
@@ -37,6 +37,7 @@ export type P2pGame = {
   forfeited?: true
   opponentBoard: Board | null
   boardVerified: boolean | null
+  announcement: string
 }
 
 export type GameView = {
@@ -395,7 +396,9 @@ const coreConnectionsReducer = (state: ConnectionsState, action: ConnectionsActi
       if (!gameState) return state;
       const playerShots = [...gameState.playerShots, action.playerShot];
       const aiShots = action.aiShot ? [...gameState.aiShots, action.aiShot] : gameState.aiShots;
-      return {...state, gameState: {...gameState, playerShots, aiShots, phase: action.phase}};
+      const announcement = action.playerShot.result === 'sunk' && action.playerShot.ship
+        ? `${action.playerShot.ship.name} sunk!` : '';
+      return {...state, gameState: {...gameState, playerShots, aiShots, phase: action.phase, announcement}};
     }
 
     case 'GAME_NOT_FOUND':
@@ -418,6 +421,7 @@ const p2pGameInitial: P2pGame = {
   winner: null,
   opponentBoard: null,
   boardVerified: null,
+  announcement: '',
 };
 
 const p2pGameReducer = (game: P2pGame | null, action: ConnectionsAction): P2pGame | null => {
@@ -452,25 +456,27 @@ const p2pGameReducer = (game: P2pGame | null, action: ConnectionsAction): P2pGam
       if (!game) return game;
       return {...game, phase: action.iGoFirst ? 'my-turn' : 'their-turn'};
 
-    case 'P2P_FIRE_RESULT':
+    case 'P2P_FIRE_RESULT': {
       if (!game) return game;
-      return {...game, myShots: [...game.myShots, action.shot], phase: 'their-turn'};
+      const announcement = action.shot.result === 'sunk' && action.shot.ship ? `${action.shot.ship.name} sunk!` : '';
+      return {...game, myShots: [...game.myShots, action.shot], phase: 'their-turn', announcement};
+    }
 
     case 'OPPONENT_FIRED':
       if (!game) return game;
-      return {...game, opponentShots: [...game.opponentShots, action.shot], phase: 'my-turn'};
+      return {...game, opponentShots: [...game.opponentShots, action.shot], phase: 'my-turn', announcement: ''};
 
     case 'P2P_GAME_OVER':
       if (!game) return game;
-      return {...game, phase: 'game-over', winner: action.winner};
+      return {...game, phase: 'game-over', winner: action.winner, announcement: ''};
 
     case 'FORFEIT_GAME':
       if (!game) return game;
-      return {...game, phase: 'game-over', winner: 'opponent'};
+      return {...game, phase: 'game-over', winner: 'opponent', announcement: ''};
 
     case 'OPPONENT_FORFEITED':
       if (!game) return game;
-      return {...game, phase: 'game-over', winner: 'me', forfeited: true};
+      return {...game, phase: 'game-over', winner: 'me', forfeited: true, announcement: ''};
 
     case 'P2P_GAME_LOADED': {
       const resumable = action.gameState.phase === 'my-turn' || action.gameState.phase === 'their-turn';

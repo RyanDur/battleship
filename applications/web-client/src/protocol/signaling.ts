@@ -155,10 +155,10 @@ export const startSignaling = (
             .or(() => maybe(p2pGameLoadedDecoder.decode(parsed)).map(msg => onEvent({type: 'P2P_GAME_LOADED', gameState: msg.gameState})))
             .or(() => maybe(p2pGameNotFoundDecoder.decode(parsed)).map(() => onEvent({type: 'P2P_GAME_NOT_FOUND'})))
             .or(() => maybe(gameStartedDecoder.decode(parsed)).map(msg =>
-              onEvent({type: 'GAME_STARTED', gameState: {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as GamePhase}})
+              onEvent({type: 'GAME_STARTED', gameState: {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as GamePhase, announcement: ''}})
             ))
             .or(() => maybe(gameStateMessageDecoder.decode(parsed)).map(msg =>
-              onEvent({type: 'GAME_STATE', gameState: {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as GamePhase}})
+              onEvent({type: 'GAME_STATE', gameState: {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as GamePhase, announcement: ''}})
             ))
             .or(() => maybe(fireResultDecoder.decode(parsed)).map(msg => onEvent({
               type: 'FIRE_RESULT',

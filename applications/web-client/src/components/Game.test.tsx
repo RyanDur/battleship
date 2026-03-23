@@ -6,7 +6,7 @@ import {createConnectionStore} from '../state/connectionStore';
 import {gameStarted, fireResult, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided, opponentForfeited} from '../state/connectionActions';
 import type {GameState, Shot} from '../state/connections';
 
-const emptyGameState: GameState = {playerShots: [], aiShots: [], phase: 'player-turn'};
+const emptyGameState: GameState = {playerShots: [], aiShots: [], phase: 'player-turn', announcement: ''};
 
 const playerShot = (row: number, col: number, result: Shot['result'], ship?: Shot['ship']): Shot =>
   ({cell: {row, col}, result, ...(ship ? {ship} : {})});

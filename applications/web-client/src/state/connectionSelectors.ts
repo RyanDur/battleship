@@ -23,6 +23,11 @@ export const selectBoardLoading = (state: ConnectionsState) => state.boardLoadin
 export const selectGameState = (state: ConnectionsState) => state.gameState;
 export const selectP2pGame = (state: ConnectionsState) => state.p2pGame;
 
+export const selectAnnouncement = (state: ConnectionsState): string => {
+  if (state.p2pGame) return state.p2pGame.announcement;
+  return state.gameState?.announcement ?? '';
+};
+
 export const selectGameView = (state: ConnectionsState): GameView | null => {
   const {gameState, p2pGame, peers} = state;
   if (p2pGame && (p2pGame.phase === 'my-turn' || p2pGame.phase === 'their-turn' || p2pGame.phase === 'game-over')) {

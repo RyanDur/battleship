@@ -1,6 +1,6 @@
-import {useState, useEffect, useRef} from 'react';
+import {useState} from 'react';
 import {useConnectionState, useConnectionStore} from '../state/useConnection';
-import {selectGameView, selectP2pGame} from '../state/connectionSelectors';
+import {selectGameView, selectP2pGame, selectAnnouncement} from '../state/connectionSelectors';
 import {fireShot, p2pFire, forfeitGame} from '../state/connectionActions';
 import {occupiedCells} from '../game/board';
 
@@ -14,19 +14,9 @@ type Props = {
 export const Game = ({onNewGame}: Props) => {
   const gameView = useConnectionState(selectGameView);
   const p2pGame = useConnectionState(selectP2pGame);
+  const announcement = useConnectionState(selectAnnouncement);
   const store = useConnectionStore();
-  const [announcement, setAnnouncement] = useState('');
   const [confirmForfeit, setConfirmForfeit] = useState(false);
-  const prevShotCountRef = useRef(0);
-
-  useEffect(() => {
-    if (!gameView) return;
-    const newShots = gameView.myShots.slice(prevShotCountRef.current);
-    const sunk = newShots.find(s => s.result === 'sunk' && s.ship);
-    if (sunk?.ship) setAnnouncement(`${sunk.ship.name} sunk!`);
-    else setAnnouncement('');
-    prevShotCountRef.current = gameView.myShots.length;
-  }, [gameView]);
 
   const handleFire = ({row, col}: {row: number; col: number}) => {
     if (gameView?.phase !== 'my-turn') return;
