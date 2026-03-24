@@ -11,7 +11,7 @@ use_nvm 24
 
 # Dev server defaults — separate from installed app (port 8080, ~/.battleship/data)
 export SERVER_PORT=8082
-export DB_URL="jdbc:h2:file:${HOME}/.battleship/dev-data;AUTO_SERVER=TRUE"
+export DB_URL="jdbc:h2:file:${PWD}/databases/dev-data;AUTO_SERVER=TRUE"
 
 # Backend (signaling-server) — additional overrides as needed
 # export SERVER_ADDRESS=localhost

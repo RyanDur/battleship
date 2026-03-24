@@ -76,7 +76,7 @@ State flows: action → middleware → reducer → listeners → subscribers.
 
 Config is 12-factor: env vars with defaults in `application.yml`. direnv manages dev overrides via `.envrc`.
 
-direnv sets dev defaults: port 8082, DB at `~/.battleship/dev-data` (separate from installed app on port 8080 with `~/.battleship/data`). `make start` reads `SERVER_PORT` from the environment for the frontend `config.json`.
+direnv sets dev defaults: port 8082, DB at `databases/dev-data` (project-local, separate from installed app on port 8080 with `~/.battleship/data`). `make start` reads `SERVER_PORT` from the environment for the frontend `config.json`.
 
 E2e tests use port 8081 via Playwright config.
 

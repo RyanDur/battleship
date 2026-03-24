@@ -248,6 +248,7 @@ const acceptIceRestartOffer = (pc: RTCPeerConnection, signalingPeerId: string, r
 export const createPeerHandler = (deps: Deps): Handler => {
   const connections = new Map<string, RTCPeerConnection>();
   const dataChannels = new Map<string, RTCDataChannel>();
+  const localOffererPeerIds = new Set<string>();
 
   type PendingCoinFlip = {opponentHash: string; myValue: number; myHash: string; iInitiated: boolean; revealSent: boolean}
   const pendingCoinFlips = new Map<string, PendingCoinFlip>();
@@ -429,8 +430,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
               deps.dispatch(turnOrderDecided(false));
             } else if (game.phase === 'my-turn') {
               // Both claimed first simultaneously — offerer yields to answerer
-              const isOfferer = selectOffererPeerIds(deps.getState()).includes(peerId);
-              if (isOfferer) deps.dispatch(turnOrderDecided(false));
+              if (localOffererPeerIds.has(peerId)) deps.dispatch(turnOrderDecided(false));
             }
           }))
         .or(() => maybe(coinFlipCommitDecoder.decode(parsed))
@@ -438,8 +438,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
             const existing = pendingCoinFlips.get(peerId);
             if (existing?.iInitiated) {
               // Simultaneous: both sent COMMIT. Offerer yields initiator role to answerer.
-              const isOfferer = selectOffererPeerIds(deps.getState()).includes(peerId);
-              const iInitiated = !isOfferer;
+              const iInitiated = !localOffererPeerIds.has(peerId);
               pendingCoinFlips.set(peerId, {...existing, opponentHash: msg.hash, iInitiated, revealSent: true});
               dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: existing.myValue}));
             } else {
@@ -459,8 +458,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
             const resolveTurn = (opponentValue: number) => {
               const merged = flip.myValue ^ opponentValue;
               // Use offerer/answerer role (fixed, not subject to async race) for direction
-              const weOffered = selectOffererPeerIds(deps.getState()).includes(peerId);
-              const iGoFirst = weOffered ? (merged % 2) === 0 : (merged % 2) !== 0;
+              const iGoFirst = localOffererPeerIds.has(peerId) ? (merged % 2) === 0 : (merged % 2) !== 0;
               deps.dispatch(turnOrderDecided(iGoFirst));
             };
             if (flip.opponentHash) {
@@ -551,6 +549,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const peerId = generatePeerId();
         const pc = deps.createPeerConnection();
         connections.set(peerId, pc);
+        localOffererPeerIds.add(peerId);
         negotiateOffer(pc, peerId, deps.name, deps.emit, cbs);
         break;
       }
@@ -622,6 +621,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         const localPeerId = generatePeerId();
         const pc = deps.createPeerConnection();
         connections.set(localPeerId, pc);
+        localOffererPeerIds.add(localPeerId);
         deps.dispatch(signalingPeerRegistered(localPeerId, command.signalingPeerId, true));
         wireIceRestart(pc, localPeerId);
         negotiateServerOffer(pc, localPeerId, command.signalingPeerId, deps.name, deps.emit, cbs);
@@ -680,6 +680,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
 
   const cleanup = (peerId: string) => {
     dataChannels.delete(peerId);
+    localOffererPeerIds.delete(peerId);
     const pc = connections.get(peerId);
     if (pc) { connections.delete(peerId); pc.close(); }
   };
