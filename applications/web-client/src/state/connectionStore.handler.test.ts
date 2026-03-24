@@ -2,7 +2,7 @@ import {createConnectionStore, createHandlerListener, encodingMiddleware, codecM
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
 import type {ConnectionFlow} from './connections';
-import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage, challengePeer, acceptChallenge, p2pBoardReady, turnOrderDecided, claimFirstTurn, takeFirstTurn, boardLoaded, p2pGameLoaded, p2pFire, peerDisconnected, p2pStateMismatch} from './connectionActions';
+import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage, challengePeer, acceptChallenge, p2pBoardReady, turnOrderDecided, claimFirstTurn, takeFirstTurn, boardLoaded, p2pGameLoaded, p2pFire, peerDisconnected, p2pStateMismatch, clearP2pGame} from './connectionActions';
 import {hashBoard, hashValue} from '../game/hashBoard';
 import type {Board} from '../game/board';
 import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections, selectMessages, selectP2pGame, selectGameView} from './connectionSelectors';
@@ -582,7 +582,7 @@ describe('P2P fire guards', () => {
 describe('reconnect — load game on PEER_CONNECTED', () => {
   it('dispatches loadP2pGame when any peer connects', async () => {
     const pair = makePair();
-    const {alice, bob} = await setupP2pGame(pair);
+    const {alice} = await setupP2pGame(pair);
     const bobPeerId = selectPeers(alice.getState())[0].id;
 
     // Disconnect Bob — game transitions to 'disconnected'
@@ -760,5 +760,89 @@ describe('disconnected and state-mismatch game view', () => {
     const view = selectGameView(alice.getState());
     expect(view).not.toBeNull();
     expect(view!.phase).toBe('state-mismatch');
+  });
+});
+
+describe('reconnect and resume game', () => {
+  it('game resumes after disconnect and p2pGameLoaded when both states match', async () => {
+    const pair = makePair();
+    const {alice, bob} = await setupP2pGame(pair);
+    const bobPeerId = selectPeers(alice.getState())[0].id;
+    const alicePeerId = selectPeers(bob.getState())[0].id;
+
+    // Give Bob a board so Alice's incoming FIRE can be resolved
+    bob.dispatch(boardLoaded({placed: []}));
+
+    // Alice fires — game transitions: Alice → their-turn, Bob → my-turn
+    alice.dispatch(p2pFire(1, 1));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('their-turn'));
+    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.phase).toBe('my-turn'));
+
+    // Capture game states before disconnect (simulates what server would save)
+    const aliceSavedGame = selectP2pGame(alice.getState())!;
+    const bobSavedGame = selectP2pGame(bob.getState())!;
+
+    // Disconnect both sides — game transitions to 'disconnected'
+    // Note: peerDisconnected triggers handler.cleanup which closes data channels
+    alice.dispatch(peerDisconnected(bobPeerId));
+    bob.dispatch(peerDisconnected(alicePeerId));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('disconnected'));
+    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.phase).toBe('disconnected'));
+
+    // Simulate server load: restore both games from saved state
+    // P2P_GAME_LOADED with a resumable phase restores the game directly.
+    // Data channels are gone after cleanup, so GAME_STATE_SYNC cannot flow,
+    // but the game is still correctly restored to play phase by the reducer.
+    alice.dispatch(p2pGameLoaded({...aliceSavedGame}));
+    bob.dispatch(p2pGameLoaded({...bobSavedGame}));
+
+    // Both games should be restored to their saved play phases
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('their-turn'));
+    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.phase).toBe('my-turn'));
+
+    // Shot history is preserved after restore
+    expect(selectP2pGame(alice.getState())?.myShots).toHaveLength(1);
+    expect(selectP2pGame(bob.getState())?.opponentShots).toHaveLength(1);
+  });
+
+  it('game transitions to state-mismatch when GAME_STATE_SYNC reveals inconsistent shot counts', async () => {
+    const pair = makePair();
+    const {alice, bob} = await setupP2pGame(pair);
+
+    // Give Bob a board so the fire resolves
+    bob.dispatch(boardLoaded({placed: []}));
+
+    // Alice fires — creates asymmetric state: Alice has 1 myShot, Bob has 1 opponentShot
+    alice.dispatch(p2pFire(1, 1));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('their-turn'));
+    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.phase).toBe('my-turn'));
+
+    // Capture the real game states before clearing
+    const aliceGame = selectP2pGame(alice.getState())!;
+    const bobGame = selectP2pGame(bob.getState())!;
+
+    // Clear both games while keeping data channels alive.
+    // This simulates a "fresh load" where prevGame is null — the P2P_GAME_LOADED listener
+    // will send GAME_STATE_SYNC to the opponent because prevGame is null.
+    alice.dispatch(clearP2pGame());
+    bob.dispatch(clearP2pGame());
+
+    // Load Alice's real state but give Bob a tampered state with 0 shots.
+    // Both will send GAME_STATE_SYNC on load (prevGame is null).
+    // Alice reports: myShots=1, opponentShots=0
+    // Bob reports:   myShots=0, opponentShots=0  (tampered — missing the shot)
+    const tamperedBobGame = {...bobGame, myShots: [], opponentShots: [], phase: 'my-turn' as const};
+
+    alice.dispatch(p2pGameLoaded({...aliceGame}));
+    bob.dispatch(p2pGameLoaded(tamperedBobGame));
+
+    // The GAME_STATE_SYNC exchange should detect mismatch on at least one side:
+    // Alice sends her shot counts; Bob's counts don't match → mismatch on Bob's side
+    // Bob sends his shot counts; Alice's counts don't match → mismatch on Alice's side
+    await vi.waitFor(() => {
+      const aPhase = selectP2pGame(alice.getState())?.phase;
+      const bPhase = selectP2pGame(bob.getState())?.phase;
+      expect(aPhase === 'state-mismatch' || bPhase === 'state-mismatch').toBe(true);
+    });
   });
 });
