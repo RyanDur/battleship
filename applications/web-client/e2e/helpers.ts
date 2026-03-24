@@ -2,6 +2,7 @@ import type {Page} from '@playwright/test';
 import {expect} from '@playwright/test';
 
 export const placeAllShips = async (page: Page) => {
+  await expect(page.getByRole('region', {name: /place your ships/i})).toBeVisible({timeout: 10_000});
   await page.getByRole('button', {name: /^carrier/i}).click();
   await page.getByRole('button', {name: 'Row 1, Column 1', exact: true}).click();
   await page.getByRole('button', {name: /^battleship/i}).click();
