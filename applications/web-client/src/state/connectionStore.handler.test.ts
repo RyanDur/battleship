@@ -437,11 +437,8 @@ describe('coin flip turn selection', () => {
       const bPhase = selectP2pGame(bob.getState())?.phase;
       expect(aPhase === 'my-turn' || aPhase === 'their-turn').toBe(true);
       expect(bPhase === 'my-turn' || bPhase === 'their-turn').toBe(true);
+      expect(aPhase).not.toBe(bPhase); // one goes first, the other second
     });
-
-    const aPhase = selectP2pGame(alice.getState())?.phase;
-    const bPhase = selectP2pGame(bob.getState())?.phase;
-    expect(aPhase).not.toBe(bPhase); // one goes first, the other second
   });
 
   it('coin flip completes with SHA-256 hashes — both peers resolve to opposite turns', async () => {
