@@ -29,10 +29,14 @@ export const Game = ({onNewGame}: Props) => {
 
   if (!gameView) return null;
 
-  const isOver = gameView.phase === 'won' || gameView.phase === 'lost';
-  const isP2pInProgress = !!p2pGame && !isOver;
+  const isOver = gameView.phase === 'won' || gameView.phase === 'lost' || gameView.phase === 'state-mismatch';
+  const isP2pInProgress = !!p2pGame && !isOver && gameView.phase !== 'disconnected';
   const revealedBoard = gameView.phase === 'won' ? p2pGame?.opponentBoard ?? null : null;
-  const turnStatus = gameView.phase === 'my-turn' ? 'Your turn' : gameView.phase === 'their-turn' ? 'Waiting for opponent' : '';
+  const turnStatus = gameView.phase === 'my-turn' ? 'Your turn'
+    : gameView.phase === 'their-turn' ? `Waiting for ${gameView.opponentName}`
+    : gameView.phase === 'disconnected' ? `${gameView.opponentName} disconnected. Game saved.`
+    : gameView.phase === 'state-mismatch' ? 'Game ended — state inconsistency detected.'
+    : '';
   const statusText = announcement || turnStatus;
 
   const shotFor = (shots: typeof gameView.myShots, row: number, col: number) =>
@@ -49,32 +53,36 @@ export const Game = ({onNewGame}: Props) => {
 
       {isOver && (
         <div className="game-over">
-          {p2pGame?.forfeited
-            ? <h2>{gameView.opponentName} forfeited. You win!</h2>
-            : <h2>{gameView.phase === 'won' ? 'You win!' : `${gameView.opponentName} wins`}</h2>
-          }
-          {revealedBoard && (
+          {gameView.phase !== 'state-mismatch' && (
             <>
-              <p className="board-verification">
-                {p2pGame?.boardVerified ? 'Board verified' : 'Board hash mismatch'}
-              </p>
-              <section aria-label="Opponent's fleet" className="game-board">
-                {ROWS.flatMap(row =>
-                  COLS.map(col => {
-                    const occupied = revealedBoard.placed.some(ps =>
-                      occupiedCells(ps).some(c => c.row === row && c.col === col)
-                    );
-                    return (
-                      <button
-                        key={`reveal-${row}-${col}`}
-                        aria-label={`Row ${row}, Column ${col}`}
-                        className={`game-cell${occupied ? ' hit' : ''}`}
-                        disabled
-                      />
-                    );
-                  })
-                )}
-              </section>
+              {p2pGame?.forfeited
+                ? <h2>{gameView.opponentName} forfeited. You win!</h2>
+                : <h2>{gameView.phase === 'won' ? 'You win!' : `${gameView.opponentName} wins`}</h2>
+              }
+              {revealedBoard && (
+                <>
+                  <p className="board-verification">
+                    {p2pGame?.boardVerified ? 'Board verified' : 'Board hash mismatch'}
+                  </p>
+                  <section aria-label="Opponent's fleet" className="game-board">
+                    {ROWS.flatMap(row =>
+                      COLS.map(col => {
+                        const occupied = revealedBoard.placed.some(ps =>
+                          occupiedCells(ps).some(c => c.row === row && c.col === col)
+                        );
+                        return (
+                          <button
+                            key={`reveal-${row}-${col}`}
+                            aria-label={`Row ${row}, Column ${col}`}
+                            className={`game-cell${occupied ? ' hit' : ''}`}
+                            disabled
+                          />
+                        );
+                      })
+                    )}
+                  </section>
+                </>
+              )}
             </>
           )}
           <button className="control" onClick={onNewGame}>New game</button>

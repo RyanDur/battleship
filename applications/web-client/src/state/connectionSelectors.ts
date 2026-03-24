@@ -30,10 +30,12 @@ export const selectAnnouncement = (state: ConnectionsState): string => {
 
 export const selectGameView = (state: ConnectionsState): GameView | null => {
   const {gameState, p2pGame, peers} = state;
-  if (p2pGame && (p2pGame.phase === 'my-turn' || p2pGame.phase === 'their-turn' || p2pGame.phase === 'game-over')) {
+  if (p2pGame && (p2pGame.phase === 'my-turn' || p2pGame.phase === 'their-turn' || p2pGame.phase === 'game-over' || p2pGame.phase === 'disconnected' || p2pGame.phase === 'state-mismatch')) {
     const opponentName = peers.find(p => p.id === p2pGame.opponentId)?.name ?? 'Opponent';
     const phase = p2pGame.phase === 'game-over'
       ? (p2pGame.winner === 'me' ? 'won' : 'lost')
+      : p2pGame.phase === 'disconnected' ? 'disconnected'
+      : p2pGame.phase === 'state-mismatch' ? 'state-mismatch'
       : p2pGame.phase;
     return {myShots: p2pGame.myShots, opponentShots: p2pGame.opponentShots, phase, opponentName};
   }

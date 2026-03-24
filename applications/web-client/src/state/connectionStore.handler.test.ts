@@ -2,10 +2,10 @@ import {createConnectionStore, createHandlerListener, encodingMiddleware, codecM
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
 import type {ConnectionFlow} from './connections';
-import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage, challengePeer, acceptChallenge, p2pBoardReady, turnOrderDecided, claimFirstTurn, takeFirstTurn, boardLoaded, p2pGameLoaded, p2pFire} from './connectionActions';
+import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage, challengePeer, acceptChallenge, p2pBoardReady, turnOrderDecided, claimFirstTurn, takeFirstTurn, boardLoaded, p2pGameLoaded, p2pFire, peerDisconnected, p2pStateMismatch} from './connectionActions';
 import {hashBoard, hashValue} from '../game/hashBoard';
 import type {Board} from '../game/board';
-import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections, selectMessages, selectP2pGame} from './connectionSelectors';
+import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections, selectMessages, selectP2pGame, selectGameView} from './connectionSelectors';
 
 const makeRelayMiddleware = (myName: string, mySigId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
   (_deps) => (next) => (action) => {
@@ -713,5 +713,32 @@ describe('P2P board reveal at game over', () => {
       expect(selectP2pGame(alice.getState())?.opponentBoard).not.toBeNull();
       expect(selectP2pGame(alice.getState())?.boardVerified).toBe(false);
     });
+  });
+});
+
+describe('disconnected and state-mismatch game view', () => {
+  it('selectGameView returns a view with disconnected phase when game is disconnected', async () => {
+    const pair = makePair();
+    const {alice} = await setupP2pGame(pair);
+    const bobPeerId = selectPeers(alice.getState())[0].id;
+
+    alice.dispatch(peerDisconnected(bobPeerId));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('disconnected'));
+
+    const view = selectGameView(alice.getState());
+    expect(view).not.toBeNull();
+    expect(view!.phase).toBe('disconnected');
+  });
+
+  it('selectGameView returns a view with state-mismatch phase', async () => {
+    const pair = makePair();
+    const {alice} = await setupP2pGame(pair);
+
+    alice.dispatch(p2pStateMismatch());
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('state-mismatch'));
+
+    const view = selectGameView(alice.getState());
+    expect(view).not.toBeNull();
+    expect(view!.phase).toBe('state-mismatch');
   });
 });

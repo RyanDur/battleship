@@ -43,7 +43,7 @@ export type P2pGame = {
 export type GameView = {
   myShots: Shot[]
   opponentShots: Shot[]
-  phase: 'my-turn' | 'their-turn' | 'won' | 'lost'
+  phase: 'my-turn' | 'their-turn' | 'won' | 'lost' | 'disconnected' | 'state-mismatch'
   opponentName: string
 }
 
