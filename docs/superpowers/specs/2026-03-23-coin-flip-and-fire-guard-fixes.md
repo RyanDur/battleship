@@ -16,7 +16,7 @@ Use SHA-256 (via `crypto.subtle`, available in Web Workers) to hash the value fo
 
 #### New helper: `hashValue`
 
-Add to `src/game/hashBoard.ts` (rename consideration: could become `src/game/crypto.ts`, but keeping it in `hashBoard.ts` avoids file churn for a small addition):
+Add to `src/game/hashBoard.ts` (keeping it there — both functions hash game data with `crypto.subtle`):
 
 ```typescript
 export const hashValue = (value: string): AsyncResult<string, Error> =>
@@ -30,22 +30,22 @@ Same pattern as `hashBoard` — returns `AsyncResult<string, Error>`.
 
 #### Protocol changes in `connection.handler.ts`
 
-**`START_COIN_FLIP` command (initiator, line 641-646):**
+**`START_COIN_FLIP` command (initiator):**
 
 1. Generate `myValue = Math.floor(Math.random() * 0xFFFFFFFF)`
-2. `hashValue(myValue.toString())` → on success, store `{opponentHash: '', myValue, myHash: hash, iInitiated: true, revealSent: false}` in `pendingCoinFlips` and send `{type: 'COIN_FLIP_COMMIT', hash}`
-3. On hash failure, do not send (flip silently fails; opponent times out or retries)
+2. `hashValue(myValue.toString())` (base-10, not hex — the original bug used `.toString(16)`) → on success, store `{opponentHash: '', myValue, myHash: hash, iInitiated: true, revealSent: false}` in `pendingCoinFlips` and send `{type: 'COIN_FLIP_COMMIT', hash}`
+3. On hash failure, dispatch a local error/no-op — the UI already handles the case where the coin flip doesn't resolve (user can retry via the "Flip Coin" button)
 
-**`COIN_FLIP_COMMIT` handler (non-initiator receiving commit, line 436-449):**
+**`COIN_FLIP_COMMIT` handler (non-initiator receiving commit):**
 
-- **Normal case (no existing flip):** Generate `myValue`, hash it, store in `pendingCoinFlips`, send `COIN_FLIP_REVEAL` with raw value. The hashing is async so the reveal send moves into the `.onSuccess` callback.
+- **Normal case (no existing flip):** Generate `myValue`, store in `pendingCoinFlips` with `opponentHash` from the received COMMIT, send `COIN_FLIP_REVEAL` with raw value. The non-initiator does NOT need to hash their own value — they reveal immediately. `myHash` is set to empty string since it's unused in this path.
 - **Simultaneous case (existing flip with `iInitiated`):** Same as today — use hash string comparison for deterministic role assignment, send reveal. Hashes are now real SHA-256 digests so comparison is fair.
 
-**`COIN_FLIP_REVEAL` handler (receiving opponent's raw value, line 451-463):**
+**`COIN_FLIP_REVEAL` handler (receiving opponent's raw value):**
 
 1. Look up `pendingCoinFlips` entry, delete it
 2. If initiator and haven't sent reveal yet, send own reveal
-3. **New: verify opponent's value.** `hashValue(msg.value.toString())` → compare result against stored `opponentHash`
+3. **New: verify opponent's value.** `hashValue(msg.value.toString())` (base-10) → compare result against stored `opponentHash`. This verification applies in ALL cases — both the normal flow and the simultaneous COMMIT flow. Any peer that committed a hash must have their reveal verified.
 4. On **match**: XOR values, mod 2, assign turns (same logic as today)
 5. On **mismatch or hash failure**: opponent goes first (graceful fallback — `dispatch(turnOrderDecided(false))`)
 
@@ -63,9 +63,9 @@ However, hashing is now required for the simultaneous case (where the non-initia
 
 ### Problem
 
-The outgoing `P2P_FIRE` handler in `connectionStore.ts` (line 166-171) checks for duplicate shots but not the current phase. Rapid clicks before a `FIRE_RESULT` arrives could send multiple FIRE messages for different cells in the same turn.
+The outgoing `P2P_FIRE` handler in `connectionStore.ts` checks for duplicate shots but not the current phase. Rapid clicks before a `FIRE_RESULT` arrives could send multiple FIRE messages for different cells in the same turn.
 
-The receiver guards against this (line 469: `if (game.phase !== 'their-turn') return;`), but defense-in-depth on the sender side prevents unnecessary network traffic and makes the intent explicit.
+The receiver guards against this (`if (game.phase !== 'their-turn') return;` in `connection.handler.ts`), but defense-in-depth on the sender side prevents unnecessary network traffic and makes the intent explicit.
 
 ### Fix
 
@@ -90,10 +90,13 @@ else if (action.type === 'P2P_FIRE') {
 - On REVEAL, initiator verifies opponent's value against committed hash
 - On hash mismatch at reveal, opponent goes first
 - Simultaneous COMMIT uses SHA-256 hashes for role assignment
+- Simultaneous COMMIT: both peers verify each other's reveal against committed hash
 
 ### Fire guard test (in `connectionStore.handler.test.ts` or `p2pGame.test.ts`)
 
+- Dispatching `P2P_FIRE` when phase is `my-turn` sends a FIRE message (positive case)
 - Dispatching `P2P_FIRE` when phase is `their-turn` does not send a FIRE message
+- Dispatching `P2P_FIRE` when phase is `selecting-turn` does not send a FIRE message
 
 ## Files Changed
 
