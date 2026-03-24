@@ -3,7 +3,7 @@ import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
 import type {ConnectionFlow} from './connections';
 import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage, challengePeer, acceptChallenge, p2pBoardReady, turnOrderDecided, claimFirstTurn, takeFirstTurn, boardLoaded, p2pGameLoaded, p2pFire} from './connectionActions';
-import {hashBoard} from '../game/hashBoard';
+import {hashBoard, hashValue} from '../game/hashBoard';
 import type {Board} from '../game/board';
 import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections, selectMessages, selectP2pGame} from './connectionSelectors';
 
@@ -86,6 +86,21 @@ const makeTriple = () => {
 
   return {alice: stores.alice!, bob: stores.bob!, carol: stores.carol!, connect};
 };
+
+describe('hashValue', () => {
+  it('produces a consistent SHA-256 hex digest for a given string', async () => {
+    const result1 = await hashValue('12345').mapEither(h => h, () => '');
+    const result2 = await hashValue('12345').mapEither(h => h, () => '');
+    expect(result1).toBe(result2);
+    expect(result1).toHaveLength(64); // SHA-256 = 64 hex chars
+  });
+
+  it('produces different hashes for different inputs', async () => {
+    const hash1 = await hashValue('100').mapEither(h => h, () => '');
+    const hash2 = await hashValue('200').mapEither(h => h, () => '');
+    expect(hash1).not.toBe(hash2);
+  });
+});
 
 describe('createHandlerMiddleware (store)', () => {
   it('CONNECT_VIA_SERVER connects both stores via server relay', async () => {
