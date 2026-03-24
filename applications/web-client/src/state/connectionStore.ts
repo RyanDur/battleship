@@ -182,8 +182,15 @@ export const createHandlerListener = ({name, createPeerConnection}: HandlerListe
         ) {
           if (selectP2pGame(state)) dispatch(saveP2pGame());
         }
-        else if (action.type === 'P2P_STATE_SYNC') {
-          send({type: 'GAME_STATE_SYNC', myShots: action.myShots, opponentShots: action.opponentShots, phase: action.phase});
+        else if (action.type === 'P2P_GAME_LOADED') {
+          const prevGame = selectP2pGame(prevState);
+          const game = selectP2pGame(state);
+          // Send sync only on reconnect: game restored from null (refreshed) or disconnected
+          if (game && (game.phase === 'my-turn' || game.phase === 'their-turn')) {
+            if (!prevGame || prevGame.phase === 'disconnected') {
+              send({type: 'GAME_STATE_SYNC', myShots: game.myShots, opponentShots: game.opponentShots, phase: game.phase});
+            }
+          }
         }
       }
     };
