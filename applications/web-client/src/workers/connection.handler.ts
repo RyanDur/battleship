@@ -6,7 +6,7 @@ import type { PeerCommand, PeerEvent } from '../types/worker-messages';
 import type { ConnectionsState, ConnectionsAction, Shot } from '../state/connections';
 import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer, selectP2pGame, selectBoard} from '../state/connectionSelectors';
 import {challengeReceived, acceptChallenge, declineChallenge, cancelChallenge, opponentBoardReady, turnOrderDecided, p2pFireResult, opponentFired, p2pGameOver, opponentForfeited, p2pStateMismatch, p2pStateSync, opponentBoardRevealed} from '../state/connectionActions';
-import {hashBoard} from '../game/hashBoard';
+import {hashBoard, hashValue} from '../game/hashBoard';
 import type {Board} from '../game/board';
 import {occupiedCells, isCellOccupied} from '../game/board';
 import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed} from '../state/connectionActions';
@@ -443,8 +443,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
               dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: existing.myValue}));
             } else {
               const myValue = Math.floor(Math.random() * 0xFFFFFFFF);
-              const myHash = myValue.toString(16);
-              pendingCoinFlips.set(peerId, {opponentHash: msg.hash, myValue, myHash, iInitiated: false, revealSent: true});
+              pendingCoinFlips.set(peerId, {opponentHash: msg.hash, myValue, myHash: '', iInitiated: false, revealSent: true});
               dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: myValue}));
             }
           }))
@@ -640,9 +639,12 @@ export const createPeerHandler = (deps: Deps): Handler => {
       }
       case 'START_COIN_FLIP': {
         const myValue = Math.floor(Math.random() * 0xFFFFFFFF);
-        const myHash = myValue.toString(16);
-        pendingCoinFlips.set(command.peerId, {opponentHash: '', myValue, myHash, iInitiated: true, revealSent: false});
-        dataChannels.get(command.peerId)?.send(JSON.stringify({type: 'COIN_FLIP_COMMIT', hash: myHash}));
+        hashValue(myValue.toString())
+          .onSuccess(hash => {
+            pendingCoinFlips.set(command.peerId, {opponentHash: '', myValue, myHash: hash, iInitiated: true, revealSent: false});
+            dataChannels.get(command.peerId)?.send(JSON.stringify({type: 'COIN_FLIP_COMMIT', hash}));
+          })
+          .onFailure(() => {}); // Hash failure is a no-op — user can retry via "Flip Coin" button
         break;
       }
     }

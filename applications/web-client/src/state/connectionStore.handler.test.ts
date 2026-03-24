@@ -443,6 +443,32 @@ describe('coin flip turn selection', () => {
     const bPhase = selectP2pGame(bob.getState())?.phase;
     expect(aPhase).not.toBe(bPhase); // one goes first, the other second
   });
+
+  it('coin flip completes with SHA-256 hashes — both peers resolve to opposite turns', async () => {
+    const {alice, bob, connect} = makePair();
+    await connect();
+    const alicePeerIdOnBob = selectPeers(bob.getState())[0].id;
+    bob.dispatch(challengePeer(alicePeerIdOnBob));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('challenge-received'));
+    alice.dispatch(acceptChallenge());
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('placing'));
+    alice.dispatch(p2pBoardReady('a-hash'));
+    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.opponentBoardReady).toBe(true));
+    bob.dispatch(p2pBoardReady('b-hash'));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('selecting-turn'));
+    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.phase).toBe('selecting-turn'));
+
+    // Only Alice claims first — triggers coin flip
+    alice.dispatch(claimFirstTurn());
+
+    await vi.waitFor(() => {
+      const aPhase = selectP2pGame(alice.getState())?.phase;
+      const bPhase = selectP2pGame(bob.getState())?.phase;
+      expect(aPhase === 'my-turn' || aPhase === 'their-turn').toBe(true);
+      expect(bPhase === 'my-turn' || bPhase === 'their-turn').toBe(true);
+      expect(aPhase).not.toBe(bPhase);
+    });
+  });
 });
 
 describe('direct turn claim', () => {
