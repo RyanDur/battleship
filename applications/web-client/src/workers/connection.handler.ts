@@ -455,10 +455,31 @@ export const createPeerHandler = (deps: Deps): Handler => {
             if (flip.iInitiated && !flip.revealSent) {
               dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: flip.myValue}));
             }
-            const merged = flip.myValue ^ msg.value;
-            // Initiator and non-initiator evaluate oppositely to guarantee different turn assignments
-            const iGoFirst = flip.iInitiated ? (merged % 2) === 0 : (merged % 2) !== 0;
-            deps.dispatch(turnOrderDecided(iGoFirst));
+            const resolveTurn = (opponentValue: number) => {
+              const merged = flip.myValue ^ opponentValue;
+              const iGoFirst = flip.iInitiated ? (merged % 2) === 0 : (merged % 2) !== 0;
+              deps.dispatch(turnOrderDecided(iGoFirst));
+            };
+            if (flip.opponentHash) {
+              // Verify opponent's revealed value matches their committed hash
+              hashValue(msg.value.toString())
+                .onSuccess(hash => {
+                  if (hash !== flip.opponentHash) {
+                    // Hash mismatch — opponent goes first as penalty
+                    deps.dispatch(turnOrderDecided(false));
+                    return;
+                  }
+                  resolveTurn(msg.value);
+                })
+                .onFailure(() => {
+                  // Hash computation failed — fall back to opponent goes first
+                  deps.dispatch(turnOrderDecided(false));
+                });
+            } else {
+              // Initiator received non-initiator's reveal — no hash to verify
+              // since the non-initiator didn't commit (they revealed immediately)
+              resolveTurn(msg.value);
+            }
           }))
         .or(() => maybe(p2pFireDecoder.decode(parsed))
           .map(msg => {
