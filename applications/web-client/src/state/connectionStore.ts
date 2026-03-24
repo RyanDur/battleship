@@ -165,7 +165,8 @@ export const createHandlerListener = ({name, createPeerConnection}: HandlerListe
         else if (action.type === 'COIN_FLIP_REVEAL') send({type: 'COIN_FLIP_REVEAL', value: action.value});
         else if (action.type === 'P2P_FIRE') {
           const prevGame = selectP2pGame(prevState);
-          if (!prevGame?.myShots.some(s => s.cell.row === action.row && s.cell.col === action.col)) {
+          if (prevGame?.phase !== 'my-turn') return;
+          if (!prevGame.myShots.some(s => s.cell.row === action.row && s.cell.col === action.col)) {
             send({type: 'FIRE', row: action.row, col: action.col});
           }
         }

@@ -579,6 +579,53 @@ describe('P2P fire guards', () => {
   });
 });
 
+describe('sender-side P2P_FIRE phase guard', () => {
+  it('P2P_FIRE sends a FIRE message when phase is my-turn', async () => {
+    const pair = makePair();
+    const {alice, bob} = await setupP2pGame(pair);
+    bob.dispatch(boardLoaded({placed: []}));
+
+    // Alice is my-turn after setupP2pGame — fire should work
+    alice.dispatch(p2pFire(1, 1));
+    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.opponentShots).toHaveLength(1));
+  });
+
+  it('P2P_FIRE does not send when phase is their-turn', async () => {
+    const pair = makePair();
+    const {alice, bob} = await setupP2pGame(pair);
+    bob.dispatch(boardLoaded({placed: []}));
+
+    // Put alice in their-turn
+    const currentGame = selectP2pGame(alice.getState())!;
+    alice.dispatch(p2pGameLoaded({...currentGame, phase: 'their-turn'}));
+
+    alice.dispatch(p2pFire(1, 1));
+    await new Promise(r => setTimeout(r, 50));
+    expect(selectP2pGame(bob.getState())?.opponentShots).toHaveLength(0);
+  });
+
+  it('P2P_FIRE does not send when phase is selecting-turn', async () => {
+    const pair = makePair();
+    const {alice, bob, connect} = pair;
+    await connect();
+    const alicePeerIdOnBob = selectPeers(bob.getState())[0].id;
+    bob.dispatch(challengePeer(alicePeerIdOnBob));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('challenge-received'));
+    alice.dispatch(acceptChallenge());
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('placing'));
+    alice.dispatch(p2pBoardReady('a-hash'));
+    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.opponentBoardReady).toBe(true));
+    bob.dispatch(p2pBoardReady('b-hash'));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('selecting-turn'));
+
+    // Alice tries to fire during selecting-turn
+    alice.dispatch(p2pFire(1, 1));
+    await new Promise(r => setTimeout(r, 50));
+    // Bob should not have received any shots
+    expect(selectP2pGame(bob.getState())?.opponentShots).toHaveLength(0);
+  });
+});
+
 describe('P2P board reveal at game over', () => {
   const fullBoard: Board = {
     placed: [
