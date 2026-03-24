@@ -481,10 +481,11 @@ const p2pGameReducer = (game: P2pGame | null, action: ConnectionsAction): P2pGam
     case 'P2P_GAME_LOADED': {
       const resumable = action.gameState.phase === 'my-turn' || action.gameState.phase === 'their-turn';
       if (!resumable) return game;
-      // Preserve current opponentId (live peer in this session); restore shots and phase from saved state
       // winner is always null for resumable phases — the decoder strips it to avoid null/string mismatch
       const base = {...action.gameState, winner: null as P2pGame['winner']};
-      return game ? {...base, opponentId: game.opponentId} : base;
+      // Use mapped opponentId from action when restoring from disconnected or null (refreshed peer).
+      // Only preserve existing game.opponentId during challenge flow (game exists in non-disconnected phase).
+      return game && game.phase !== 'disconnected' ? {...base, opponentId: game.opponentId} : base;
     }
 
     case 'P2P_STATE_MISMATCH':

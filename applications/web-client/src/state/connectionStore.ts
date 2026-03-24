@@ -2,7 +2,7 @@ import * as Decoder from 'schemawax';
 import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction, P2pGame} from './connections';
 import {tryCatch} from '../lib/result';
-import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling, selectP2pGame} from './connectionSelectors';
+import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling, selectSignalingToPeer, selectP2pGame} from './connectionSelectors';
 import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, p2pGameLoaded, saveP2pGame, loadP2pGame, turnOrderDecided} from './connectionActions';
 import type {PeerEvent} from '../types/worker-messages';
 import {encodeConnectionCode, decodeConnectionCode} from '../protocol/connection-code';
@@ -87,6 +87,9 @@ const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState) =
         const signalingPeerId = selectPeerToSignaling(getState())[event.peerId];
         if (signalingPeerId) dispatch(previousPeerConnected(signalingPeerId));
       }
+      // Reconnect: load any saved game for this peer from the server
+      const signalingPeerId = selectPeerToSignaling(getState())[event.peerId];
+      if (signalingPeerId) dispatch(loadP2pGame(signalingPeerId));
     }
     else if (event.type === 'PEER_NAMED') dispatch(peerNamed(event.peerId, event.name));
     else if (event.type === 'PEER_DISCONNECTED') dispatch(peerDisconnected(event.peerId));
@@ -270,7 +273,12 @@ export const createSignalingListener = ({config}: SignalingListenerConfig): List
             tryCatch(() => JSON.parse(event.gameState), () => null)
               .onSuccess(gs => {
                 const decoded = p2pGameStateDecoder.decode(gs);
-                if (decoded) dispatch(p2pGameLoaded(decoded as P2pGame));
+                if (decoded) {
+                  const game = decoded as P2pGame;
+                  // Map signaling opponentId to local peerId for the current session
+                  const localOpponentId = selectSignalingToPeer(getState())[game.opponentId];
+                  dispatch(p2pGameLoaded(localOpponentId ? {...game, opponentId: localOpponentId} : game));
+                }
               });
           }
         });

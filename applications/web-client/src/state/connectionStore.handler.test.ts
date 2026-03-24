@@ -579,6 +579,26 @@ describe('P2P fire guards', () => {
   });
 });
 
+describe('reconnect — load game on PEER_CONNECTED', () => {
+  it('dispatches loadP2pGame when any peer connects', async () => {
+    const pair = makePair();
+    const {alice, bob} = await setupP2pGame(pair);
+    const bobPeerId = selectPeers(alice.getState())[0].id;
+
+    // Disconnect Bob — game transitions to 'disconnected'
+    alice.dispatch(peerDisconnected(bobPeerId));
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('disconnected'));
+
+    // Simulate server restoring game with correct opponentId
+    const savedGame = {...selectP2pGame(alice.getState())!, phase: 'their-turn' as const, opponentId: bobPeerId};
+    alice.dispatch(p2pGameLoaded(savedGame));
+
+    // Game should be restored to play phase with correct opponentId
+    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('their-turn'));
+    expect(selectP2pGame(alice.getState())?.opponentId).toBe(bobPeerId);
+  });
+});
+
 describe('sender-side P2P_FIRE phase guard', () => {
   it('P2P_FIRE sends a FIRE message when phase is my-turn', async () => {
     const pair = makePair();
