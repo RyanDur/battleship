@@ -786,19 +786,23 @@ describe('reconnect and resume game', () => {
     // Note: peerDisconnected triggers handler.cleanup which closes data channels
     alice.dispatch(peerDisconnected(bobPeerId));
     bob.dispatch(peerDisconnected(alicePeerId));
-    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('disconnected'));
-    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.phase).toBe('disconnected'));
+    expect(selectP2pGame(alice.getState())?.phase).toBe('disconnected');
+    expect(selectP2pGame(bob.getState())?.phase).toBe('disconnected');
+
+    // Verify shots survive the disconnect transition
+    expect(selectP2pGame(alice.getState())?.myShots).toHaveLength(1);
+    expect(selectP2pGame(bob.getState())?.opponentShots).toHaveLength(1);
 
     // Simulate server load: restore both games from saved state
     // P2P_GAME_LOADED with a resumable phase restores the game directly.
     // Data channels are gone after cleanup, so GAME_STATE_SYNC cannot flow,
     // but the game is still correctly restored to play phase by the reducer.
-    alice.dispatch(p2pGameLoaded({...aliceSavedGame}));
-    bob.dispatch(p2pGameLoaded({...bobSavedGame}));
+    alice.dispatch(p2pGameLoaded(aliceSavedGame));
+    bob.dispatch(p2pGameLoaded(bobSavedGame));
 
     // Both games should be restored to their saved play phases
-    await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('their-turn'));
-    await vi.waitFor(() => expect(selectP2pGame(bob.getState())?.phase).toBe('my-turn'));
+    expect(selectP2pGame(alice.getState())?.phase).toBe('their-turn');
+    expect(selectP2pGame(bob.getState())?.phase).toBe('my-turn');
 
     // Shot history is preserved after restore
     expect(selectP2pGame(alice.getState())?.myShots).toHaveLength(1);
@@ -833,16 +837,15 @@ describe('reconnect and resume game', () => {
     // Bob reports:   myShots=0, opponentShots=0  (tampered — missing the shot)
     const tamperedBobGame = {...bobGame, myShots: [], opponentShots: [], phase: 'my-turn' as const};
 
-    alice.dispatch(p2pGameLoaded({...aliceGame}));
+    alice.dispatch(p2pGameLoaded(aliceGame));
     bob.dispatch(p2pGameLoaded(tamperedBobGame));
 
-    // The GAME_STATE_SYNC exchange should detect mismatch on at least one side:
+    // The GAME_STATE_SYNC exchange should detect mismatch on both sides:
     // Alice sends her shot counts; Bob's counts don't match → mismatch on Bob's side
     // Bob sends his shot counts; Alice's counts don't match → mismatch on Alice's side
     await vi.waitFor(() => {
-      const aPhase = selectP2pGame(alice.getState())?.phase;
-      const bPhase = selectP2pGame(bob.getState())?.phase;
-      expect(aPhase === 'state-mismatch' || bPhase === 'state-mismatch').toBe(true);
+      expect(selectP2pGame(alice.getState())?.phase).toBe('state-mismatch');
+      expect(selectP2pGame(bob.getState())?.phase).toBe('state-mismatch');
     });
   });
 });

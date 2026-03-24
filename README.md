@@ -16,8 +16,8 @@ battleship/
 └── docs/                      # Architecture diagrams
 ```
 
-- **signaling-server** — runs locally on each player's machine. WebSocket signaling relay for peer discovery, SDP exchange, and email sharing. Health/heartbeat endpoint for service status. H2 database for peer relationships and name/email persistence. Packaged as a native installer (dmg, msi, deb) via jpackage.
-- **web-client** — hosted on GitHub Pages. Manages P2P connections via WebRTC, with signaling mediated through the server. Chat, trust, and introductions flow over direct data channels.
+- **signaling-server** — runs locally on each player's machine. WebSocket signaling relay for peer discovery, SDP exchange, email sharing, and game state persistence. Health/heartbeat endpoint for service status. H2 database for peer relationships, name/email persistence, and saved game state. Packaged as a native installer (dmg, msi, deb) via jpackage.
+- **web-client** — hosted on GitHub Pages. Manages P2P connections via WebRTC, with signaling mediated through the server. Chat, trust, introductions, and P2P Battleship gameplay flow over direct data channels. Games auto-save to the server and resume after disconnection.
 - **signaling-protocol** — shared Kotlin Result type (Railway Oriented Programming)
 
 The web client maintains its own TypeScript types (Result, Maybe, AsyncResult). This is intentional — the browser is a separate bounded context with its own technology stack. No shared code across the Kotlin/TypeScript boundary.
@@ -181,7 +181,7 @@ npm run e2e
 | Backend | Kotlin 2.3.10, Spring Boot 3.4.1, JVM 21 |
 | Decoding | schemawax (TypeScript) |
 | Networking | WebSocket (signaling + health), WebRTC (P2P data channels) |
-| Persistence | H2 (peer relationships, names, emails) |
+| Persistence | H2 (peer relationships, names, emails, game state) |
 | Crypto | Web Crypto API (PBKDF2 → AES-GCM), CompressionStream |
 | CI/CD | GitHub Actions, GitHub Pages, GitHub Releases |
 | Build | Gradle 9.4 (Kotlin), npm (TypeScript) |

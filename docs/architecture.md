@@ -11,6 +11,7 @@ graph TB
         WC --> HH[HealthHandler]
         SH --> PR
         SH --> PRG[PeerRelationshipGateway]
+        SH --> PGG[P2pGameGateway]
         ES["@EnableScheduling"] -.->|drives| HH
         CC[CorsConfig]
         QH[MacOsQuitHandlerRegistrar]
@@ -68,6 +69,7 @@ graph TB
     style SH fill:#2e7d32,stroke:#1b5e20,color:#fff
     style PR fill:#2e7d32,stroke:#1b5e20,color:#fff
     style PRG fill:#2e7d32,stroke:#1b5e20,color:#fff
+    style PGG fill:#2e7d32,stroke:#1b5e20,color:#fff
     style HH fill:#2e7d32,stroke:#1b5e20,color:#fff
     style WC fill:#2e7d32,stroke:#1b5e20,color:#fff
     style ES fill:#2e7d32,stroke:#1b5e20,color:#fff
@@ -96,9 +98,10 @@ graph TB
 | Node | Description |
 |------|-------------|
 | SessionController | `GET /session` — assigns persistent `peerId` cookie |
-| SignalingHandler | `WS /ws/signaling` — routes 10 message types for peer discovery, SDP relay, email sharing |
+| SignalingHandler | `WS /ws/signaling` — routes 12 message types for peer discovery, SDP relay, email sharing, game save/load |
 | PeerRegistry | In-memory peer-to-session map with relationship persistence |
 | PeerRelationshipGateway | JPA interface — 6 entities: relationships, names, emails, sharing permissions, forgotten pairs, saved emails |
+| P2pGameGateway | JPA interface — persists P2P game state keyed by sorted peer-ID pair for reconnect resume |
 | HealthHandler | `WS /ws/health` — heartbeat every N ms with version |
 | WebSocketConfig | Origin validation, registers signaling + health handlers, peerId interceptor |
 | CorsConfig | Global CORS — configured origins, credentials enabled |
@@ -114,7 +117,7 @@ graph TB
 | useConnection hooks | `useConnectionStore()` and `useConnectionState(selector)` for components |
 | Signaling Client | WebSocket client for `/ws/signaling` — decodes server events, sends commands |
 | startHeartbeat | WebSocket state machine with reconnect + retry |
-| connection.handler | Multi-peer WebRTC manager — RTCPeerConnection, data channels, trust, introductions, chat, ICE restart |
+| connection.handler | Multi-peer WebRTC manager — RTCPeerConnection, data channels, trust, introductions, chat, ICE restart, P2P game protocol (challenge, shots, coin flip, state sync) |
 | ConnectionCode | Compress (deflate-raw) + encrypt (PBKDF2 → AES-GCM) SDP to base64url codes |
 | Config Loader | Fetches `config.json` at runtime (12-factor V) |
 | Download Protocol | GitHub API + schemawax decoder |
@@ -122,7 +125,7 @@ graph TB
 | Result / Maybe / AsyncResult | Frozen immutable types (TypeScript) |
 | Platform Detection | macOS / Windows / Linux |
 
-> **Status (post Iteration 6):** Backend provides full signaling relay (peer discovery, SDP exchange, ICE restart relay, email sharing) with H2 persistence for peer relationships. Frontend has complete P2P connection management: server-mediated WebRTC negotiation, multi-peer data channels, trust model, peer introductions, real-time chat, and ICE restart resilience. Native installers (dmg, msi, deb) with macOS dock quit support.
+> **Status (post Iteration 7):** Backend provides full signaling relay (peer discovery, SDP exchange, ICE restart relay, email sharing, game save/load) with H2 persistence for peer relationships and game state. Frontend has complete P2P connection management: server-mediated WebRTC negotiation, multi-peer data channels, trust model, peer introductions, real-time chat, ICE restart resilience, and game resume after disconnection. Native installers (dmg, msi, deb) with macOS dock quit support.
 > Green = implemented and tested.
 
 ---
@@ -301,6 +304,66 @@ sequenceDiagram
 > - Up to 3 automatic retries before giving up with `PEER_DISCONNECTED`
 > - ICE restart SDP relayed through the signaling server (data channel may be broken)
 > - `peerConnectionHealth` state tracks `stable` / `unstable` per peer
+
+---
+
+## Game Reconnect Flow
+
+When a peer disconnects mid-game (tab close, page refresh, network drop), the game transitions to `disconnected` phase. On reconnect, both peers load saved game state from the server and verify consistency before resuming.
+
+```mermaid
+sequenceDiagram
+    participant A as Alice
+    participant S as Signaling Server
+    participant B as Bob
+
+    Note over A, B: Game in progress (my-turn / their-turn)
+
+    B->>B: Disconnects (tab close / refresh)
+    A->>A: PEER_DISCONNECTED → game phase = disconnected
+
+    Note over A, B: Bob reconnects (same signaling ID via cookie)
+
+    B->>S: REGISTER {name: "Bob"}
+    S->>A: PEER_ONLINE {Bob}
+    A->>A: Bob appears in Previous peers (online)
+
+    Note over A, B: Alice clicks Reconnect
+
+    A->>S: RELAY_OFFER (server-mediated WebRTC)
+    S->>B: OFFER_RECEIVED
+    B->>S: RELAY_ANSWER
+    S->>A: ANSWER_RECEIVED
+    A->>B: Data channel established
+
+    Note over A, B: Both load saved game from server
+
+    A->>S: LOAD_P2P_GAME {opponentId: Bob}
+    S->>A: P2P_GAME_LOADED {gameState}
+    B->>S: LOAD_P2P_GAME {opponentId: Alice}
+    S->>B: P2P_GAME_LOADED {gameState}
+
+    Note over A, B: State sync over data channel
+
+    A->>B: GAME_STATE_SYNC {myShots, opponentShots, phase}
+    B->>A: GAME_STATE_SYNC {myShots, opponentShots, phase}
+
+    alt Shot counts match
+        A->>A: Game resumes at saved phase
+        B->>B: Game resumes at saved phase
+    else Shot counts differ
+        A->>A: Phase → state-mismatch
+        B->>B: Phase → state-mismatch
+    end
+```
+
+> **Key design decisions:**
+> - Game state auto-saved to server on turn transitions (`TURN_ORDER_DECIDED`, `P2P_FIRE_RESULT`, `OPPONENT_FIRED`, `P2P_GAME_OVER`)
+> - Server stores game keyed by sorted signaling-peer-ID pair (symmetrical lookup)
+> - `loadP2pGame` dispatched on every `PEER_CONNECTED` (server returns NOT_FOUND if no game — harmless)
+> - Signaling-to-local peer ID mapping resolves stale opponent IDs across reconnection
+> - `GAME_STATE_SYNC` sent once on game load (not echoed back) to avoid infinite loops
+> - Only server-mediated connections create signaling ID mappings; direct code-exchange connections cannot resume games
 
 ---
 

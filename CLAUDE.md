@@ -38,9 +38,9 @@ cd applications/web-client && npm run e2e:run -- e2e/acceptance.test.ts
 
 P2P Battleship game following [App Continuum](https://www.appcontinuum.io/) — organized by bounded context, not technical layer.
 
-**signaling-server** (Kotlin/Spring Boot) — local WebSocket relay for peer discovery, SDP exchange, email sharing. H2 database. Packaged as native installer via jpackage.
+**signaling-server** (Kotlin/Spring Boot) — local WebSocket relay for peer discovery, SDP exchange, email sharing, game state persistence. H2 database. Packaged as native installer via jpackage.
 
-**web-client** (React/Vite/TypeScript) — hosted on GitHub Pages. WebRTC P2P connections with signaling mediated through the server. Chat, trust, introductions over direct data channels.
+**web-client** (React/Vite/TypeScript) — hosted on GitHub Pages. WebRTC P2P connections with signaling mediated through the server. Chat, trust, introductions, and P2P Battleship gameplay over direct data channels. Games auto-save and resume after disconnection via state sync.
 
 **signaling-protocol** (Kotlin) — shared Result type (ROP) used by the backend.
 
