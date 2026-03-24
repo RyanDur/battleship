@@ -474,7 +474,6 @@ describe('coin flip turn selection', () => {
     const {alice, bob, connect} = makePair();
     await connect();
     const alicePeerIdOnBob = selectPeers(bob.getState())[0].id;
-    const bobPeerIdOnAlice = selectPeers(alice.getState())[0].id;
     bob.dispatch(challengePeer(alicePeerIdOnBob));
     await vi.waitFor(() => expect(selectP2pGame(alice.getState())?.phase).toBe('challenge-received'));
     alice.dispatch(acceptChallenge());
