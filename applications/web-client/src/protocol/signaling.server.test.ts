@@ -28,10 +28,9 @@ describe('startSignaling', () => {
   it('fetches session before connecting', async () => {
     let sessionFetched = false;
     const received: string[] = [];
-    let wsConn: WsConnection | undefined;
     const server = await createStubServer({
       routes: {'GET /session': (_req, res) => { sessionFetched = true; res.writeHead(200); res.end(); }},
-      ws: {'/ws/signaling': conn => { wsConn = conn; conn.onMessage(msg => received.push(msg)); }},
+      ws: {'/ws/signaling': conn => conn.onMessage(msg => received.push(msg))},
     });
     startSignaling({
       createWebSocket: makeWebSocket,
@@ -40,10 +39,11 @@ describe('startSignaling', () => {
       name: 'Alice',
     }, () => undefined);
 
-    await vi.waitFor(() => expect(wsConn).toBeDefined());
-    const registerMsg = received.map(m => JSON.parse(m) as {type: string}).find(m => m.type === 'REGISTER');
-    expect(sessionFetched).toBe(true);
-    expect(registerMsg).toMatchObject({type: 'REGISTER'});
+    await vi.waitFor(() => {
+      const registerMsg = received.map(m => JSON.parse(m) as {type: string}).find(m => m.type === 'REGISTER');
+      expect(sessionFetched).toBe(true);
+      expect(registerMsg).toMatchObject({type: 'REGISTER'});
+    });
     await server.close();
   });
 
