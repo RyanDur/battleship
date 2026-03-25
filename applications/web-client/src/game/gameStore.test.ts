@@ -1,0 +1,514 @@
+import {createGameStore} from './gameStore';
+import {
+  challengePeer, challengeReceived, acceptChallenge, declineChallenge, cancelChallenge,
+  p2pBoardReady, opponentBoardReady, turnOrderDecided,
+  p2pFireResult, opponentFired,
+  p2pGameOver, forfeitGame, opponentForfeited,
+  p2pStateMismatch, peerDisconnected, clearP2pGame, opponentBoardRevealed,
+  boardLoaded, boardNotFound, saveBoard,
+  gameStarted, fireResult, gameStateReceived, gameNotFound,
+  peerNamed, peerConnected,
+} from './gameActions';
+import {
+  selectP2pGame, selectBoard, selectBoardLoading, selectAiGameState,
+  selectAnnouncement, selectGameView, selectOpponentNames, selectOffererPeerIds,
+} from './gameSelectors';
+import type {Shot, AiGameState} from './game';
+import type {Board} from './board';
+
+const makeStore = () => createGameStore();
+
+describe('P2P game', () => {
+  describe('challenge flow', () => {
+    it('CHALLENGE_PEER sets phase to challenged', () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      expect(selectP2pGame(store.getState())).toMatchObject({phase: 'challenged', opponentId: 'peer-bob'});
+    });
+
+    it('CHALLENGE_RECEIVED sets phase to challenge-received', () => {
+      const store = makeStore();
+      store.dispatch(challengeReceived('peer-alice'));
+      expect(selectP2pGame(store.getState())).toMatchObject({phase: 'challenge-received', opponentId: 'peer-alice'});
+    });
+
+    it('ACCEPT_CHALLENGE transitions to placing', () => {
+      const store = makeStore();
+      store.dispatch(challengeReceived('peer-alice'));
+      store.dispatch(acceptChallenge());
+      expect(selectP2pGame(store.getState())?.phase).toBe('placing');
+    });
+
+    it('challenger transitions to placing on ACCEPT_CHALLENGE', () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(acceptChallenge());
+      expect(selectP2pGame(store.getState())?.phase).toBe('placing');
+    });
+
+    it('DECLINE_CHALLENGE clears p2pGame', () => {
+      const store = makeStore();
+      store.dispatch(challengeReceived('peer-alice'));
+      store.dispatch(declineChallenge());
+      expect(selectP2pGame(store.getState())).toBeNull();
+    });
+
+    it('CANCEL_CHALLENGE clears p2pGame', () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(cancelChallenge());
+      expect(selectP2pGame(store.getState())).toBeNull();
+    });
+  });
+
+  describe('board ready', () => {
+    const makePlacingStore = () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(acceptChallenge());
+      return store;
+    };
+
+    it('P2P_BOARD_READY marks my board ready with hash', () => {
+      const store = makePlacingStore();
+      store.dispatch(p2pBoardReady('abc123'));
+      expect(selectP2pGame(store.getState())).toMatchObject({myBoardReady: true, myBoardHash: 'abc123'});
+    });
+
+    it('OPPONENT_BOARD_READY marks opponent board ready with hash', () => {
+      const store = makePlacingStore();
+      store.dispatch(opponentBoardReady('def456'));
+      expect(selectP2pGame(store.getState())).toMatchObject({opponentBoardReady: true, opponentBoardHash: 'def456'});
+    });
+
+    it('phase stays placing when only my board is ready', () => {
+      const store = makePlacingStore();
+      store.dispatch(p2pBoardReady('abc123'));
+      expect(selectP2pGame(store.getState())?.phase).toBe('placing');
+    });
+
+    it('phase transitions to selecting-turn when both boards are ready', () => {
+      const store = makePlacingStore();
+      store.dispatch(p2pBoardReady('abc123'));
+      store.dispatch(opponentBoardReady('def456'));
+      expect(selectP2pGame(store.getState())?.phase).toBe('selecting-turn');
+    });
+
+    it('also transitions when opponent ready arrives first', () => {
+      const store = makePlacingStore();
+      store.dispatch(opponentBoardReady('def456'));
+      store.dispatch(p2pBoardReady('abc123'));
+      expect(selectP2pGame(store.getState())?.phase).toBe('selecting-turn');
+    });
+  });
+
+  describe('turn selection', () => {
+    const makeSelectingStore = () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(acceptChallenge());
+      store.dispatch(p2pBoardReady('abc123'));
+      store.dispatch(opponentBoardReady('def456'));
+      return store;
+    };
+
+    it('TURN_ORDER_DECIDED with iGoFirst=true sets my-turn', () => {
+      const store = makeSelectingStore();
+      store.dispatch(turnOrderDecided(true));
+      expect(selectP2pGame(store.getState())?.phase).toBe('my-turn');
+    });
+
+    it('TURN_ORDER_DECIDED with iGoFirst=false sets their-turn', () => {
+      const store = makeSelectingStore();
+      store.dispatch(turnOrderDecided(false));
+      expect(selectP2pGame(store.getState())?.phase).toBe('their-turn');
+    });
+  });
+
+  describe('gameplay', () => {
+    const makeMyTurnStore = () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(acceptChallenge());
+      store.dispatch(p2pBoardReady('abc123'));
+      store.dispatch(opponentBoardReady('def456'));
+      store.dispatch(turnOrderDecided(true));
+      return store;
+    };
+
+    const makeTheirTurnStore = () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(acceptChallenge());
+      store.dispatch(p2pBoardReady('abc123'));
+      store.dispatch(opponentBoardReady('def456'));
+      store.dispatch(turnOrderDecided(false));
+      return store;
+    };
+
+    const shot: Shot = {cell: {row: 1, col: 1}, result: 'miss'};
+
+    it('P2P_FIRE_RESULT adds shot to myShots and transitions to their-turn', () => {
+      const store = makeMyTurnStore();
+      store.dispatch(p2pFireResult(shot));
+      expect(selectP2pGame(store.getState())?.myShots).toEqual([shot]);
+      expect(selectP2pGame(store.getState())?.phase).toBe('their-turn');
+    });
+
+    it('OPPONENT_FIRED adds shot to opponentShots and transitions to my-turn', () => {
+      const store = makeTheirTurnStore();
+      const incomingShot: Shot = {cell: {row: 2, col: 3}, result: 'hit'};
+      store.dispatch(opponentFired(incomingShot));
+      expect(selectP2pGame(store.getState())?.opponentShots).toEqual([incomingShot]);
+      expect(selectP2pGame(store.getState())?.phase).toBe('my-turn');
+    });
+  });
+
+  describe('game over', () => {
+    const makeInProgressStore = () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(acceptChallenge());
+      store.dispatch(p2pBoardReady('abc123'));
+      store.dispatch(opponentBoardReady('def456'));
+      store.dispatch(turnOrderDecided(true));
+      return store;
+    };
+
+    it('P2P_GAME_OVER sets phase to game-over with winner', () => {
+      const store = makeInProgressStore();
+      store.dispatch(p2pGameOver('me'));
+      expect(selectP2pGame(store.getState())).toMatchObject({phase: 'game-over', winner: 'me'});
+    });
+
+    it('FORFEIT_GAME sets opponent as winner', () => {
+      const store = makeInProgressStore();
+      store.dispatch(forfeitGame());
+      expect(selectP2pGame(store.getState())).toMatchObject({phase: 'game-over', winner: 'opponent'});
+    });
+
+    it('OPPONENT_FORFEITED sets me as winner', () => {
+      const store = makeInProgressStore();
+      store.dispatch(opponentForfeited());
+      expect(selectP2pGame(store.getState())).toMatchObject({phase: 'game-over', winner: 'me'});
+    });
+  });
+
+  describe('clearing game', () => {
+    it('CLEAR_P2P_GAME resets p2pGame to null from game-over', () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(acceptChallenge());
+      store.dispatch(p2pBoardReady('abc123'));
+      store.dispatch(opponentBoardReady('def456'));
+      store.dispatch(turnOrderDecided(true));
+      store.dispatch(p2pGameOver('me'));
+      store.dispatch(clearP2pGame());
+      expect(selectP2pGame(store.getState())).toBeNull();
+    });
+
+    it('CLEAR_P2P_GAME resets p2pGame to null from disconnected', () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(acceptChallenge());
+      store.dispatch(p2pBoardReady('abc123'));
+      store.dispatch(opponentBoardReady('def456'));
+      store.dispatch(turnOrderDecided(true));
+      store.dispatch(peerDisconnected('peer-bob'));
+      store.dispatch(clearP2pGame());
+      expect(selectP2pGame(store.getState())).toBeNull();
+    });
+  });
+
+  describe('disconnect', () => {
+    const makeInProgressStore = () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-bob'));
+      store.dispatch(acceptChallenge());
+      store.dispatch(p2pBoardReady('abc123'));
+      store.dispatch(opponentBoardReady('def456'));
+      store.dispatch(turnOrderDecided(true));
+      return store;
+    };
+
+    it('PEER_DISCONNECTED transitions to disconnected when opponent disconnects', () => {
+      const store = makeInProgressStore();
+      store.dispatch(peerDisconnected('peer-bob'));
+      expect(selectP2pGame(store.getState())?.phase).toBe('disconnected');
+    });
+
+    it('PEER_DISCONNECTED does not affect game when unrelated peer disconnects', () => {
+      const store = makeInProgressStore();
+      store.dispatch(peerDisconnected('other-peer'));
+      expect(selectP2pGame(store.getState())?.phase).toBe('my-turn');
+    });
+
+    it('P2P_STATE_MISMATCH sets phase to state-mismatch', () => {
+      const store = makeInProgressStore();
+      store.dispatch(p2pStateMismatch());
+      expect(selectP2pGame(store.getState())?.phase).toBe('state-mismatch');
+    });
+
+    it('OPPONENT_BOARD_REVEALED while game is in progress is ignored', () => {
+      const store = makeInProgressStore();
+      store.dispatch(opponentBoardRevealed({placed: []}, true));
+      expect(selectP2pGame(store.getState())?.opponentBoard).toBeNull();
+    });
+  });
+});
+
+describe('board', () => {
+  it('LOAD_BOARD sets boardLoading to true', () => {
+    const store = makeStore();
+    store.dispatch({type: 'LOAD_BOARD'});
+    expect(selectBoardLoading(store.getState())).toBe(true);
+  });
+
+  it('BOARD_LOADED sets board and clears loading', () => {
+    const store = makeStore();
+    const board: Board = {placed: []};
+    store.dispatch({type: 'LOAD_BOARD'});
+    store.dispatch(boardLoaded(board));
+    expect(selectBoard(store.getState())).toEqual(board);
+    expect(selectBoardLoading(store.getState())).toBe(false);
+  });
+
+  it('BOARD_NOT_FOUND clears board and loading', () => {
+    const store = makeStore();
+    store.dispatch({type: 'LOAD_BOARD'});
+    store.dispatch(boardNotFound());
+    expect(selectBoard(store.getState())).toBeNull();
+    expect(selectBoardLoading(store.getState())).toBe(false);
+  });
+
+  it('SAVE_BOARD stores the board', () => {
+    const store = makeStore();
+    const board: Board = {placed: []};
+    store.dispatch(saveBoard(board));
+    expect(selectBoard(store.getState())).toEqual(board);
+  });
+});
+
+describe('AI game', () => {
+  const aiGame: AiGameState = {
+    playerShots: [],
+    aiShots: [],
+    phase: 'player-turn',
+    announcement: '',
+  };
+
+  it('GAME_STARTED sets AI game state', () => {
+    const store = makeStore();
+    store.dispatch(gameStarted(aiGame));
+    expect(selectAiGameState(store.getState())).toEqual(aiGame);
+  });
+
+  it('GAME_STATE sets AI game state', () => {
+    const store = makeStore();
+    store.dispatch(gameStateReceived(aiGame));
+    expect(selectAiGameState(store.getState())).toEqual(aiGame);
+  });
+
+  it('GAME_NOT_FOUND clears AI game state', () => {
+    const store = makeStore();
+    store.dispatch(gameStarted(aiGame));
+    store.dispatch(gameNotFound());
+    expect(selectAiGameState(store.getState())).toBeNull();
+  });
+
+  it('FIRE_RESULT adds playerShot and updates phase', () => {
+    const store = makeStore();
+    store.dispatch(gameStarted(aiGame));
+    const playerShot: Shot = {cell: {row: 0, col: 0}, result: 'miss'};
+    store.dispatch(fireResult(playerShot, null, 'computer-turn'));
+    const state = selectAiGameState(store.getState());
+    expect(state?.playerShots).toEqual([playerShot]);
+    expect(state?.phase).toBe('computer-turn');
+  });
+
+  it('FIRE_RESULT adds both player and AI shots', () => {
+    const store = makeStore();
+    store.dispatch(gameStarted(aiGame));
+    const playerShot: Shot = {cell: {row: 0, col: 0}, result: 'miss'};
+    const aiShot: Shot = {cell: {row: 3, col: 4}, result: 'hit'};
+    store.dispatch(fireResult(playerShot, aiShot, 'player-turn'));
+    const state = selectAiGameState(store.getState());
+    expect(state?.playerShots).toEqual([playerShot]);
+    expect(state?.aiShots).toEqual([aiShot]);
+  });
+
+  it('FIRE_RESULT sets announcement when ship is sunk', () => {
+    const store = makeStore();
+    store.dispatch(gameStarted(aiGame));
+    const sunkShot: Shot = {cell: {row: 0, col: 0}, result: 'sunk', ship: {name: 'Destroyer', size: 2}};
+    store.dispatch(fireResult(sunkShot, null, 'computer-turn'));
+    expect(selectAiGameState(store.getState())?.announcement).toBe('Destroyer sunk!');
+  });
+
+  it('FIRE_RESULT does nothing when no game state', () => {
+    const store = makeStore();
+    const playerShot: Shot = {cell: {row: 0, col: 0}, result: 'miss'};
+    store.dispatch(fireResult(playerShot, null, 'computer-turn'));
+    expect(selectAiGameState(store.getState())).toBeNull();
+  });
+});
+
+describe('peer tracking', () => {
+  it('PEER_NAMED records opponent name', () => {
+    const store = makeStore();
+    store.dispatch(peerNamed('peer-bob', 'Bob'));
+    expect(selectOpponentNames(store.getState())).toEqual({'peer-bob': 'Bob'});
+  });
+
+  it('PEER_CONNECTED as offerer records peer id', () => {
+    const store = makeStore();
+    store.dispatch(peerConnected('peer-bob', true));
+    expect(selectOffererPeerIds(store.getState())).toContain('peer-bob');
+  });
+
+  it('PEER_CONNECTED as non-offerer does not record peer id', () => {
+    const store = makeStore();
+    store.dispatch(peerConnected('peer-bob', false));
+    expect(selectOffererPeerIds(store.getState())).not.toContain('peer-bob');
+  });
+});
+
+describe('selectAnnouncement', () => {
+  it('returns empty string when no game', () => {
+    const store = makeStore();
+    expect(selectAnnouncement(store.getState())).toBe('');
+  });
+
+  it('returns AI game announcement when in AI game', () => {
+    const store = makeStore();
+    const aiGame: AiGameState = {playerShots: [], aiShots: [], phase: 'player-turn', announcement: 'Destroyer sunk!'};
+    store.dispatch(gameStarted(aiGame));
+    expect(selectAnnouncement(store.getState())).toBe('Destroyer sunk!');
+  });
+
+  it('returns p2p game announcement when in p2p game', () => {
+    const store = makeStore();
+    store.dispatch(challengePeer('peer-bob'));
+    store.dispatch(acceptChallenge());
+    store.dispatch(p2pBoardReady('abc123'));
+    store.dispatch(opponentBoardReady('def456'));
+    store.dispatch(turnOrderDecided(true));
+    const sunkShot: Shot = {cell: {row: 0, col: 0}, result: 'sunk', ship: {name: 'Carrier', size: 5}};
+    store.dispatch(p2pFireResult(sunkShot));
+    expect(selectAnnouncement(store.getState())).toBe('Carrier sunk!');
+  });
+});
+
+describe('selectGameView', () => {
+  it('returns null when no game', () => {
+    const store = makeStore();
+    expect(selectGameView(store.getState())).toBeNull();
+  });
+
+  it('returns AI game view with my-turn phase', () => {
+    const store = makeStore();
+    const aiGame: AiGameState = {playerShots: [], aiShots: [], phase: 'player-turn', announcement: ''};
+    store.dispatch(gameStarted(aiGame));
+    const view = selectGameView(store.getState());
+    expect(view).toMatchObject({phase: 'my-turn', opponentName: 'Computer'});
+  });
+
+  it('returns AI game view with their-turn phase', () => {
+    const store = makeStore();
+    const aiGame: AiGameState = {playerShots: [], aiShots: [], phase: 'computer-turn', announcement: ''};
+    store.dispatch(gameStarted(aiGame));
+    const view = selectGameView(store.getState());
+    expect(view?.phase).toBe('their-turn');
+  });
+
+  it('returns AI game view with won phase on player-won', () => {
+    const store = makeStore();
+    const aiGame: AiGameState = {playerShots: [], aiShots: [], phase: 'player-won', announcement: ''};
+    store.dispatch(gameStarted(aiGame));
+    expect(selectGameView(store.getState())?.phase).toBe('won');
+  });
+
+  it('returns AI game view with lost phase on computer-won', () => {
+    const store = makeStore();
+    const aiGame: AiGameState = {playerShots: [], aiShots: [], phase: 'computer-won', announcement: ''};
+    store.dispatch(gameStarted(aiGame));
+    expect(selectGameView(store.getState())?.phase).toBe('lost');
+  });
+
+  it('returns null for p2p game when not in active phase', () => {
+    const store = makeStore();
+    store.dispatch(challengePeer('peer-bob'));
+    expect(selectGameView(store.getState())).toBeNull();
+  });
+
+  it('returns p2p game view with opponent name from opponentNames', () => {
+    const store = makeStore();
+    store.dispatch(peerNamed('peer-bob', 'Bob'));
+    store.dispatch(challengePeer('peer-bob'));
+    store.dispatch(acceptChallenge());
+    store.dispatch(p2pBoardReady('abc123'));
+    store.dispatch(opponentBoardReady('def456'));
+    store.dispatch(turnOrderDecided(true));
+    const view = selectGameView(store.getState());
+    expect(view?.opponentName).toBe('Bob');
+  });
+
+  it('returns p2p game view with Opponent fallback when name unknown', () => {
+    const store = makeStore();
+    store.dispatch(challengePeer('peer-bob'));
+    store.dispatch(acceptChallenge());
+    store.dispatch(p2pBoardReady('abc123'));
+    store.dispatch(opponentBoardReady('def456'));
+    store.dispatch(turnOrderDecided(true));
+    const view = selectGameView(store.getState());
+    expect(view?.opponentName).toBe('Opponent');
+  });
+
+  it('returns p2p game view with won phase', () => {
+    const store = makeStore();
+    store.dispatch(challengePeer('peer-bob'));
+    store.dispatch(acceptChallenge());
+    store.dispatch(p2pBoardReady('abc123'));
+    store.dispatch(opponentBoardReady('def456'));
+    store.dispatch(turnOrderDecided(true));
+    store.dispatch(p2pGameOver('me'));
+    const view = selectGameView(store.getState());
+    expect(view?.phase).toBe('won');
+  });
+
+  it('returns p2p game view with lost phase', () => {
+    const store = makeStore();
+    store.dispatch(challengePeer('peer-bob'));
+    store.dispatch(acceptChallenge());
+    store.dispatch(p2pBoardReady('abc123'));
+    store.dispatch(opponentBoardReady('def456'));
+    store.dispatch(turnOrderDecided(true));
+    store.dispatch(p2pGameOver('opponent'));
+    const view = selectGameView(store.getState());
+    expect(view?.phase).toBe('lost');
+  });
+
+  it('returns p2p game view with disconnected phase', () => {
+    const store = makeStore();
+    store.dispatch(challengePeer('peer-bob'));
+    store.dispatch(acceptChallenge());
+    store.dispatch(p2pBoardReady('abc123'));
+    store.dispatch(opponentBoardReady('def456'));
+    store.dispatch(turnOrderDecided(true));
+    store.dispatch(peerDisconnected('peer-bob'));
+    const view = selectGameView(store.getState());
+    expect(view?.phase).toBe('disconnected');
+  });
+
+  it('returns p2p game view with state-mismatch phase', () => {
+    const store = makeStore();
+    store.dispatch(challengePeer('peer-bob'));
+    store.dispatch(acceptChallenge());
+    store.dispatch(p2pBoardReady('abc123'));
+    store.dispatch(opponentBoardReady('def456'));
+    store.dispatch(turnOrderDecided(true));
+    store.dispatch(p2pStateMismatch());
+    const view = selectGameView(store.getState());
+    expect(view?.phase).toBe('state-mismatch');
+  });
+});
