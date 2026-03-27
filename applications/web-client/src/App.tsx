@@ -13,11 +13,12 @@ import type {HeartbeatState} from './protocol/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
 import {detectPlatform} from './protocol/platform';
 import {createConnectionStore, createHandlerListener, createSignalingListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './state/connectionStore';
-import {startSignaling, stopSignaling, saveBoard, startGame, clearP2pGame} from './state/connectionActions';
+import {startSignaling, stopSignaling, saveBoard, startGame, clearP2pGame, sendToPeer} from './state/connectionActions';
 import {ConnectionProvider} from './state/ConnectionProvider';
 import {useConnectionState, useConnectionStore} from './state/useConnection';
 import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './state/connectionSelectors';
 import {createGameStore} from './game/gameStore';
+import {initialGameState} from './game/game';
 import {GameProvider} from './game/GameProvider';
 import {createConnectionPort} from './connections/connectionPort';
 
@@ -53,24 +54,29 @@ const App = ({config}: Props) => {
   const [selectedPeer, setSelectedPeer] = useState<SelectedPeer>(null);
   const {state: heartbeat, retry} = useHeartbeat(config);
 
-  const store = useMemo(() => {
+  const {store, gameStore} = useMemo(() => {
     const signalingUrl = `${config.serviceUrl.replace(/^http/, 'ws')}/ws/signaling`;
-    return createConnectionStore(
+    let gs: ReturnType<typeof createGameStore> | null = null;
+    const {port, emit: portEmit} = createConnectionPort({
+      sendToPeer: (peerId, message) => connectionStore.dispatch(sendToPeer(peerId, message as Record<string, unknown>)),
+      sendToServer: () => {},
+    });
+    const connectionStore = createConnectionStore(
       applyMiddleware([encodingMiddleware, codecMiddleware]),
       [
-        createHandlerListener({name: 'Player', createPeerConnection: () => new RTCPeerConnection({iceServers: [{urls: 'stun:stun.l.google.com:19302'}]})}),
+        createHandlerListener({
+          name: 'Player',
+          createPeerConnection: () => new RTCPeerConnection({iceServers: [{urls: 'stun:stun.l.google.com:19302'}]}),
+          portEmit,
+          getGameState: () => gs?.getState() ?? initialGameState,
+          dispatchToGame: (action) => gs?.dispatch(action),
+        }),
         createSignalingListener({config: {createWebSocket: (url) => new WebSocket(url), sessionUrl: `${config.serviceUrl}/session`, url: signalingUrl, name: 'Player'}}),
       ],
     );
+    gs = createGameStore({port});
+    return {store: connectionStore, gameStore: gs};
   }, [config]);
-
-  const gameStore = useMemo(() => {
-    const {port} = createConnectionPort({
-      sendToPeer: () => {},
-      sendToServer: () => {},
-    });
-    return createGameStore({port});
-  }, []);
 
   useEffect(() => {
     store.dispatch(startSignaling());

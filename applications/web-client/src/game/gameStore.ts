@@ -1,6 +1,8 @@
 import {gameReducer, initialGameState} from './game';
 import type {GameState, GameAction} from './game';
 import type {ConnectionPort} from '../connections/connectionPort';
+import {createGameMessageHandler} from './gameMessageHandler';
+import {selectBoard, selectP2pGame, selectOffererPeerIds} from './gameSelectors';
 
 export type GameListenerContext = {
   prevState: GameState
@@ -56,6 +58,17 @@ export const createGameStore = (config?: GameStoreConfig): GameStore => {
 
   const listenerDeps: ListenerFactoryDeps = {dispatch: (action) => store.dispatch(action), getState: () => state, port: config?.port};
   config?.listenerFactories?.forEach(factory => store.addListener(factory(listenerDeps)));
+
+  if (config?.port) {
+    const gameMessageHandler = createGameMessageHandler({
+      dispatch: (action) => store.dispatch(action),
+      getP2pGame: () => selectP2pGame(state),
+      getBoard: () => selectBoard(state),
+      getOffererPeerIds: () => selectOffererPeerIds(state),
+      sendToPeer: config.port.sendToPeer,
+    });
+    config.port.subscribe(gameMessageHandler);
+  }
 
   return store;
 };

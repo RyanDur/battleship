@@ -1,15 +1,13 @@
 import * as Decoder from 'schemawax';
-import { maybe } from '../lib/maybe';
+import { maybe, nothing } from '../lib/maybe';
 import { tryCatch } from '../lib/result';
 import { asyncResult, asyncTryCatch } from '../lib/asyncResult';
 import type { PeerCommand, PeerEvent } from '../types/worker-messages';
-import type { ConnectionsState, ConnectionsAction, Shot } from '../state/connections';
-import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer, selectP2pGame, selectBoard} from '../state/connectionSelectors';
-import {challengeReceived, acceptChallenge, declineChallenge, cancelChallenge, opponentBoardReady, turnOrderDecided, p2pFireResult, opponentFired, p2pGameOver, opponentForfeited, p2pStateMismatch, p2pStateSync, opponentBoardRevealed} from '../state/connectionActions';
-import {hashBoard, hashValue} from '../game/hashBoard';
-import type {Board} from '../game/board';
-import {occupiedCells, isCellOccupied} from '../game/board';
-import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed} from '../state/connectionActions';
+import type { ConnectionsState, ConnectionsAction } from '../state/connections';
+import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer} from '../state/connectionSelectors';
+import {hashValue} from '../game/hashBoard';
+import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed, turnOrderDecided} from '../state/connectionActions';
+import type {ConnectionEvent} from '../connections/connectionPort';
 
 const introduceDecoder = Decoder.object({
   required: { type: Decoder.literal('INTRODUCE'), name: Decoder.string },
@@ -59,70 +57,13 @@ const chatDecoder = Decoder.object({
   required: { type: Decoder.literal('CHAT'), text: Decoder.string },
 });
 
-const gameChallengeDecoder = Decoder.object({required: {type: Decoder.literal('GAME_CHALLENGE')}});
-const gameAcceptDecoder = Decoder.object({required: {type: Decoder.literal('GAME_ACCEPT')}});
-const gameDeclineDecoder = Decoder.object({required: {type: Decoder.literal('GAME_DECLINE')}});
-const gameCancelDecoder = Decoder.object({required: {type: Decoder.literal('GAME_CANCEL')}});
-const boardReadyDecoder = Decoder.object({required: {type: Decoder.literal('BOARD_READY'), boardHash: Decoder.string}});
-const gameFirstTurnDecoder = Decoder.object({required: {type: Decoder.literal('GAME_FIRST_TURN')}});
 const coinFlipCommitDecoder = Decoder.object({required: {type: Decoder.literal('COIN_FLIP_COMMIT'), hash: Decoder.string}});
 const coinFlipRevealDecoder = Decoder.object({required: {type: Decoder.literal('COIN_FLIP_REVEAL'), value: Decoder.number}});
-const p2pFireDecoder = Decoder.object({required: {type: Decoder.literal('FIRE'), row: Decoder.number, col: Decoder.number}});
-const p2pCellDecoder = Decoder.object({required: {row: Decoder.number, col: Decoder.number}});
-const p2pShipInfoDecoder = Decoder.object({required: {name: Decoder.string, size: Decoder.number}});
-const shotResultDecoder = Decoder.oneOf(Decoder.literal('hit'), Decoder.literal('miss'), Decoder.literal('sunk'));
-const p2pFireResultDecoder = Decoder.object({
-  required: {type: Decoder.literal('FIRE_RESULT'), row: Decoder.number, col: Decoder.number, result: shotResultDecoder},
-  optional: {ship: p2pShipInfoDecoder},
-});
-const gameForfeitDecoder = Decoder.object({required: {type: Decoder.literal('GAME_FORFEIT')}});
-const p2pOrientationDecoder = Decoder.oneOf(Decoder.literal('horizontal'), Decoder.literal('vertical'));
-const p2pPlacedShipDecoder = Decoder.object({
-  required: {
-    ship: Decoder.object({required: {name: Decoder.string, size: Decoder.number}}),
-    position: Decoder.object({required: {row: Decoder.number, col: Decoder.number}}),
-    orientation: p2pOrientationDecoder,
-  },
-});
-const gameOverDecoder = Decoder.object({
-  required: {
-    type: Decoder.literal('GAME_OVER'),
-    board: Decoder.object({required: {placed: Decoder.array(p2pPlacedShipDecoder)}}),
-  },
-});
-const p2pShotDecoder = Decoder.object({
-  required: {cell: p2pCellDecoder, result: shotResultDecoder},
-  optional: {ship: p2pShipInfoDecoder},
-});
-const gameStateSyncDecoder = Decoder.object({
-  required: {
-    type: Decoder.literal('GAME_STATE_SYNC'),
-    phase: Decoder.string,
-    myShots: Decoder.array(p2pShotDecoder),
-    opponentShots: Decoder.array(p2pShotDecoder),
-  },
-});
-
-const TOTAL_SHIPS = 5;
-const isFleetSunk = (shots: Shot[]): boolean =>
-  new Set(shots.filter(s => s.result === 'sunk' && s.ship).map(s => s.ship!.name)).size >= TOTAL_SHIPS;
-
-const resolveP2pShot = (board: NonNullable<ReturnType<typeof selectBoard>>, prevShots: Shot[], cell: {row: number; col: number}): Shot => {
-  const hit = isCellOccupied(board, cell);
-  if (!hit) return {cell, result: 'miss'};
-  const placedShip = board.placed.find(p => occupiedCells(p).some(c => c.row === cell.row && c.col === cell.col));
-  if (!placedShip) return {cell, result: 'hit'};
-  const allCells = occupiedCells(placedShip);
-  const hitCells = [...prevShots.map(s => s.cell), cell];
-  const isSunk = allCells.every(c => hitCells.some(h => h.row === c.row && h.col === c.col));
-  return isSunk
-    ? {cell, result: 'sunk', ship: {name: placedShip.ship.name, size: placedShip.ship.size}}
-    : {cell, result: 'hit'};
-};
 
 type Deps = {
   name: string
   emit: (event: PeerEvent) => void
+  emitToPort: (event: ConnectionEvent) => void
   createPeerConnection: () => RTCPeerConnection
   getState: () => ConnectionsState
   dispatch: (action: ConnectionsAction) => void
@@ -405,34 +346,6 @@ export const createPeerHandler = (deps: Deps): Handler => {
           .map(msg => cleanupIntro(msg.introId, 'INTRODUCTION_EXPIRED')))
         .or(() => maybe(chatDecoder.decode(parsed))
           .map(msg => deps.emit({ type: 'MESSAGE_RECEIVED', peerId, text: msg.text })))
-        .or(() => maybe(gameChallengeDecoder.decode(parsed))
-          .map(() => {
-            const game = selectP2pGame(deps.getState());
-            if (game) {
-              dataChannels.get(peerId)?.send(JSON.stringify({type: 'GAME_DECLINE', reason: 'busy'}));
-            } else {
-              deps.dispatch(challengeReceived(peerId));
-            }
-          }))
-        .or(() => maybe(gameAcceptDecoder.decode(parsed))
-          .map(() => deps.dispatch(acceptChallenge())))
-        .or(() => maybe(gameDeclineDecoder.decode(parsed))
-          .map(() => deps.dispatch(declineChallenge())))
-        .or(() => maybe(gameCancelDecoder.decode(parsed))
-          .map(() => deps.dispatch(cancelChallenge())))
-        .or(() => maybe(boardReadyDecoder.decode(parsed))
-          .map(msg => deps.dispatch(opponentBoardReady(msg.boardHash))))
-        .or(() => maybe(gameFirstTurnDecoder.decode(parsed))
-          .map(() => {
-            const game = selectP2pGame(deps.getState());
-            if (!game) return;
-            if (game.phase === 'selecting-turn') {
-              deps.dispatch(turnOrderDecided(false));
-            } else if (game.phase === 'my-turn') {
-              // Both claimed first simultaneously — offerer yields to answerer
-              if (localOffererPeerIds.has(peerId)) deps.dispatch(turnOrderDecided(false));
-            }
-          }))
         .or(() => maybe(coinFlipCommitDecoder.decode(parsed))
           .map(msg => {
             const existing = pendingCoinFlips.get(peerId);
@@ -482,64 +395,10 @@ export const createPeerHandler = (deps: Deps): Handler => {
               resolveTurn(msg.value);
             }
           }))
-        .or(() => maybe(p2pFireDecoder.decode(parsed))
-          .map(msg => {
-            const game = selectP2pGame(deps.getState());
-            const board = selectBoard(deps.getState());
-            if (!game || !board) return;
-            if (game.phase !== 'their-turn') return;
-            if (game.opponentShots.some(s => s.cell.row === msg.row && s.cell.col === msg.col)) return;
-            const shot = resolveP2pShot(board, game.opponentShots, {row: msg.row, col: msg.col});
-            deps.dispatch(opponentFired(shot));
-            dataChannels.get(peerId)?.send(JSON.stringify({
-              type: 'FIRE_RESULT', row: msg.row, col: msg.col, result: shot.result,
-              ...(shot.ship ? {ship: shot.ship} : {}),
-            }));
-            const updatedOpponentShots = [...game.opponentShots, shot];
-            if (isFleetSunk(updatedOpponentShots)) {
-              deps.dispatch(p2pGameOver('opponent'));
-              dataChannels.get(peerId)?.send(JSON.stringify({type: 'GAME_OVER', board}));
-            }
-          }))
-        .or(() => maybe(p2pFireResultDecoder.decode(parsed))
-          .map(msg => {
-            const shot: Shot = {
-              cell: {row: msg.row, col: msg.col},
-              result: msg.result,
-              ...(msg.ship ? {ship: msg.ship} : {}),
-            };
-            deps.dispatch(p2pFireResult(shot));
-            const game = selectP2pGame(deps.getState());
-            if (game && isFleetSunk(game.myShots)) {
-              deps.dispatch(p2pGameOver('me'));
-            }
-          }))
-        .or(() => maybe(gameForfeitDecoder.decode(parsed))
-          .map(() => deps.dispatch(opponentForfeited())))
-        .or(() => maybe(gameOverDecoder.decode(parsed))
-          .map(msg => {
-            const game = selectP2pGame(deps.getState());
-            if (!game || game.winner !== 'me') return;
-            const board = msg.board as Board;
-            hashBoard(board)
-              .onSuccess(hash => deps.dispatch(opponentBoardRevealed(board, hash === game.opponentBoardHash)))
-              .onFailure(() => deps.dispatch(opponentBoardRevealed(board, false)));
-          }))
-        .or(() => maybe(gameStateSyncDecoder.decode(parsed))
-          .map(msg => {
-            const game = selectP2pGame(deps.getState());
-            if (!game) return;
-            const myShots = msg.myShots as Shot[];
-            const opponentShots = msg.opponentShots as Shot[];
-            const shotsMatch =
-              myShots.length === game.opponentShots.length &&
-              opponentShots.length === game.myShots.length;
-            if (shotsMatch) {
-              deps.dispatch(p2pStateSync(game.opponentId, game.myShots, game.opponentShots, game.phase));
-            } else {
-              deps.dispatch(p2pStateMismatch());
-            }
-          }));
+        .or(() => {
+          deps.emitToPort({type: 'PEER_MESSAGE', peerId, data: parsed});
+          return nothing();
+        });
     },
   };
 

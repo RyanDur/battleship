@@ -143,6 +143,7 @@ export type ConnectionsAction =
   | {type: 'P2P_STATE_MISMATCH'}
   | {type: 'CLEAR_P2P_GAME'}
   | {type: 'OPPONENT_BOARD_REVEALED'; board: Board; verified: boolean}
+  | {type: 'SEND_TO_PEER'; peerId: string; message: Record<string, unknown>}
 
 const handlerInitialState: HandlerState = {
   signalingToPeer: {},
