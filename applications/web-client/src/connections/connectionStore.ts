@@ -6,7 +6,7 @@ import {tryCatch} from '../lib/result';
 import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling, selectSignalingToPeer, selectP2pGame as selectP2pGameFromConnections} from './connectionSelectors';
 import {selectP2pGame as selectGameStoreP2pGame} from '../game/gameSelectors';
 import type {GameState, GameAction} from '../game/game';
-import {acceptChallenge as gameAcceptChallenge, declineChallenge as gameDeclineChallenge, cancelChallenge as gameCancelChallenge, challengePeer as gameChallengePeer, turnOrderDecided as gameTurnOrderDecided, p2pBoardReady as gameP2pBoardReady, peerDisconnected as gamePeerDisconnected, saveBoard as gameSaveBoard, startGame as gameStartGame, clearP2pGame as gameClearP2pGame} from '../game/gameActions';
+import {acceptChallenge as gameAcceptChallenge, declineChallenge as gameDeclineChallenge, cancelChallenge as gameCancelChallenge, challengePeer as gameChallengePeer, turnOrderDecided as gameTurnOrderDecided, p2pBoardReady as gameP2pBoardReady, peerDisconnected as gamePeerDisconnected, saveBoard as gameSaveBoard, startGame as gameStartGame, clearP2pGame as gameClearP2pGame, forfeitGame as gameForfeitGame} from '../game/gameActions';
 import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, p2pGameLoaded, saveP2pGame, loadP2pGame, turnOrderDecided} from './connectionActions';
 import type {PeerEvent} from './connectionHandler';
 import {encodeConnectionCode, decodeConnectionCode} from './connectionCode';
@@ -210,7 +210,10 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit, get
             send({type: 'FIRE', row: action.row, col: action.col});
           }
         }
-        else if (action.type === 'FORFEIT_GAME') send({type: 'GAME_FORFEIT'});
+        else if (action.type === 'FORFEIT_GAME') {
+          send({type: 'GAME_FORFEIT'});
+          dispatchToGame?.(gameForfeitGame());
+        }
         else if (action.type === 'TURN_ORDER_DECIDED') {
           dispatchToGame?.(gameTurnOrderDecided(action.iGoFirst));
           if (getGame()) dispatch(saveP2pGame());
