@@ -2,14 +2,20 @@ import {useState} from 'react';
 import {useConnectionState, useConnectionStore} from './useConnection';
 import type {Peer, PreviousPeer} from './connections';
 import {selectPeers, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth} from './connectionSelectors';
-import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, connectViaServer} from './connectionActions';
+import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, connectViaServer, challengePeer, cancelChallenge} from './connectionActions';
+import {useOptionalGameState} from '../game/useGame';
+import {selectP2pGame} from '../game/gameSelectors';
 
 type SelectPeer = (id: string, name: string | null) => void;
 
 const PeerCard = ({peer, otherTrustingPeers, unstable, onSelect}: {peer: Peer; otherTrustingPeers: Peer[]; unstable: boolean; onSelect?: SelectPeer}) => {
   const store = useConnectionStore();
+  const p2pGame = useOptionalGameState(selectP2pGame);
   const [introducing, setIntroducing] = useState(false);
   const showIntroduceButton = peer.trustsMe && otherTrustingPeers.length > 0;
+
+  const isChallenging = p2pGame?.phase === 'challenged' && p2pGame.opponentId === peer.id;
+  const showChallenge = !p2pGame || (p2pGame.opponentId !== peer.id && p2pGame.phase !== 'challenge-received');
 
   return (
     <article className="fleet-peer-card">
@@ -17,6 +23,15 @@ const PeerCard = ({peer, otherTrustingPeers, unstable, onSelect}: {peer: Peer; o
       {unstable && <small className="fleet-peer-health">Reconnecting...</small>}
       {peer.trustsMe && (
         <abbr className="fleet-peer-trust" aria-label="Trusts you to introduce them">★</abbr>
+      )}
+      {isChallenging && (
+        <>
+          <button className="control" disabled>Waiting...</button>
+          <button className="control" onClick={() => store.dispatch(cancelChallenge())}>Cancel</button>
+        </>
+      )}
+      {!isChallenging && showChallenge && (
+        <button className="control" onClick={() => store.dispatch(challengePeer(peer.id))}>Challenge</button>
       )}
       {showIntroduceButton && !introducing && (
         <button className="control" onClick={() => setIntroducing(true)}>Introduce</button>

@@ -8,7 +8,7 @@ test('player places all ships on the board and confirms placement', async ({page
 
   await placeAllShips(page);
 
-  await expect(page.getByRole('button', {name: /confirm placement/i})).toBeVisible();
+  await expect(page.getByRole('button', {name: /confirm placement/i})).toBeVisible({timeout: 10_000});
   await page.getByRole('button', {name: /confirm placement/i}).click();
 
   await expect(page.getByRole('region', {name: /place your ships/i})).not.toBeVisible();

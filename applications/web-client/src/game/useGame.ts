@@ -15,3 +15,13 @@ export const useGameState = <T,>(selector: (state: GameState) => T): T => {
   useEffect(() => store.subscribe(() => setValue(selector(store.getState()))), [store, selector]);
   return value;
 };
+
+export const useOptionalGameState = <T,>(selector: (state: GameState) => T): T | null => {
+  const store = useContext(GameContext);
+  const [value, setValue] = useState(() => store ? selector(store.getState()) : null);
+  useEffect(() => {
+    if (!store) return;
+    return store.subscribe(() => setValue(selector(store.getState())));
+  }, [store, selector]);
+  return value;
+};
