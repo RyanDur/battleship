@@ -40,8 +40,9 @@ export const Comms = ({peerId, peerName}: Props) => {
 
   return (
     <aside className="hud-comms" aria-label="Communications">
-      <Alerts/>
-      <ChallengeAlert/>
+      <Alerts>
+        <ChallengeAlert/>
+      </Alerts>
       <details className="comms-details" open aria-label="Comms" onToggle={handleToggle}>
         <summary className="comms-summary">
           Comms

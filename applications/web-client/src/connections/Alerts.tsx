@@ -1,8 +1,13 @@
+import type {ReactNode} from 'react';
 import {useConnectionState, useConnectionStore} from './useConnection';
 import {selectPendingIntroductions} from './connectionSelectors';
 import {acceptIntroduction, declineIntroduction} from './connectionActions';
 
-export const Alerts = () => {
+type Props = {
+  children?: ReactNode;
+};
+
+export const Alerts = ({children}: Props) => {
   const store = useConnectionStore();
   const pendingIntroductions = useConnectionState(selectPendingIntroductions);
 
@@ -14,6 +19,8 @@ export const Alerts = () => {
         Alerts
         <output className="alerts-count" aria-live="assertive">{count > 0 ? String(count) : ''}</output>
       </summary>
+
+      {children}
 
       {count > 0 && (
         <ul className="alerts-list">
