@@ -1,6 +1,7 @@
-import {useGameState, useGameStore} from './useGame';
+import {useConnectionStore} from '../connections/useConnection';
+import {p2pBoardReady, claimFirstTurn, takeFirstTurn} from '../connections/connectionActions';
+import {useGameState} from './useGame';
 import {selectP2pGame, selectOpponentNames, selectBoard} from './gameSelectors';
-import {p2pBoardReady, claimFirstTurn, takeFirstTurn} from './gameActions';
 import {hashBoard} from './hashBoard';
 
 type Props = {
@@ -11,7 +12,7 @@ export const GameLobby = ({onSetupBoard}: Props) => {
   const p2pGame = useGameState(selectP2pGame);
   const opponentNames = useGameState(selectOpponentNames);
   const board = useGameState(selectBoard);
-  const store = useGameStore();
+  const store = useConnectionStore();
 
   if (!p2pGame) return null;
 

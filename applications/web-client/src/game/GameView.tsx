@@ -1,7 +1,9 @@
 import {useState} from 'react';
+import {useConnectionStore} from '../connections/useConnection';
+import {p2pFire, forfeitGame} from '../connections/connectionActions';
 import {useGameState, useGameStore} from './useGame';
 import {selectGameView, selectP2pGame, selectAnnouncement} from './gameSelectors';
-import {fireShot, p2pFire, forfeitGame} from './gameActions';
+import {fireShot} from './gameActions';
 import {occupiedCells} from './board';
 
 const ROWS = Array.from({length: 10}, (_, i) => i + 1);
@@ -15,15 +17,16 @@ export const Game = ({onNewGame}: Props) => {
   const gameView = useGameState(selectGameView);
   const p2pGame = useGameState(selectP2pGame);
   const announcement = useGameState(selectAnnouncement);
-  const store = useGameStore();
+  const gameStore = useGameStore();
+  const connectionStore = useConnectionStore();
   const [confirmForfeit, setConfirmForfeit] = useState(false);
 
   const handleFire = ({row, col}: {row: number; col: number}) => {
     if (gameView?.phase !== 'my-turn') return;
     if (p2pGame) {
-      store.dispatch(p2pFire(row, col));
+      connectionStore.dispatch(p2pFire(row, col));
     } else {
-      store.dispatch(fireShot(row, col));
+      gameStore.dispatch(fireShot(row, col));
     }
   };
 
@@ -43,7 +46,7 @@ export const Game = ({onNewGame}: Props) => {
     shots.find(s => s.cell.row === row && s.cell.col === col);
 
   const handleForfeitConfirm = () => {
-    store.dispatch(forfeitGame());
+    connectionStore.dispatch(forfeitGame());
     setConfirmForfeit(false);
   };
 

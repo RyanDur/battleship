@@ -5,40 +5,49 @@ import {GameProvider} from './GameProvider';
 import {createGameStore} from './gameStore';
 import {boardLoaded, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady} from './gameActions';
 import type {Board} from './board';
+import {ConnectionProvider} from '../connections/ConnectionProvider';
+import {createConnectionStore} from '../connections/connectionStore';
 
 const emptyBoard: Board = {placed: []};
 
 const renderLobby = (onSetupBoard = () => {}) => {
   const gameStore = createGameStore();
+  const connectionStore = createConnectionStore();
   act(() => {
     gameStore.dispatch(challengePeer('peer-bob'));
     gameStore.dispatch(acceptChallenge());
   });
   render(
-    <GameProvider store={gameStore}>
-      <GameLobby onSetupBoard={onSetupBoard}/>
-    </GameProvider>
+    <ConnectionProvider store={connectionStore}>
+      <GameProvider store={gameStore}>
+        <GameLobby onSetupBoard={onSetupBoard}/>
+      </GameProvider>
+    </ConnectionProvider>
   );
   return gameStore;
 };
 
 const renderLobbyWithBoard = (onSetupBoard = () => {}) => {
   const gameStore = createGameStore();
+  const connectionStore = createConnectionStore();
   act(() => {
     gameStore.dispatch(boardLoaded(emptyBoard));
     gameStore.dispatch(challengePeer('peer-bob'));
     gameStore.dispatch(acceptChallenge());
   });
   render(
-    <GameProvider store={gameStore}>
-      <GameLobby onSetupBoard={onSetupBoard}/>
-    </GameProvider>
+    <ConnectionProvider store={connectionStore}>
+      <GameProvider store={gameStore}>
+        <GameLobby onSetupBoard={onSetupBoard}/>
+      </GameProvider>
+    </ConnectionProvider>
   );
   return gameStore;
 };
 
 const renderLobbySelectingTurn = (onSetupBoard = () => {}) => {
   const gameStore = createGameStore();
+  const connectionStore = createConnectionStore();
   act(() => {
     gameStore.dispatch(challengePeer('peer-bob'));
     gameStore.dispatch(acceptChallenge());
@@ -46,9 +55,11 @@ const renderLobbySelectingTurn = (onSetupBoard = () => {}) => {
     gameStore.dispatch(opponentBoardReady('def456'));
   });
   render(
-    <GameProvider store={gameStore}>
-      <GameLobby onSetupBoard={onSetupBoard}/>
-    </GameProvider>
+    <ConnectionProvider store={connectionStore}>
+      <GameProvider store={gameStore}>
+        <GameLobby onSetupBoard={onSetupBoard}/>
+      </GameProvider>
+    </ConnectionProvider>
   );
   return gameStore;
 };
