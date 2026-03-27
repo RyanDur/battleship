@@ -1,18 +1,19 @@
 import type {Page} from '@playwright/test';
 import {expect} from '@playwright/test';
 
+const selectAndPlace = async (page: Page, shipPattern: RegExp, row: number, col: number) => {
+  await page.getByRole('button', {name: shipPattern}).click();
+  await expect(page.getByRole('button', {name: shipPattern})).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', {name: `Row ${row}, Column ${col}`, exact: true}).click();
+};
+
 export const placeAllShips = async (page: Page) => {
   await expect(page.getByRole('region', {name: /place your ships/i})).toBeVisible({timeout: 10_000});
-  await page.getByRole('button', {name: /^carrier/i}).click();
-  await page.getByRole('button', {name: 'Row 1, Column 1', exact: true}).click();
-  await page.getByRole('button', {name: /^battleship/i}).click();
-  await page.getByRole('button', {name: 'Row 2, Column 1', exact: true}).click();
-  await page.getByRole('button', {name: /^cruiser/i}).click();
-  await page.getByRole('button', {name: 'Row 3, Column 1', exact: true}).click();
-  await page.getByRole('button', {name: /^submarine/i}).click();
-  await page.getByRole('button', {name: 'Row 4, Column 1', exact: true}).click();
-  await page.getByRole('button', {name: /^destroyer/i}).click();
-  await page.getByRole('button', {name: 'Row 5, Column 1', exact: true}).click();
+  await selectAndPlace(page, /^carrier/i, 1, 1);
+  await selectAndPlace(page, /^battleship/i, 2, 1);
+  await selectAndPlace(page, /^cruiser/i, 3, 1);
+  await selectAndPlace(page, /^submarine/i, 4, 1);
+  await selectAndPlace(page, /^destroyer/i, 5, 1);
 };
 
 // Ships placed by placeAllShips (horizontal from column 1):
