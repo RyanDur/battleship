@@ -92,7 +92,7 @@ export type GameAction =
 
 export const initialGameState: GameState = {
   board: null,
-  boardLoading: true,
+  boardLoading: false,
   aiGameState: null,
   p2pGame: null,
   opponentNames: {},
