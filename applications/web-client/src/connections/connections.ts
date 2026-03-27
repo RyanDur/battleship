@@ -1,8 +1,5 @@
 import type {Board} from '../game/board';
-import type {Shot, P2pGamePhase, P2pGame, AiGamePhase as GamePhase, AiGameState as GameState} from '../game/game';
-
-export type {ShotResult, Shot, P2pGamePhase, P2pGame, GameView} from '../game/game';
-export type {AiGamePhase as GamePhase, AiGameState as GameState} from '../game/game';
+import type {Shot, P2pGamePhase, P2pGame, AiGamePhase, AiGameState} from '../game/game';
 
 export type Peer = {id: string; name?: string; trusted?: boolean; trustsMe?: boolean}
 
@@ -44,7 +41,7 @@ export type ConnectionsState = {
   handlerState: HandlerState
   board: Board | null
   boardLoading: boolean
-  gameState: GameState | null
+  gameState: AiGameState | null
   p2pGame: P2pGame | null
 }
 
@@ -112,11 +109,11 @@ export type ConnectionsAction =
   | {type: 'BOARD_LOADED'; board: Board}
   | {type: 'BOARD_NOT_FOUND'}
   | {type: 'START_GAME'}
-  | {type: 'GAME_STARTED'; gameState: GameState}
+  | {type: 'GAME_STARTED'; gameState: AiGameState}
   | {type: 'FIRE_SHOT'; row: number; col: number}
-  | {type: 'FIRE_RESULT'; playerShot: Shot; aiShot: Shot | null; phase: GamePhase}
+  | {type: 'FIRE_RESULT'; playerShot: Shot; aiShot: Shot | null; phase: AiGamePhase}
   | {type: 'LOAD_GAME'}
-  | {type: 'GAME_STATE'; gameState: GameState}
+  | {type: 'GAME_STATE'; gameState: AiGameState}
   | {type: 'GAME_NOT_FOUND'}
   | {type: 'CHALLENGE_PEER'; opponentId: string}
   | {type: 'CHALLENGE_RECEIVED'; opponentId: string}

@@ -2,7 +2,8 @@ import * as Decoder from 'schemawax';
 import {maybe} from '../lib/maybe';
 import {tryCatch} from '../lib/result';
 import {asyncTryCatch} from '../lib/asyncResult';
-import type {PreviousPeer, GameState, Shot, GamePhase} from './connections';
+import type {PreviousPeer} from './connections';
+import type {AiGameState, Shot, AiGamePhase} from '../game/game';
 import type {Board} from '../game/board';
 
 export type OnlinePeer = {peerId: string; name: string}
@@ -22,9 +23,9 @@ export type SignalingEvent =
   | {type: 'BOARD_SAVED'}
   | {type: 'BOARD_LOADED'; board: Board}
   | {type: 'BOARD_NOT_FOUND'}
-  | {type: 'GAME_STARTED'; gameState: GameState}
-  | {type: 'FIRE_RESULT'; playerShot: Shot; aiShot: Shot | null; phase: GamePhase}
-  | {type: 'GAME_STATE'; gameState: GameState}
+  | {type: 'GAME_STARTED'; gameState: AiGameState}
+  | {type: 'FIRE_RESULT'; playerShot: Shot; aiShot: Shot | null; phase: AiGamePhase}
+  | {type: 'GAME_STATE'; gameState: AiGameState}
   | {type: 'GAME_NOT_FOUND'}
   | {type: 'P2P_GAME_LOADED'; gameState: string}
   | {type: 'P2P_GAME_NOT_FOUND'}
@@ -155,16 +156,16 @@ export const startSignaling = (
             .or(() => maybe(p2pGameLoadedDecoder.decode(parsed)).map(msg => onEvent({type: 'P2P_GAME_LOADED', gameState: msg.gameState})))
             .or(() => maybe(p2pGameNotFoundDecoder.decode(parsed)).map(() => onEvent({type: 'P2P_GAME_NOT_FOUND'})))
             .or(() => maybe(gameStartedDecoder.decode(parsed)).map(msg =>
-              onEvent({type: 'GAME_STARTED', gameState: {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as GamePhase, announcement: ''}})
+              onEvent({type: 'GAME_STARTED', gameState: {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as AiGamePhase, announcement: ''}})
             ))
             .or(() => maybe(gameStateMessageDecoder.decode(parsed)).map(msg =>
-              onEvent({type: 'GAME_STATE', gameState: {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as GamePhase, announcement: ''}})
+              onEvent({type: 'GAME_STATE', gameState: {playerShots: msg.playerShots as Shot[], aiShots: msg.aiShots as Shot[], phase: msg.phase as AiGamePhase, announcement: ''}})
             ))
             .or(() => maybe(fireResultDecoder.decode(parsed)).map(msg => onEvent({
               type: 'FIRE_RESULT',
               playerShot: msg.playerShot as Shot,
               aiShot: msg.aiShot ? msg.aiShot as Shot : null,
-              phase: msg.phase as GamePhase,
+              phase: msg.phase as AiGamePhase,
             })));
         });
     };

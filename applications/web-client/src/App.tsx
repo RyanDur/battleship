@@ -16,8 +16,10 @@ import {createConnectionStore, createHandlerListener, createSignalingListener, e
 import {startSignaling, stopSignaling, sendToPeer} from './connections/connectionActions';
 import {ConnectionProvider} from './connections/ConnectionProvider';
 import {selectSignalingToPeer} from './connections/connectionSelectors';
-import {saveBoard, startGame, clearP2pGame} from './game/gameActions';
+import {saveBoard, startGame} from './connections/connectionActions';
+import {clearP2pGame} from './game/gameActions';
 import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './game/gameSelectors';
+import {useConnectionStore} from './connections/useConnection';
 import {useGameState, useGameStore} from './game/useGame';
 import {createGameStore} from './game/gameStore';
 import {initialGameState} from './game/game';
@@ -41,15 +43,16 @@ const AppMain = () => {
   const boardLoading = useGameState(selectBoardLoading);
   const p2pGame = useGameState(selectP2pGame);
   const gameView = useGameState(selectGameView);
+  const store = useConnectionStore();
   const gameStore = useGameStore();
   const [settingUpBoard, setSettingUpBoard] = useState(false);
 
   if (boardLoading) return null;
-  if (!p2pGame && !board) return <BoardSetup onConfirm={b => gameStore.dispatch(saveBoard(b))}/>;
-  if (settingUpBoard) return <BoardSetup onConfirm={b => { gameStore.dispatch(saveBoard(b)); setSettingUpBoard(false); }}/>;
+  if (!p2pGame && !board) return <BoardSetup onConfirm={b => store.dispatch(saveBoard(b))}/>;
+  if (settingUpBoard) return <BoardSetup onConfirm={b => { store.dispatch(saveBoard(b)); setSettingUpBoard(false); }}/>;
   if (p2pGame && (p2pGame.phase === 'placing' || p2pGame.phase === 'selecting-turn')) return <GameLobby onSetupBoard={() => setSettingUpBoard(true)}/>;
-  if (gameView) return <Game onNewGame={() => gameStore.dispatch(p2pGame ? clearP2pGame() : startGame())}/>;
-  return <button className="control" onClick={() => gameStore.dispatch(startGame())}>Play vs AI</button>;
+  if (gameView) return <Game onNewGame={() => p2pGame ? gameStore.dispatch(clearP2pGame()) : store.dispatch(startGame())}/>;
+  return <button className="control" onClick={() => store.dispatch(startGame())}>Play vs AI</button>;
 };
 
 const App = ({config}: Props) => {

@@ -1,11 +1,12 @@
 import * as Decoder from 'schemawax';
 import {connectionsReducer, initialState} from './connections';
-import type {ConnectionsState, ConnectionsAction, P2pGame} from './connections';
+import type {ConnectionsState, ConnectionsAction} from './connections';
+import type {P2pGame} from '../game/game';
 import {tryCatch} from '../lib/result';
 import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling, selectSignalingToPeer, selectP2pGame as selectP2pGameFromConnections} from './connectionSelectors';
 import {selectP2pGame as selectGameStoreP2pGame} from '../game/gameSelectors';
 import type {GameState, GameAction} from '../game/game';
-import {acceptChallenge as gameAcceptChallenge, declineChallenge as gameDeclineChallenge, cancelChallenge as gameCancelChallenge, challengePeer as gameChallengePeer, turnOrderDecided as gameTurnOrderDecided, p2pBoardReady as gameP2pBoardReady, peerDisconnected as gamePeerDisconnected} from '../game/gameActions';
+import {acceptChallenge as gameAcceptChallenge, declineChallenge as gameDeclineChallenge, cancelChallenge as gameCancelChallenge, challengePeer as gameChallengePeer, turnOrderDecided as gameTurnOrderDecided, p2pBoardReady as gameP2pBoardReady, peerDisconnected as gamePeerDisconnected, saveBoard as gameSaveBoard, startGame as gameStartGame, clearP2pGame as gameClearP2pGame} from '../game/gameActions';
 import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, p2pGameLoaded, saveP2pGame, loadP2pGame, turnOrderDecided} from './connectionActions';
 import type {PeerEvent} from './connectionHandler';
 import {encodeConnectionCode, decodeConnectionCode} from './connectionCode';
@@ -133,6 +134,11 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit, get
     const getGame = () => getGameState ? selectGameStoreP2pGame(getGameState()) : null;
 
     return (action, {prevState, state}) => {
+      // Bridge game state actions to game store
+      if (action.type === 'SAVE_BOARD' && dispatchToGame) dispatchToGame(gameSaveBoard(action.board));
+      else if (action.type === 'START_GAME' && dispatchToGame) dispatchToGame(gameStartGame());
+      else if (action.type === 'CLEAR_P2P_GAME' && dispatchToGame) dispatchToGame(gameClearP2pGame());
+
       if (action.type === 'CREATE_OFFER') handler.handleCommand({type: 'CREATE_OFFER'});
       else if (action.type === 'ACCEPT_OFFER') handler.handleCommand({type: 'ACCEPT_OFFER', sdp: action.sdp});
       else if (action.type === 'ACCEPT_ANSWER') handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: action.peerId, sdp: action.sdp});
@@ -262,14 +268,26 @@ export const codecMiddleware: MiddlewareFactory =
 
 const p2pCellDecoder = Decoder.object({required: {row: Decoder.number, col: Decoder.number}});
 const p2pShipDecoder = Decoder.object({required: {name: Decoder.string, size: Decoder.number}});
+const shotResultDecoder = Decoder.oneOf(Decoder.literal('hit'), Decoder.literal('miss'), Decoder.literal('sunk'));
 const p2pShotDecoder = Decoder.object({
-  required: {cell: p2pCellDecoder, result: Decoder.string},
+  required: {cell: p2pCellDecoder, result: shotResultDecoder},
   optional: {ship: p2pShipDecoder},
 });
+const p2pPhaseDecoder = Decoder.oneOf(
+  Decoder.literal('challenged'),
+  Decoder.literal('challenge-received'),
+  Decoder.literal('placing'),
+  Decoder.literal('selecting-turn'),
+  Decoder.literal('my-turn'),
+  Decoder.literal('their-turn'),
+  Decoder.literal('game-over'),
+  Decoder.literal('disconnected'),
+  Decoder.literal('state-mismatch'),
+);
 const p2pGameStateDecoder = Decoder.object({
   required: {
     opponentId: Decoder.string,
-    phase: Decoder.string,
+    phase: p2pPhaseDecoder,
     myBoardHash: Decoder.string,
     myShots: Decoder.array(p2pShotDecoder),
     opponentShots: Decoder.array(p2pShotDecoder),
@@ -343,14 +361,13 @@ export const createSignalingListener = ({config, portEmit}: SignalingListenerCon
                 const decoded = p2pGameStateDecoder.decode(gs);
                 if (decoded) {
                   const localOpponentId = selectSignalingToPeer(getState())[decoded.opponentId];
-                  // TODO: Task 8 — remove dual-write path (casts exist because decoders use Decoder.string)
                   const game: P2pGame = {
                     opponentId: localOpponentId ?? decoded.opponentId,
-                    phase: decoded.phase as P2pGame['phase'],
+                    phase: decoded.phase,
                     myBoardHash: decoded.myBoardHash,
                     opponentBoardHash: decoded.opponentBoardHash ?? null,
-                    myShots: decoded.myShots as P2pGame['myShots'],
-                    opponentShots: decoded.opponentShots as P2pGame['opponentShots'],
+                    myShots: decoded.myShots,
+                    opponentShots: decoded.opponentShots,
                     myBoardReady: decoded.myBoardReady,
                     opponentBoardReady: decoded.opponentBoardReady,
                     winner: null,
