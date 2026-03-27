@@ -17,6 +17,9 @@ import {startSignaling, stopSignaling, saveBoard, startGame, clearP2pGame} from 
 import {ConnectionProvider} from './state/ConnectionProvider';
 import {useConnectionState, useConnectionStore} from './state/useConnection';
 import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './state/connectionSelectors';
+import {createGameStore} from './game/gameStore';
+import {GameProvider} from './game/GameProvider';
+import {createConnectionPort} from './connections/connectionPort';
 
 const platform = detectPlatform(navigator.userAgent);
 
@@ -61,6 +64,14 @@ const App = ({config}: Props) => {
     );
   }, [config]);
 
+  const gameStore = useMemo(() => {
+    const {port} = createConnectionPort({
+      sendToPeer: () => {},
+      sendToServer: () => {},
+    });
+    return createGameStore({port});
+  }, []);
+
   useEffect(() => {
     store.dispatch(startSignaling());
     return () => store.dispatch(stopSignaling());
@@ -74,15 +85,17 @@ const App = ({config}: Props) => {
         <DownloadLink platform={platform} action={actionFor(heartbeat)} fetchDownloadUrl={fetchDownloadUrl}/>
       </header>
       <ConnectionProvider store={store}>
-        <Fleet onSelectPeer={(id, name) => setSelectedPeer({id, name})}/>
-        <main className="hud-main">
-          <AppMain/>
-        </main>
-        <Comms peerId={selectedPeer?.id ?? null} peerName={selectedPeer?.name ?? null}/>
-        <footer className="hud-footer">
-          <DirectConnect serviceOnline={heartbeat.status === 'online'}/>
-          <small className="app-version">{config.version}</small>
-        </footer>
+        <GameProvider store={gameStore}>
+          <Fleet onSelectPeer={(id, name) => setSelectedPeer({id, name})}/>
+          <main className="hud-main">
+            <AppMain/>
+          </main>
+          <Comms peerId={selectedPeer?.id ?? null} peerName={selectedPeer?.name ?? null}/>
+          <footer className="hud-footer">
+            <DirectConnect serviceOnline={heartbeat.status === 'online'}/>
+            <small className="app-version">{config.version}</small>
+          </footer>
+        </GameProvider>
       </ConnectionProvider>
     </>
   );

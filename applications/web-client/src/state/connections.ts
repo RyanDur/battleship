@@ -1,4 +1,8 @@
 import type {Board} from '../game/board';
+import type {Shot, P2pGamePhase, P2pGame, AiGamePhase as GamePhase, AiGameState as GameState} from '../game/game';
+
+export type {ShotResult, Shot, P2pGamePhase, P2pGame, GameView} from '../game/game';
+export type {AiGamePhase as GamePhase, AiGameState as GameState} from '../game/game';
 
 export type Peer = {id: string; name?: string; trusted?: boolean; trustsMe?: boolean}
 
@@ -7,45 +11,6 @@ export type OnlinePeer = {peerId: string; name: string}
 export type PreviousPeer = {peerId: string; name: string; online: boolean; email?: string}
 
 export type PendingIntroduction = {introId: string; from: string; peer: string}
-
-export type ShotResult = 'hit' | 'miss' | 'sunk'
-export type GamePhase = 'player-turn' | 'computer-turn' | 'player-won' | 'computer-won'
-export type Shot = {cell: {row: number; col: number}; result: ShotResult; ship?: {name: string; size: number}}
-export type GameState = {playerShots: Shot[]; aiShots: Shot[]; phase: GamePhase; announcement: string}
-
-export type P2pGamePhase =
-  | 'challenged'
-  | 'challenge-received'
-  | 'placing'
-  | 'selecting-turn'
-  | 'my-turn'
-  | 'their-turn'
-  | 'game-over'
-  | 'disconnected'
-  | 'state-mismatch'
-
-export type P2pGame = {
-  opponentId: string
-  phase: P2pGamePhase
-  myBoardHash: string
-  opponentBoardHash: string | null
-  myShots: Shot[]
-  opponentShots: Shot[]
-  myBoardReady: boolean
-  opponentBoardReady: boolean
-  winner: 'me' | 'opponent' | null
-  forfeited?: true
-  opponentBoard: Board | null
-  boardVerified: boolean | null
-  announcement: string
-}
-
-export type GameView = {
-  myShots: Shot[]
-  opponentShots: Shot[]
-  phase: 'my-turn' | 'their-turn' | 'won' | 'lost' | 'disconnected' | 'state-mismatch'
-  opponentName: string
-}
 
 export type ConnectionFlow =
   | {phase: 'idle'}
