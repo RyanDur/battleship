@@ -20,7 +20,7 @@ import {clearP2pGame} from './game/gameActions';
 import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './game/gameSelectors';
 import {useConnectionStore} from './connections/useConnection';
 import {useGameState, useGameStore} from './game/useGame';
-import {createGameStore, createAiGameListenerFactory} from './game/gameStore';
+import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory} from './game/gameStore';
 import {initialGameState} from './game/game';
 import {GameProvider} from './game/GameProvider';
 import {createConnectionPort} from './connections/connectionPort';
@@ -80,7 +80,7 @@ const App = ({config}: Props) => {
     );
     gs = createGameStore({
       port,
-      listenerFactories: [createAiGameListenerFactory],
+      listenerFactories: [createAiGameListenerFactory, createOfflineFallbackListenerFactory],
       translatePeerId: (signalingId) => selectSignalingToPeer(connectionStore.getState())[signalingId],
     });
     return {store: connectionStore, gameStore: gs};

@@ -3,7 +3,7 @@ import type {GameState, GameAction} from './game';
 import type {ConnectionPort} from '../connections/connectionPort';
 import {createGameMessageHandler} from './gameMessageHandler';
 import {selectBoard, selectAiGameState, selectP2pGame, selectOffererPeerIds} from './gameSelectors';
-import {gameStarted, fireResult} from './gameActions';
+import {gameStarted, fireResult, boardNotFound} from './gameActions';
 import {randomBoard, resolveFireShot} from './aiGame';
 
 export type GameListenerContext = {
@@ -57,6 +57,21 @@ export const createAiGameListenerFactory: GameListenerFactory = ({dispatch, getS
       if (aiGameState.playerShots.some(s => s.cell.row === action.row && s.cell.col === action.col)) return;
       const result = resolveFireShot(aiBoard, board, aiGameState.playerShots, aiGameState.aiShots, {row: action.row, col: action.col});
       dispatch(fireResult(result.playerShot, result.aiShot, result.phase));
+    }
+  };
+};
+
+const OFFLINE_FALLBACK_MS = 3_000;
+
+export const createOfflineFallbackListenerFactory: GameListenerFactory = ({dispatch}) => {
+  let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    dispatch(boardNotFound());
+  }, OFFLINE_FALLBACK_MS);
+
+  return (action) => {
+    if (action.type === 'LOAD_BOARD' && timer !== null) {
+      clearTimeout(timer);
+      timer = null;
     }
   };
 };
