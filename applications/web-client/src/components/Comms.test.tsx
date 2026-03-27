@@ -6,6 +6,8 @@ import {createConnectionStore, createHandlerListener, encodingMiddleware, codecM
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import {messageReceived, sendMessage} from '../state/connectionActions';
 import {selectMessages} from '../state/connectionSelectors';
+import {GameProvider} from '../game/GameProvider';
+import {createGameStore} from '../game/gameStore';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();
@@ -18,10 +20,13 @@ const makeStore = () => {
 
 const setup = (peerId: string | null = null, peerName: string | null = null) => {
   const {store} = makeStore();
+  const gameStore = createGameStore();
   render(
-    <ConnectionProvider store={store}>
-      <Comms peerId={peerId} peerName={peerName}/>
-    </ConnectionProvider>
+    <GameProvider store={gameStore}>
+      <ConnectionProvider store={store}>
+        <Comms peerId={peerId} peerName={peerName}/>
+      </ConnectionProvider>
+    </GameProvider>
   );
   return {store};
 };
@@ -188,10 +193,13 @@ describe('Comms', () => {
   it('switching peers while collapsed resets unread count for the new peer', async () => {
     const user = userEvent.setup();
     const {store} = makeStore();
+    const gameStore = createGameStore();
     const {rerender} = render(
-      <ConnectionProvider store={store}>
-        <Comms peerId="p1" peerName="Alice"/>
-      </ConnectionProvider>
+      <GameProvider store={gameStore}>
+        <ConnectionProvider store={store}>
+          <Comms peerId="p1" peerName="Alice"/>
+        </ConnectionProvider>
+      </GameProvider>
     );
 
     // Give Alice several messages so seenCount gets set on open
@@ -212,9 +220,11 @@ describe('Comms', () => {
 
     // Switch to Bob — seenCount (3) > Bob messages (1), would wrongly show 0
     rerender(
-      <ConnectionProvider store={store}>
-        <Comms peerId="p2" peerName="Bob"/>
-      </ConnectionProvider>
+      <GameProvider store={gameStore}>
+        <ConnectionProvider store={store}>
+          <Comms peerId="p2" peerName="Bob"/>
+        </ConnectionProvider>
+      </GameProvider>
     );
 
     // Bob has 1 message that should be unread

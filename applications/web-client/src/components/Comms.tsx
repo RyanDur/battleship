@@ -3,6 +3,7 @@ import {useConnectionState, useConnectionStore} from '../state/useConnection';
 import {selectMessages} from '../state/connectionSelectors';
 import {sendMessage} from '../state/connectionActions';
 import {Alerts} from './Alerts';
+import {ChallengeAlert} from '../game/ChallengeAlert';
 
 type Props = {
   peerId: string | null;
@@ -40,6 +41,7 @@ export const Comms = ({peerId, peerName}: Props) => {
   return (
     <aside className="hud-comms" aria-label="Communications">
       <Alerts/>
+      <ChallengeAlert/>
       <details className="comms-details" open aria-label="Comms" onToggle={handleToggle}>
         <summary className="comms-summary">
           Comms

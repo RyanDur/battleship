@@ -1,18 +1,15 @@
 import {useState} from 'react';
 import {useConnectionState, useConnectionStore} from '../state/useConnection';
 import type {Peer, PreviousPeer} from '../state/connections';
-import {selectPeers, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth, selectP2pGame} from '../state/connectionSelectors';
-import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, connectViaServer, challengePeer, cancelChallenge} from '../state/connectionActions';
+import {selectPeers, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth} from '../state/connectionSelectors';
+import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, connectViaServer} from '../state/connectionActions';
 
 type SelectPeer = (id: string, name: string | null) => void;
 
 const PeerCard = ({peer, otherTrustingPeers, unstable, onSelect}: {peer: Peer; otherTrustingPeers: Peer[]; unstable: boolean; onSelect?: SelectPeer}) => {
   const store = useConnectionStore();
-  const p2pGame = useConnectionState(selectP2pGame);
   const [introducing, setIntroducing] = useState(false);
   const showIntroduceButton = peer.trustsMe && otherTrustingPeers.length > 0;
-  const isChallenging = p2pGame?.opponentId === peer.id && p2pGame?.phase === 'challenged';
-  const showChallenge = !p2pGame;
 
   return (
     <article className="fleet-peer-card">
@@ -33,15 +30,6 @@ const PeerCard = ({peer, otherTrustingPeers, unstable, onSelect}: {peer: Peer; o
           Introduce to {other.name ?? 'Unknown'}
         </button>
       ))}
-      {showChallenge && (
-        <button className="control" onClick={() => store.dispatch(challengePeer(peer.id))}>Challenge</button>
-      )}
-      {isChallenging && (
-        <>
-          <button className="control" disabled>Waiting...</button>
-          <button className="control" onClick={() => store.dispatch(cancelChallenge())}>Cancel</button>
-        </>
-      )}
       {peer.trusted
         ? <button className="control" onClick={() => store.dispatch(revokeTrust(peer.id))}>Revoke trust</button>
         : <button className="control" onClick={() => store.dispatch(grantTrust(peer.id))}>Trust</button>
