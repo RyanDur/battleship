@@ -1,6 +1,6 @@
-import {useConnectionState, useConnectionStore} from '../state/useConnection';
-import {selectP2pGame, selectPeers, selectBoard} from '../state/connectionSelectors';
-import {p2pBoardReady, claimFirstTurn, takeFirstTurn} from '../state/connectionActions';
+import {useGameState, useGameStore} from '../game/useGame';
+import {selectP2pGame, selectOpponentNames, selectBoard} from '../game/gameSelectors';
+import {p2pBoardReady, claimFirstTurn, takeFirstTurn} from '../game/gameActions';
 import {hashBoard} from '../game/hashBoard';
 
 type Props = {
@@ -8,14 +8,14 @@ type Props = {
 };
 
 export const GameLobby = ({onSetupBoard}: Props) => {
-  const p2pGame = useConnectionState(selectP2pGame);
-  const peers = useConnectionState(selectPeers);
-  const board = useConnectionState(selectBoard);
-  const store = useConnectionStore();
+  const p2pGame = useGameState(selectP2pGame);
+  const opponentNames = useGameState(selectOpponentNames);
+  const board = useGameState(selectBoard);
+  const store = useGameStore();
 
   if (!p2pGame) return null;
 
-  const opponentName = peers.find(p => p.id === p2pGame.opponentId)?.name ?? 'Opponent';
+  const opponentName = opponentNames[p2pGame.opponentId] ?? 'Opponent';
 
   const handleUseBoard = () => {
     if (!board) return;

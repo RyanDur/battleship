@@ -1,12 +1,12 @@
 import {render, screen, within, waitFor, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Game} from './Game';
-import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore} from '../state/connectionStore';
-import {gameStarted, fireResult, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided, opponentForfeited} from '../state/connectionActions';
-import type {GameState, Shot} from '../state/connections';
+import {GameProvider} from '../game/GameProvider';
+import {createGameStore} from '../game/gameStore';
+import {gameStarted, fireResult, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided, opponentForfeited, peerNamed} from '../game/gameActions';
+import type {AiGameState, Shot} from '../game/game';
 
-const emptyGameState: GameState = {playerShots: [], aiShots: [], phase: 'player-turn', announcement: ''};
+const emptyGameState: AiGameState = {playerShots: [], aiShots: [], phase: 'player-turn', announcement: ''};
 
 const playerShot = (row: number, col: number, result: Shot['result'], ship?: Shot['ship']): Shot =>
   ({cell: {row, col}, result, ...(ship ? {ship} : {})});
@@ -15,14 +15,14 @@ const aiShot = (row: number, col: number, result: Shot['result']): Shot =>
   ({cell: {row, col}, result});
 
 const renderGame = (initialState = emptyGameState, onNewGame = () => {}) => {
-  const store = createConnectionStore();
-  act(() => { store.dispatch(gameStarted(initialState)); });
+  const gameStore = createGameStore();
+  act(() => { gameStore.dispatch(gameStarted(initialState)); });
   render(
-    <ConnectionProvider store={store}>
+    <GameProvider store={gameStore}>
       <Game onNewGame={onNewGame}/>
-    </ConnectionProvider>
+    </GameProvider>
   );
-  return store;
+  return gameStore;
 };
 
 describe('Game', () => {
@@ -137,20 +137,21 @@ describe('Game', () => {
 
 describe('P2P game forfeit', () => {
   const renderP2pGame = (iGoFirst: boolean, onNewGame = () => {}) => {
-    const store = createConnectionStore();
+    const gameStore = createGameStore();
     act(() => {
-      store.dispatch(challengePeer('peer-bob'));
-      store.dispatch(acceptChallenge());
-      store.dispatch(p2pBoardReady('abc123'));
-      store.dispatch(opponentBoardReady('def456'));
-      store.dispatch(turnOrderDecided(iGoFirst));
+      gameStore.dispatch(challengePeer('peer-bob'));
+      gameStore.dispatch(peerNamed('peer-bob', 'Bob'));
+      gameStore.dispatch(acceptChallenge());
+      gameStore.dispatch(p2pBoardReady('abc123'));
+      gameStore.dispatch(opponentBoardReady('def456'));
+      gameStore.dispatch(turnOrderDecided(iGoFirst));
     });
     render(
-      <ConnectionProvider store={store}>
+      <GameProvider store={gameStore}>
         <Game onNewGame={onNewGame}/>
-      </ConnectionProvider>
+      </GameProvider>
     );
-    return store;
+    return gameStore;
   };
 
   it('shows forfeit button during p2p gameplay', () => {

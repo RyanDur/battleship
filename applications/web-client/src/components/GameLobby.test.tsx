@@ -1,56 +1,56 @@
 import {render, screen, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {GameLobby} from './GameLobby';
-import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore} from '../state/connectionStore';
-import {boardLoaded, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady} from '../state/connectionActions';
+import {GameProvider} from '../game/GameProvider';
+import {createGameStore} from '../game/gameStore';
+import {boardLoaded, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady} from '../game/gameActions';
 import type {Board} from '../game/board';
 
 const emptyBoard: Board = {placed: []};
 
 const renderLobby = (onSetupBoard = () => {}) => {
-  const store = createConnectionStore();
+  const gameStore = createGameStore();
   act(() => {
-    store.dispatch(challengePeer('peer-bob'));
-    store.dispatch(acceptChallenge());
+    gameStore.dispatch(challengePeer('peer-bob'));
+    gameStore.dispatch(acceptChallenge());
   });
   render(
-    <ConnectionProvider store={store}>
+    <GameProvider store={gameStore}>
       <GameLobby onSetupBoard={onSetupBoard}/>
-    </ConnectionProvider>
+    </GameProvider>
   );
-  return store;
+  return gameStore;
 };
 
 const renderLobbyWithBoard = (onSetupBoard = () => {}) => {
-  const store = createConnectionStore();
+  const gameStore = createGameStore();
   act(() => {
-    store.dispatch(boardLoaded(emptyBoard));
-    store.dispatch(challengePeer('peer-bob'));
-    store.dispatch(acceptChallenge());
+    gameStore.dispatch(boardLoaded(emptyBoard));
+    gameStore.dispatch(challengePeer('peer-bob'));
+    gameStore.dispatch(acceptChallenge());
   });
   render(
-    <ConnectionProvider store={store}>
+    <GameProvider store={gameStore}>
       <GameLobby onSetupBoard={onSetupBoard}/>
-    </ConnectionProvider>
+    </GameProvider>
   );
-  return store;
+  return gameStore;
 };
 
 const renderLobbySelectingTurn = (onSetupBoard = () => {}) => {
-  const store = createConnectionStore();
+  const gameStore = createGameStore();
   act(() => {
-    store.dispatch(challengePeer('peer-bob'));
-    store.dispatch(acceptChallenge());
-    store.dispatch(p2pBoardReady('abc123'));
-    store.dispatch(opponentBoardReady('def456'));
+    gameStore.dispatch(challengePeer('peer-bob'));
+    gameStore.dispatch(acceptChallenge());
+    gameStore.dispatch(p2pBoardReady('abc123'));
+    gameStore.dispatch(opponentBoardReady('def456'));
   });
   render(
-    <ConnectionProvider store={store}>
+    <GameProvider store={gameStore}>
       <GameLobby onSetupBoard={onSetupBoard}/>
-    </ConnectionProvider>
+    </GameProvider>
   );
-  return store;
+  return gameStore;
 };
 
 describe('GameLobby', () => {

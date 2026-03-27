@@ -1,7 +1,7 @@
 import {useState} from 'react';
-import {useConnectionState, useConnectionStore} from '../state/useConnection';
-import {selectGameView, selectP2pGame, selectAnnouncement} from '../state/connectionSelectors';
-import {fireShot, p2pFire, forfeitGame} from '../state/connectionActions';
+import {useGameState, useGameStore} from '../game/useGame';
+import {selectGameView, selectP2pGame, selectAnnouncement} from '../game/gameSelectors';
+import {fireShot, p2pFire, forfeitGame} from '../game/gameActions';
 import {occupiedCells} from '../game/board';
 
 const ROWS = Array.from({length: 10}, (_, i) => i + 1);
@@ -12,10 +12,10 @@ type Props = {
 };
 
 export const Game = ({onNewGame}: Props) => {
-  const gameView = useConnectionState(selectGameView);
-  const p2pGame = useConnectionState(selectP2pGame);
-  const announcement = useConnectionState(selectAnnouncement);
-  const store = useConnectionStore();
+  const gameView = useGameState(selectGameView);
+  const p2pGame = useGameState(selectP2pGame);
+  const announcement = useGameState(selectAnnouncement);
+  const store = useGameStore();
   const [confirmForfeit, setConfirmForfeit] = useState(false);
 
   const handleFire = ({row, col}: {row: number; col: number}) => {

@@ -1,15 +1,15 @@
-import {createConnectionStore} from './connectionStore';
+import {createGameStore} from '../game/gameStore';
 import {
   challengePeer, challengeReceived, acceptChallenge, declineChallenge, cancelChallenge,
   p2pBoardReady, opponentBoardReady, turnOrderDecided,
   p2pFireResult, opponentFired,
   p2pGameOver, forfeitGame, opponentForfeited,
   p2pStateMismatch, peerDisconnected, clearP2pGame, opponentBoardRevealed,
-} from './connectionActions';
-import {selectP2pGame} from './connectionSelectors';
-import type {Shot} from './connections';
+} from '../game/gameActions';
+import {selectP2pGame} from '../game/gameSelectors';
+import type {Shot} from '../game/game';
 
-const makeStore = () => createConnectionStore();
+const makeStore = () => createGameStore();
 
 describe('P2P game', () => {
   describe('challenge flow', () => {
