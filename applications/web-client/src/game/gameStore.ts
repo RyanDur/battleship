@@ -2,7 +2,9 @@ import {gameReducer, initialGameState} from './game';
 import type {GameState, GameAction} from './game';
 import type {ConnectionPort} from '../connections/connectionPort';
 import {createGameMessageHandler} from './gameMessageHandler';
-import {selectBoard, selectP2pGame, selectOffererPeerIds} from './gameSelectors';
+import {selectBoard, selectAiGameState, selectP2pGame, selectOffererPeerIds} from './gameSelectors';
+import {gameStarted, fireResult} from './gameActions';
+import {randomBoard, resolveFireShot} from './aiGame';
 
 export type GameListenerContext = {
   prevState: GameState
@@ -35,6 +37,29 @@ type GameStoreConfig = {
   listenerFactories?: GameListenerFactory[]
   translatePeerId?: (signalingId: string) => string | undefined
 }
+
+export const createAiGameListenerFactory: GameListenerFactory = ({dispatch, getState}) => {
+  let aiBoard: ReturnType<typeof randomBoard> | null = null;
+
+  return (action) => {
+    if (action.type === 'START_GAME') {
+      const board = selectBoard(getState());
+      if (!board) return;
+      aiBoard = randomBoard();
+      dispatch(gameStarted({playerShots: [], aiShots: [], phase: 'player-turn', announcement: ''}));
+      return;
+    }
+    if (action.type === 'FIRE_SHOT') {
+      const aiGameState = selectAiGameState(getState());
+      const board = selectBoard(getState());
+      if (!aiGameState || !board || !aiBoard) return;
+      if (aiGameState.phase !== 'player-turn') return;
+      if (aiGameState.playerShots.some(s => s.cell.row === action.row && s.cell.col === action.col)) return;
+      const result = resolveFireShot(aiBoard, board, aiGameState.playerShots, aiGameState.aiShots, {row: action.row, col: action.col});
+      dispatch(fireResult(result.playerShot, result.aiShot, result.phase));
+    }
+  };
+};
 
 export const createGameStore = (config?: GameStoreConfig): GameStore => {
   let state = initialGameState;
