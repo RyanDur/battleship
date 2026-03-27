@@ -92,7 +92,7 @@ export type GameAction =
 
 export const initialGameState: GameState = {
   board: null,
-  boardLoading: false,
+  boardLoading: true,
   aiGameState: null,
   p2pGame: null,
   opponentNames: {},
@@ -186,7 +186,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     case 'BOARD_LOADED':
       return {...state, board: action.board, boardLoading: false};
     case 'BOARD_NOT_FOUND':
-      return {...state, board: null, boardLoading: false};
+      return {...state, boardLoading: false};
     case 'SAVE_BOARD':
       return {...state, board: action.board};
     case 'GAME_STARTED':
