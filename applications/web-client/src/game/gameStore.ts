@@ -33,6 +33,7 @@ export type GameListenerFactory = (deps: ListenerFactoryDeps) => GameListenerFn
 type GameStoreConfig = {
   port?: ConnectionPort
   listenerFactories?: GameListenerFactory[]
+  translatePeerId?: (signalingId: string) => string | undefined
 }
 
 export const createGameStore = (config?: GameStoreConfig): GameStore => {
@@ -66,6 +67,7 @@ export const createGameStore = (config?: GameStoreConfig): GameStore => {
       getBoard: () => selectBoard(state),
       getOffererPeerIds: () => selectOffererPeerIds(state),
       sendToPeer: config.port.sendToPeer,
+      translatePeerId: config.translatePeerId,
     });
     config.port.subscribe(gameMessageHandler);
   }

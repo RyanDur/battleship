@@ -283,16 +283,21 @@ const p2pGameStateDecoder = Decoder.object({
 
 type SignalingListenerConfig = {
   config: SignalingConfig
+  portEmit?: (event: ConnectionEvent) => void
 }
 
-export const createSignalingListener = ({config}: SignalingListenerConfig): ListenerFactory =>
+export const createSignalingListener = ({config, portEmit}: SignalingListenerConfig): ListenerFactory =>
   ({dispatch, getState}) => {
     let handle: SignalingHandle | null = null;
 
     return (action) => {
       if (action.type === 'START_SIGNALING') {
         handle = startSignaling(config, (event: SignalingEvent) => {
-          if (event.type === 'REGISTERED') { dispatch(loadBoard()); dispatch(loadGame()); }
+          if (event.type === 'REGISTERED') {
+            dispatch(loadBoard());
+            dispatch(loadGame());
+            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'REGISTERED'}});
+          }
           else if (event.type === 'PEERS') dispatch(onlinePeersUpdated(event.peers));
           else if (event.type === 'PEER_JOINED') dispatch(onlinePeerJoined(event.peerId, event.name));
           else if (event.type === 'PEER_LEFT') dispatch(onlinePeerLeft(event.peerId));
@@ -303,22 +308,57 @@ export const createSignalingListener = ({config}: SignalingListenerConfig): List
           else if (event.type === 'ICE_RESTART_ANSWER_RECEIVED') dispatch(iceRestartAnswerReceived(event.fromPeerId, event.sdp));
           else if (event.type === 'EMAIL_SHARED') dispatch(emailSharedReceived(event.fromPeerId, event.email));
           else if (event.type === 'EMAIL_REVOKED') dispatch(emailRevokedReceived(event.fromPeerId));
-          else if (event.type === 'BOARD_SAVED') dispatch(boardSaved());
-          else if (event.type === 'BOARD_LOADED') dispatch(boardLoaded(event.board));
-          else if (event.type === 'BOARD_NOT_FOUND') dispatch(boardNotFound());
-          else if (event.type === 'GAME_STARTED') dispatch(gameStarted(event.gameState));
-          else if (event.type === 'FIRE_RESULT') dispatch(fireResult(event.playerShot, event.aiShot, event.phase));
-          else if (event.type === 'GAME_STATE') dispatch(gameStateReceived(event.gameState));
-          else if (event.type === 'GAME_NOT_FOUND') dispatch(gameNotFound());
+          else if (event.type === 'BOARD_SAVED') {
+            dispatch(boardSaved());
+            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'BOARD_SAVED'}});
+          }
+          else if (event.type === 'BOARD_LOADED') {
+            dispatch(boardLoaded(event.board));
+            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'BOARD_LOADED', board: event.board}});
+          }
+          else if (event.type === 'BOARD_NOT_FOUND') {
+            dispatch(boardNotFound());
+            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'BOARD_NOT_FOUND'}});
+          }
+          else if (event.type === 'GAME_STARTED') {
+            dispatch(gameStarted(event.gameState));
+            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'GAME_STARTED', gameState: event.gameState}});
+          }
+          else if (event.type === 'FIRE_RESULT') {
+            dispatch(fireResult(event.playerShot, event.aiShot, event.phase));
+            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'FIRE_RESULT', playerShot: event.playerShot, aiShot: event.aiShot, phase: event.phase}});
+          }
+          else if (event.type === 'GAME_STATE') {
+            dispatch(gameStateReceived(event.gameState));
+            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'GAME_STATE', gameState: event.gameState}});
+          }
+          else if (event.type === 'GAME_NOT_FOUND') {
+            dispatch(gameNotFound());
+            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'GAME_NOT_FOUND'}});
+          }
           else if (event.type === 'P2P_GAME_LOADED') {
+            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'P2P_GAME_LOADED', gameState: event.gameState}});
             tryCatch(() => JSON.parse(event.gameState), () => null)
               .onSuccess(gs => {
                 const decoded = p2pGameStateDecoder.decode(gs);
                 if (decoded) {
-                  const game = decoded as P2pGame;
-                  // Map signaling opponentId to local peerId for the current session
-                  const localOpponentId = selectSignalingToPeer(getState())[game.opponentId];
-                  dispatch(p2pGameLoaded(localOpponentId ? {...game, opponentId: localOpponentId} : game));
+                  const localOpponentId = selectSignalingToPeer(getState())[decoded.opponentId];
+                  // TODO: Task 8 — remove dual-write path (casts exist because decoders use Decoder.string)
+                  const game: P2pGame = {
+                    opponentId: localOpponentId ?? decoded.opponentId,
+                    phase: decoded.phase as P2pGame['phase'],
+                    myBoardHash: decoded.myBoardHash,
+                    opponentBoardHash: decoded.opponentBoardHash ?? null,
+                    myShots: decoded.myShots as P2pGame['myShots'],
+                    opponentShots: decoded.opponentShots as P2pGame['opponentShots'],
+                    myBoardReady: decoded.myBoardReady,
+                    opponentBoardReady: decoded.opponentBoardReady,
+                    winner: null,
+                    opponentBoard: null,
+                    boardVerified: null,
+                    announcement: '',
+                  };
+                  dispatch(p2pGameLoaded(game));
                 }
               });
           }

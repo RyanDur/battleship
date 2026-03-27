@@ -16,7 +16,7 @@ import {createConnectionStore, createHandlerListener, createSignalingListener, e
 import {startSignaling, stopSignaling, saveBoard, startGame, clearP2pGame, sendToPeer} from './state/connectionActions';
 import {ConnectionProvider} from './state/ConnectionProvider';
 import {useConnectionState, useConnectionStore} from './state/useConnection';
-import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './state/connectionSelectors';
+import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView, selectSignalingToPeer} from './state/connectionSelectors';
 import {createGameStore} from './game/gameStore';
 import {initialGameState} from './game/game';
 import {GameProvider} from './game/GameProvider';
@@ -71,10 +71,13 @@ const App = ({config}: Props) => {
           getGameState: () => gs?.getState() ?? initialGameState,
           dispatchToGame: (action) => gs?.dispatch(action),
         }),
-        createSignalingListener({config: {createWebSocket: (url) => new WebSocket(url), sessionUrl: `${config.serviceUrl}/session`, url: signalingUrl, name: 'Player'}}),
+        createSignalingListener({config: {createWebSocket: (url) => new WebSocket(url), sessionUrl: `${config.serviceUrl}/session`, url: signalingUrl, name: 'Player'}, portEmit}),
       ],
     );
-    gs = createGameStore({port});
+    gs = createGameStore({
+      port,
+      translatePeerId: (signalingId) => selectSignalingToPeer(connectionStore.getState())[signalingId],
+    });
     return {store: connectionStore, gameStore: gs};
   }, [config]);
 

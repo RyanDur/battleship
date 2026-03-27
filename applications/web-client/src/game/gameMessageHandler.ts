@@ -1,7 +1,8 @@
 import * as Decoder from 'schemawax';
 import {maybe} from '../lib/maybe';
+import {tryCatch} from '../lib/result';
 import type {ConnectionEvent} from '../connections/connectionPort';
-import type {GameAction, Shot, P2pGamePhase} from './game';
+import type {GameAction, Shot, P2pGamePhase, P2pGame} from './game';
 import type {Board} from './board';
 import {occupiedCells, isCellOccupied} from './board';
 import {hashBoard} from './hashBoard';
@@ -10,7 +11,36 @@ import {
   opponentBoardReady, turnOrderDecided, p2pFireResult, opponentFired,
   p2pGameOver, opponentForfeited, p2pStateMismatch, p2pStateSync, opponentBoardRevealed,
   peerConnected, peerNamed, peerDisconnected,
+  loadBoard, loadGame, boardSaved, boardLoaded, boardNotFound,
+  gameStarted, fireResult, gameStateReceived, gameNotFound, p2pGameLoaded,
 } from './gameActions';
+
+// Server message decoders
+const registeredServerDecoder = Decoder.object({required: {type: Decoder.literal('REGISTERED')}});
+const boardSavedServerDecoder = Decoder.object({required: {type: Decoder.literal('BOARD_SAVED')}});
+const boardNotFoundServerDecoder = Decoder.object({required: {type: Decoder.literal('BOARD_NOT_FOUND')}});
+const gameNotFoundServerDecoder = Decoder.object({required: {type: Decoder.literal('GAME_NOT_FOUND')}});
+const p2pGameNotFoundServerDecoder = Decoder.object({required: {type: Decoder.literal('P2P_GAME_NOT_FOUND')}});
+const p2pGameLoadedServerDecoder = Decoder.object({required: {type: Decoder.literal('P2P_GAME_LOADED'), gameState: Decoder.string}});
+
+const aiGamePhaseDecoder = Decoder.oneOf(
+  Decoder.literal('player-turn'),
+  Decoder.literal('computer-turn'),
+  Decoder.literal('player-won'),
+  Decoder.literal('computer-won'),
+);
+
+const p2pPhaseDecoder = Decoder.oneOf(
+  Decoder.literal('challenged'),
+  Decoder.literal('challenge-received'),
+  Decoder.literal('placing'),
+  Decoder.literal('selecting-turn'),
+  Decoder.literal('my-turn'),
+  Decoder.literal('their-turn'),
+  Decoder.literal('game-over'),
+  Decoder.literal('disconnected'),
+  Decoder.literal('state-mismatch'),
+);
 
 const gameChallengeDecoder = Decoder.object({required: {type: Decoder.literal('GAME_CHALLENGE')}});
 const gameAcceptDecoder = Decoder.object({required: {type: Decoder.literal('GAME_ACCEPT')}});
@@ -61,6 +91,40 @@ const gameStateSyncDecoder = Decoder.object({
   },
 });
 
+// Server message decoders (dependent on peer decoders above)
+const boardDecoder = Decoder.object({required: {placed: Decoder.array(p2pPlacedShipDecoder)}});
+const boardLoadedServerDecoder = Decoder.object({required: {type: Decoder.literal('BOARD_LOADED'), board: boardDecoder}});
+
+const aiGameStateDecoder = Decoder.object({
+  required: {
+    playerShots: Decoder.array(p2pShotDecoder),
+    aiShots: Decoder.array(p2pShotDecoder),
+    phase: aiGamePhaseDecoder,
+    announcement: Decoder.string,
+  },
+});
+const gameStartedServerDecoder = Decoder.object({required: {type: Decoder.literal('GAME_STARTED'), gameState: aiGameStateDecoder}});
+const gameStateServerDecoder = Decoder.object({required: {type: Decoder.literal('GAME_STATE'), gameState: aiGameStateDecoder}});
+const fireResultServerDecoder = Decoder.object({
+  required: {type: Decoder.literal('FIRE_RESULT'), playerShot: p2pShotDecoder, phase: aiGamePhaseDecoder},
+  optional: {aiShot: p2pShotDecoder},
+});
+
+const serverP2pGameStateDecoder = Decoder.object({
+  required: {
+    opponentId: Decoder.string,
+    phase: p2pPhaseDecoder,
+    myBoardHash: Decoder.string,
+    myShots: Decoder.array(p2pShotDecoder),
+    opponentShots: Decoder.array(p2pShotDecoder),
+    myBoardReady: Decoder.boolean,
+    opponentBoardReady: Decoder.boolean,
+  },
+  optional: {
+    opponentBoardHash: Decoder.string,
+  },
+});
+
 const TOTAL_SHIPS = 5;
 const isFleetSunk = (shots: Shot[]): boolean =>
   new Set(shots.filter(s => s.result === 'sunk' && s.ship).map(s => s.ship!.name)).size >= TOTAL_SHIPS;
@@ -93,6 +157,7 @@ type GameMessageDeps = {
   getBoard: () => Board | null
   getOffererPeerIds: () => string[]
   sendToPeer: (peerId: string, message: unknown) => void
+  translatePeerId?: (signalingId: string) => string | undefined
 }
 
 export const createGameMessageHandler = (deps: GameMessageDeps) =>
@@ -107,6 +172,55 @@ export const createGameMessageHandler = (deps: GameMessageDeps) =>
     }
     if (event.type === 'PEER_DISCONNECTED') {
       deps.dispatch(peerDisconnected(event.peerId));
+      return;
+    }
+    if (event.type === 'SERVER_MESSAGE') {
+      const data = event.data;
+      maybe(registeredServerDecoder.decode(data))
+        .map(() => {
+          deps.dispatch(loadBoard());
+          deps.dispatch(loadGame());
+        })
+        .or(() => maybe(boardSavedServerDecoder.decode(data))
+          .map(() => deps.dispatch(boardSaved())))
+        .or(() => maybe(boardLoadedServerDecoder.decode(data))
+          .map(msg => deps.dispatch(boardLoaded(msg.board))))
+        .or(() => maybe(boardNotFoundServerDecoder.decode(data))
+          .map(() => deps.dispatch(boardNotFound())))
+        .or(() => maybe(gameStartedServerDecoder.decode(data))
+          .map(msg => deps.dispatch(gameStarted(msg.gameState))))
+        .or(() => maybe(fireResultServerDecoder.decode(data))
+          .map(msg => deps.dispatch(fireResult(msg.playerShot, msg.aiShot ?? null, msg.phase))))
+        .or(() => maybe(gameStateServerDecoder.decode(data))
+          .map(msg => deps.dispatch(gameStateReceived(msg.gameState))))
+        .or(() => maybe(gameNotFoundServerDecoder.decode(data))
+          .map(() => deps.dispatch(gameNotFound())))
+        .or(() => maybe(p2pGameNotFoundServerDecoder.decode(data))
+          .map(() => {}))
+        .or(() => maybe(p2pGameLoadedServerDecoder.decode(data))
+          .map(msg => {
+            tryCatch(() => JSON.parse(msg.gameState), () => null)
+              .onSuccess(gs => {
+                const decoded = serverP2pGameStateDecoder.decode(gs);
+                if (!decoded) return;
+                const localOpponentId = deps.translatePeerId?.(decoded.opponentId);
+                const game: P2pGame = {
+                  opponentId: localOpponentId ?? decoded.opponentId,
+                  phase: decoded.phase,
+                  myBoardHash: decoded.myBoardHash,
+                  opponentBoardHash: decoded.opponentBoardHash ?? null,
+                  myShots: decoded.myShots,
+                  opponentShots: decoded.opponentShots,
+                  myBoardReady: decoded.myBoardReady,
+                  opponentBoardReady: decoded.opponentBoardReady,
+                  winner: null,
+                  opponentBoard: null,
+                  boardVerified: null,
+                  announcement: '',
+                };
+                deps.dispatch(p2pGameLoaded(game));
+              });
+          }));
       return;
     }
     if (event.type !== 'PEER_MESSAGE') return;

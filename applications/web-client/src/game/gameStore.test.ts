@@ -16,6 +16,7 @@ import {
 } from './gameSelectors';
 import type {Shot, AiGameState, P2pGame} from './game';
 import type {Board} from './board';
+import {createConnectionPort} from '../connections/connectionPort';
 
 const makeStore = () => createGameStore();
 
@@ -558,5 +559,132 @@ describe('selectGameView', () => {
     store.dispatch(p2pStateMismatch());
     const view = selectGameView(store.getState());
     expect(view?.phase).toBe('state-mismatch');
+  });
+});
+
+describe('server message handling', () => {
+  const createStoreWithPort = () => {
+    const {port, emit} = createConnectionPort({
+      sendToPeer: () => {},
+      sendToServer: () => {},
+    });
+    const store = createGameStore({port});
+    return {store, emit};
+  };
+
+  it('loads board and game on REGISTERED', () => {
+    const {store, emit} = createStoreWithPort();
+    emit({type: 'SERVER_MESSAGE', data: {type: 'REGISTERED'}});
+    expect(selectBoardLoading(store.getState())).toBe(true);
+  });
+
+  it('handles BOARD_SAVED without crashing', () => {
+    const {store, emit} = createStoreWithPort();
+    emit({type: 'SERVER_MESSAGE', data: {type: 'BOARD_SAVED'}});
+    expect(store.getState()).toBeDefined();
+  });
+
+  it('sets board on BOARD_LOADED', () => {
+    const {store, emit} = createStoreWithPort();
+    const board: Board = {placed: [{ship: {name: 'Carrier', size: 5}, position: {row: 1, col: 1}, orientation: 'horizontal'}]};
+    emit({type: 'SERVER_MESSAGE', data: {type: 'BOARD_LOADED', board}});
+    expect(selectBoard(store.getState())).toEqual(board);
+  });
+
+  it('clears board loading on BOARD_NOT_FOUND', () => {
+    const {store, emit} = createStoreWithPort();
+    emit({type: 'SERVER_MESSAGE', data: {type: 'REGISTERED'}});
+    emit({type: 'SERVER_MESSAGE', data: {type: 'BOARD_NOT_FOUND'}});
+    expect(selectBoardLoading(store.getState())).toBe(false);
+    expect(selectBoard(store.getState())).toBeNull();
+  });
+
+  it('starts AI game on GAME_STARTED', () => {
+    const {store, emit} = createStoreWithPort();
+    const gameState: AiGameState = {playerShots: [], aiShots: [], phase: 'player-turn', announcement: ''};
+    emit({type: 'SERVER_MESSAGE', data: {type: 'GAME_STARTED', gameState}});
+    expect(selectAiGameState(store.getState())).toEqual(gameState);
+  });
+
+  it('receives fire result', () => {
+    const {store, emit} = createStoreWithPort();
+    const gameState: AiGameState = {playerShots: [], aiShots: [], phase: 'player-turn', announcement: ''};
+    emit({type: 'SERVER_MESSAGE', data: {type: 'GAME_STARTED', gameState}});
+    const playerShot: Shot = {cell: {row: 1, col: 1}, result: 'miss'};
+    emit({type: 'SERVER_MESSAGE', data: {type: 'FIRE_RESULT', playerShot, phase: 'computer-turn'}});
+    expect(selectAiGameState(store.getState())?.playerShots).toHaveLength(1);
+    expect(selectAiGameState(store.getState())?.phase).toBe('computer-turn');
+  });
+
+  it('receives game state', () => {
+    const {store, emit} = createStoreWithPort();
+    const gameState: AiGameState = {playerShots: [{cell: {row: 1, col: 1}, result: 'hit'}], aiShots: [], phase: 'player-turn', announcement: ''};
+    emit({type: 'SERVER_MESSAGE', data: {type: 'GAME_STATE', gameState}});
+    expect(selectAiGameState(store.getState())).toEqual(gameState);
+  });
+
+  it('handles GAME_NOT_FOUND', () => {
+    const {store, emit} = createStoreWithPort();
+    emit({type: 'SERVER_MESSAGE', data: {type: 'REGISTERED'}});
+    emit({type: 'SERVER_MESSAGE', data: {type: 'GAME_NOT_FOUND'}});
+    expect(selectAiGameState(store.getState())).toBeNull();
+  });
+
+  it('loads P2P game with peer ID translation', () => {
+    const {port, emit} = createConnectionPort({
+      sendToPeer: () => {},
+      sendToServer: () => {},
+    });
+    const store = createGameStore({
+      port,
+      translatePeerId: (id) => id === 'signaling-123' ? 'local-456' : undefined,
+    });
+    const gameState = JSON.stringify({
+      opponentId: 'signaling-123',
+      phase: 'my-turn',
+      myBoardHash: 'abc',
+      myShots: [],
+      opponentShots: [],
+      myBoardReady: true,
+      opponentBoardReady: true,
+    });
+    emit({type: 'SERVER_MESSAGE', data: {type: 'P2P_GAME_LOADED', gameState}});
+    expect(selectP2pGame(store.getState())?.opponentId).toBe('local-456');
+    expect(selectP2pGame(store.getState())?.phase).toBe('my-turn');
+  });
+
+  it('loads P2P game without translation when no mapping exists', () => {
+    const {port, emit} = createConnectionPort({
+      sendToPeer: () => {},
+      sendToServer: () => {},
+    });
+    const store = createGameStore({
+      port,
+      translatePeerId: () => undefined,
+    });
+    const gameState = JSON.stringify({
+      opponentId: 'signaling-123',
+      phase: 'their-turn',
+      myBoardHash: 'abc',
+      myShots: [],
+      opponentShots: [],
+      myBoardReady: true,
+      opponentBoardReady: true,
+    });
+    emit({type: 'SERVER_MESSAGE', data: {type: 'P2P_GAME_LOADED', gameState}});
+    expect(selectP2pGame(store.getState())?.opponentId).toBe('signaling-123');
+    expect(selectP2pGame(store.getState())?.phase).toBe('their-turn');
+  });
+
+  it('ignores P2P_GAME_LOADED with invalid JSON', () => {
+    const {store, emit} = createStoreWithPort();
+    emit({type: 'SERVER_MESSAGE', data: {type: 'P2P_GAME_LOADED', gameState: 'not-json'}});
+    expect(selectP2pGame(store.getState())).toBeNull();
+  });
+
+  it('ignores unknown server message types without crashing', () => {
+    const {store, emit} = createStoreWithPort();
+    emit({type: 'SERVER_MESSAGE', data: {type: 'UNKNOWN_EVENT'}});
+    expect(store.getState()).toBeDefined();
   });
 });
