@@ -33,8 +33,8 @@ export const randomBoard = (): Board => {
 };
 
 export const nextAiShot = (fired: Shot[]): Cell => {
-  const fired_set = new Set(fired.map(s => `${s.cell.row},${s.cell.col}`));
-  const available = allCells().filter(c => !fired_set.has(`${c.row},${c.col}`));
+  const firedSet = new Set(fired.map(s => `${s.cell.row},${s.cell.col}`));
+  const available = allCells().filter(c => !firedSet.has(`${c.row},${c.col}`));
   return available[randomInt(available.length)];
 };
 
