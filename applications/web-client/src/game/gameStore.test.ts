@@ -1,4 +1,5 @@
-import {createGameStore, createAiGameListenerFactory} from './gameStore';
+import {vi} from 'vitest';
+import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory} from './gameStore';
 import {
   challengePeer, challengeReceived, acceptChallenge, declineChallenge, cancelChallenge,
   p2pBoardReady, opponentBoardReady, turnOrderDecided,
@@ -773,8 +774,22 @@ describe('AI game listener', () => {
     expect(aiGame?.playerShots).toHaveLength(1);
   });
 
-  it('initial boardLoading is false', () => {
-    const store = makeAiStore();
+  it('boardLoading is unblocked by offline fallback when no server connects', () => {
+    vi.useFakeTimers();
+    const store = createGameStore({listenerFactories: [createAiGameListenerFactory, createOfflineFallbackListenerFactory]});
+    expect(selectBoardLoading(store.getState())).toBe(true);
+    vi.runAllTimers();
     expect(selectBoardLoading(store.getState())).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('offline fallback is cancelled when server connects (LOAD_BOARD received)', () => {
+    vi.useFakeTimers();
+    const store = createGameStore({listenerFactories: [createAiGameListenerFactory, createOfflineFallbackListenerFactory]});
+    store.dispatch({type: 'LOAD_BOARD'});
+    vi.runAllTimers();
+    // boardLoading was set to true by LOAD_BOARD and never cleared by fallback
+    expect(selectBoardLoading(store.getState())).toBe(true);
+    vi.useRealTimers();
   });
 });

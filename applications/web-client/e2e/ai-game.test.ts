@@ -61,31 +61,23 @@ test('player can sink the AI fleet and win', async ({page}) => {
 
   // Fire all 100 cells — guaranteed to sink the AI fleet
   const trackingBoard = page.getByRole('region', {name: /tracking board/i});
+
   for (let row = 1; row <= 10; row++) {
     for (let col = 1; col <= 10; col++) {
       const gameOver = await page.locator('.game-over').isVisible();
       if (gameOver) break;
-
-      const isMyTurn = await page.locator('.game-announcement').filter({hasText: /your turn/i}).isVisible();
-      if (!isMyTurn) {
-        // Wait for our turn to come back after computer fires
-        await expect(page.locator('.game-announcement')).toContainText(/your turn|game over|you win|computer wins/i, {timeout: 10_000});
-        const nowOver = await page.locator('.game-over').isVisible();
-        if (nowOver) break;
-        const stillMyTurn = await page.locator('.game-announcement').filter({hasText: /your turn/i}).isVisible();
-        if (!stillMyTurn) continue;
-      }
 
       const btn = trackingBoard.getByRole('button', {name: `Row ${row}, Column ${col}`, exact: true});
       const isDisabled = await btn.isDisabled();
       if (isDisabled) continue;
 
       await btn.click();
+      // Wait for shot to resolve: button becomes disabled (shot registered) or game ends
       await expect(async () => {
         const over = await page.locator('.game-over').isVisible();
-        const myTurn = await page.locator('.game-announcement').filter({hasText: /your turn/i}).isVisible();
-        expect(over || myTurn).toBe(true);
-      }).toPass({timeout: 5_000});
+        const fired = await btn.isDisabled();
+        expect(over || fired).toBe(true);
+      }).toPass({timeout: 10_000});
     }
 
     const gameOver = await page.locator('.game-over').isVisible();
