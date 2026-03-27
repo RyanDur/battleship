@@ -2,9 +2,10 @@ import type {Page} from '@playwright/test';
 import {expect} from '@playwright/test';
 
 const selectAndPlace = async (page: Page, shipPattern: RegExp, row: number, col: number) => {
+  const shipList = page.getByRole('list', {name: /ships remaining/i});
   await page.getByRole('button', {name: shipPattern}).click();
-  await expect(page.getByRole('button', {name: shipPattern})).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', {name: `Row ${row}, Column ${col}`, exact: true}).click();
+  await expect(shipList.getByRole('button', {name: shipPattern})).not.toBeVisible();
 };
 
 export const placeAllShips = async (page: Page) => {
