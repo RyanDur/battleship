@@ -8,12 +8,13 @@ import {
   boardLoaded, boardNotFound, saveBoard,
   gameStarted, fireResult, gameStateReceived, gameNotFound,
   peerNamed, peerConnected,
+  p2pGameLoaded,
 } from './gameActions';
 import {
   selectP2pGame, selectBoard, selectBoardLoading, selectAiGameState,
   selectAnnouncement, selectGameView, selectOpponentNames, selectOffererPeerIds,
 } from './gameSelectors';
-import type {Shot, AiGameState} from './game';
+import type {Shot, AiGameState, P2pGame} from './game';
 import type {Board} from './board';
 
 const makeStore = () => createGameStore();
@@ -253,6 +254,53 @@ describe('P2P game', () => {
       const store = makeInProgressStore();
       store.dispatch(opponentBoardRevealed({placed: []}, true));
       expect(selectP2pGame(store.getState())?.opponentBoard).toBeNull();
+    });
+  });
+
+  describe('game loading', () => {
+    const loadedGame: P2pGame = {
+      opponentId: 'peer-saved',
+      phase: 'my-turn',
+      myBoardHash: 'hash-a',
+      opponentBoardHash: 'hash-b',
+      myShots: [{cell: {row: 0, col: 0}, result: 'miss'}],
+      opponentShots: [{cell: {row: 1, col: 1}, result: 'hit'}],
+      myBoardReady: true,
+      opponentBoardReady: true,
+      winner: null,
+      opponentBoard: null,
+      boardVerified: null,
+      announcement: '',
+    };
+
+    it('P2P_GAME_LOADED with resumable phase (my-turn) populates p2pGame', () => {
+      const store = makeStore();
+      store.dispatch(p2pGameLoaded(loadedGame));
+      expect(selectP2pGame(store.getState())).toMatchObject({phase: 'my-turn', opponentId: 'peer-saved'});
+    });
+
+    it('P2P_GAME_LOADED with non-resumable phase (game-over) is ignored', () => {
+      const store = makeStore();
+      store.dispatch(p2pGameLoaded({...loadedGame, phase: 'game-over'}));
+      expect(selectP2pGame(store.getState())).toBeNull();
+    });
+
+    it('P2P_GAME_LOADED when current game is disconnected uses loaded state opponentId', () => {
+      const store = makeStore();
+      store.dispatch(challengePeer('peer-active'));
+      store.dispatch(acceptChallenge());
+      store.dispatch(p2pBoardReady('abc123'));
+      store.dispatch(opponentBoardReady('def456'));
+      store.dispatch(turnOrderDecided(true));
+      store.dispatch(peerDisconnected('peer-active'));
+      store.dispatch(p2pGameLoaded(loadedGame));
+      expect(selectP2pGame(store.getState())).toMatchObject({phase: 'my-turn', opponentId: 'peer-saved'});
+    });
+
+    it('P2P_GAME_LOADED when no current game uses loaded state as-is', () => {
+      const store = makeStore();
+      store.dispatch(p2pGameLoaded({...loadedGame, phase: 'their-turn'}));
+      expect(selectP2pGame(store.getState())).toMatchObject({phase: 'their-turn', opponentId: 'peer-saved'});
     });
   });
 });
