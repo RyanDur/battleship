@@ -1,4 +1,4 @@
-import {useContext, useEffect, useLayoutEffect, useRef, useState} from 'react';
+import {useContext, useEffect, useState} from 'react';
 import {ConnectionContext} from './connectionContext';
 import type {ConnectionStore} from './connectionStore';
 import type {ConnectionsState} from './connections';
@@ -11,12 +11,7 @@ export const useConnectionStore = (): ConnectionStore => {
 
 export const useConnectionState = <T,>(selector: (state: ConnectionsState) => T): T => {
   const store = useConnectionStore();
-  const selectorRef = useRef(selector);
-  useLayoutEffect(() => { selectorRef.current = selector; });
-
   const [value, setValue] = useState(() => selector(store.getState()));
-
-  useEffect(() => store.subscribe(() => setValue(selectorRef.current(store.getState()))), [store]);
-
+  useEffect(() => store.subscribe(() => setValue(selector(store.getState()))), [store, selector]);
   return value;
 };

@@ -10,7 +10,7 @@ import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers
 import {selectP2pGame, selectGameView} from '../game/gameSelectors';
 import {createGameStore} from '../game/gameStore';
 import type {GameStore} from '../game/gameStore';
-import {createConnectionPort} from '../connections/connectionPort';
+import {createConnectionPort} from './connectionPort';
 
 const makeRelayMiddleware = (myName: string, mySigId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
   (_deps) => (next) => (action) => {

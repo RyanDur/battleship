@@ -1,6 +1,6 @@
-import {useConnectionState, useConnectionStore} from '../state/useConnection';
-import {selectPendingIntroductions} from '../state/connectionSelectors';
-import {acceptIntroduction, declineIntroduction} from '../state/connectionActions';
+import {useConnectionState, useConnectionStore} from './useConnection';
+import {selectPendingIntroductions} from './connectionSelectors';
+import {acceptIntroduction, declineIntroduction} from './connectionActions';
 
 export const Alerts = () => {
   const store = useConnectionStore();

@@ -1,7 +1,7 @@
 import {render, screen, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {BoardSetup} from './BoardSetup';
-import {type Board} from '../game/board';
+import {type Board} from './board';
 
 const setup = (onConfirm = () => {}) => {
   render(<BoardSetup onConfirm={onConfirm}/>);

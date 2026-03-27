@@ -1,10 +1,10 @@
 import {render, screen, within, waitFor, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {Game} from './Game';
-import {GameProvider} from '../game/GameProvider';
-import {createGameStore} from '../game/gameStore';
-import {gameStarted, fireResult, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided, opponentForfeited, peerNamed} from '../game/gameActions';
-import type {AiGameState, Shot} from '../game/game';
+import {Game} from './GameView';
+import {GameProvider} from './GameProvider';
+import {createGameStore} from './gameStore';
+import {gameStarted, fireResult, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided, opponentForfeited, peerNamed} from './gameActions';
+import type {AiGameState, Shot} from './game';
 
 const emptyGameState: AiGameState = {playerShots: [], aiShots: [], phase: 'player-turn', announcement: ''};
 

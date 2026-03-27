@@ -1,8 +1,8 @@
 import {useState} from 'react';
-import {useConnectionState, useConnectionStore} from '../state/useConnection';
-import type {Peer, PreviousPeer} from '../state/connections';
-import {selectPeers, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth} from '../state/connectionSelectors';
-import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, connectViaServer} from '../state/connectionActions';
+import {useConnectionState, useConnectionStore} from './useConnection';
+import type {Peer, PreviousPeer} from './connections';
+import {selectPeers, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth} from './connectionSelectors';
+import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, connectViaServer} from './connectionActions';
 
 type SelectPeer = (id: string, name: string | null) => void;
 

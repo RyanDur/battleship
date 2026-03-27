@@ -7,7 +7,7 @@ import {
   type Board,
   type Ship,
   type Orientation,
-} from '../game/board';
+} from './board';
 
 const ROWS = Array.from({length: 10}, (_, i) => i + 1);
 const COLS = Array.from({length: 10}, (_, i) => i + 1);

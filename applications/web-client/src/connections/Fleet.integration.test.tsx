@@ -2,13 +2,13 @@ import {render, screen, within, waitFor, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Fleet} from './Fleet';
 import {Alerts} from './Alerts';
-import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
+import {ConnectionProvider} from './ConnectionProvider';
+import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import type {ConnectionStore, MiddlewareFactory} from '../state/connectionStore';
-import type {ConnectionFlow} from '../state/connections';
-import {serverOfferReceived, serverAnswerReceived, previousPeersReceived, reconnectViaServer, onlinePeersUpdated, createOffer, joinOffer, acceptAnswerCode} from '../state/connectionActions';
-import {selectFlow, selectPeers, selectPreviousPeers} from '../state/connectionSelectors';
+import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
+import type {ConnectionFlow} from './connections';
+import {serverOfferReceived, serverAnswerReceived, previousPeersReceived, reconnectViaServer, onlinePeersUpdated, createOffer, joinOffer, acceptAnswerCode} from './connectionActions';
+import {selectFlow, selectPeers, selectPreviousPeers} from './connectionSelectors';
 
 describe('Fleet integration', () => {
   it('reconnecting to a previous peer removes them from previous peers list', async () => {

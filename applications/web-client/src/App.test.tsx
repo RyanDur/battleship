@@ -1,6 +1,6 @@
 import {render, screen, within} from '@testing-library/react';
 import {App} from './App';
-import type {Config} from './protocol/config';
+import type {Config} from './connections/config';
 
 const config: Config = {version: '1.2.3', serviceUrl: 'http://localhost:8080'};
 

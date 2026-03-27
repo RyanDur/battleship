@@ -1,10 +1,10 @@
 import {render, screen, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {GameLobby} from './GameLobby';
-import {GameProvider} from '../game/GameProvider';
-import {createGameStore} from '../game/gameStore';
-import {boardLoaded, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady} from '../game/gameActions';
-import type {Board} from '../game/board';
+import {GameProvider} from './GameProvider';
+import {createGameStore} from './gameStore';
+import {boardLoaded, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady} from './gameActions';
+import type {Board} from './board';
 
 const emptyBoard: Board = {placed: []};
 

@@ -2,7 +2,7 @@ import * as Decoder from 'schemawax';
 import {maybe} from '../lib/maybe';
 import {tryCatch} from '../lib/result';
 import {asyncTryCatch} from '../lib/asyncResult';
-import type {PreviousPeer, GameState, Shot, GamePhase} from '../state/connections';
+import type {PreviousPeer, GameState, Shot, GamePhase} from './connections';
 import type {Board} from '../game/board';
 
 export type OnlinePeer = {peerId: string; name: string}

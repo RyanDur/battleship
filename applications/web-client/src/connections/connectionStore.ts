@@ -8,11 +8,11 @@ import type {GameState, GameAction} from '../game/game';
 import {acceptChallenge as gameAcceptChallenge, declineChallenge as gameDeclineChallenge, cancelChallenge as gameCancelChallenge, challengePeer as gameChallengePeer, turnOrderDecided as gameTurnOrderDecided, p2pBoardReady as gameP2pBoardReady, peerDisconnected as gamePeerDisconnected} from '../game/gameActions';
 import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, p2pGameLoaded, saveP2pGame, loadP2pGame, turnOrderDecided} from './connectionActions';
 import type {PeerEvent} from '../types/worker-messages';
-import {encodeConnectionCode, decodeConnectionCode} from '../protocol/connection-code';
-import {createPeerHandler} from '../workers/connection.handler';
-import {startSignaling} from '../protocol/signaling';
-import type {ConnectionEvent} from '../connections/connectionPort';
-import type {SignalingConfig, SignalingEvent, SignalingHandle} from '../protocol/signaling';
+import {encodeConnectionCode, decodeConnectionCode} from './connectionCode';
+import {createPeerHandler} from './connectionHandler';
+import {startSignaling} from './signaling';
+import type {ConnectionEvent} from './connectionPort';
+import type {SignalingConfig, SignalingEvent, SignalingHandle} from './signaling';
 
 export type ListenerContext = {
   prevState: ConnectionsState

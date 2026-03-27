@@ -1,6 +1,6 @@
 import {useEffect, useState} from 'react';
-import {RELEASES_PAGE} from '../protocol/download';
-import type {Platform} from '../protocol/platform';
+import {RELEASES_PAGE} from './download';
+import type {Platform} from './platform';
 import type {AsyncResult} from '../lib/asyncResult';
 
 type Action = 'download' | 'upgrade' | 'none'

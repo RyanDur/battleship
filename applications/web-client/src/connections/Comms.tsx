@@ -1,7 +1,7 @@
 import {useState} from 'react';
-import {useConnectionState, useConnectionStore} from '../state/useConnection';
-import {selectMessages} from '../state/connectionSelectors';
-import {sendMessage} from '../state/connectionActions';
+import {useConnectionState, useConnectionStore} from './useConnection';
+import {selectMessages} from './connectionSelectors';
+import {sendMessage} from './connectionActions';
 import {Alerts} from './Alerts';
 import {ChallengeAlert} from '../game/ChallengeAlert';
 

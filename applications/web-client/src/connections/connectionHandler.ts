@@ -3,11 +3,11 @@ import { maybe, nothing } from '../lib/maybe';
 import { tryCatch } from '../lib/result';
 import { asyncResult, asyncTryCatch } from '../lib/asyncResult';
 import type { PeerCommand, PeerEvent } from '../types/worker-messages';
-import type { ConnectionsState, ConnectionsAction } from '../state/connections';
-import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer} from '../state/connectionSelectors';
+import type { ConnectionsState, ConnectionsAction } from './connections';
+import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer} from './connectionSelectors';
 import {hashValue} from '../game/hashBoard';
-import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed, turnOrderDecided} from '../state/connectionActions';
-import type {ConnectionEvent} from '../connections/connectionPort';
+import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed, turnOrderDecided} from './connectionActions';
+import type {ConnectionEvent} from './connectionPort';
 
 const introduceDecoder = Decoder.object({
   required: { type: Decoder.literal('INTRODUCE'), name: Decoder.string },

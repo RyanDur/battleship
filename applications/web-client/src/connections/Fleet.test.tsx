@@ -1,12 +1,12 @@
 import {render, screen, act, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Fleet} from './Fleet';
-import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
-import type {ConnectionsAction} from '../state/connections';
+import {ConnectionProvider} from './ConnectionProvider';
+import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
+import type {ConnectionsAction} from './connections';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import {peerConnected, peerNamed, peerDisconnected, grantTrust, peerTrustUpdated, introductionReceived, peerConnectionUnstable, peerConnectionRestored, previousPeersReceived, onlinePeerLeft, onlinePeersUpdated, onlinePeerJoined, reconnectViaServer, forgetPeer, savePeerEmail} from '../state/connectionActions';
-import {selectPeers} from '../state/connectionSelectors';
+import {peerConnected, peerNamed, peerDisconnected, grantTrust, peerTrustUpdated, introductionReceived, peerConnectionUnstable, peerConnectionRestored, previousPeersReceived, onlinePeerLeft, onlinePeersUpdated, onlinePeerJoined, reconnectViaServer, forgetPeer, savePeerEmail} from './connectionActions';
+import {selectPeers} from './connectionSelectors';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();

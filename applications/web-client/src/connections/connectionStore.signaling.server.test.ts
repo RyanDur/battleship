@@ -136,7 +136,7 @@ describe('createSignalingMiddleware (server)', () => {
 
   it('ICE_RESTART_RECEIVED message from server dispatches store action', async () => {
     const {store, getConn, cleanup} = await connectStore();
-    const captured: import('../state/connections').ConnectionsAction[] = [];
+    const captured: import('./connections').ConnectionsAction[] = [];
     const origDispatch = store.dispatch;
     store.dispatch = (action) => { captured.push(action); origDispatch(action); };
 
@@ -150,7 +150,7 @@ describe('createSignalingMiddleware (server)', () => {
 
   it('ICE_RESTART_ANSWER_RECEIVED message from server dispatches store action', async () => {
     const {store, getConn, cleanup} = await connectStore();
-    const captured: import('../state/connections').ConnectionsAction[] = [];
+    const captured: import('./connections').ConnectionsAction[] = [];
     const origDispatch = store.dispatch;
     store.dispatch = (action) => { captured.push(action); origDispatch(action); };
 

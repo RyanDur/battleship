@@ -1,4 +1,4 @@
-import { encodeConnectionCode, decodeConnectionCode } from './connection-code';
+import { encodeConnectionCode, decodeConnectionCode } from './connectionCode';
 
 // Story #39: Secure, compact connection codes
 

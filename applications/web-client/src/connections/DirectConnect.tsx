@@ -1,8 +1,8 @@
 import {useState} from 'react';
-import {useConnectionState, useConnectionStore} from '../state/useConnection';
-import type {ConnectionFlow} from '../state/connections';
-import {selectFlow} from '../state/connectionSelectors';
-import {acceptAnswerCode, cancelOffer, createOffer, joinOffer} from '../state/connectionActions';
+import {useConnectionState, useConnectionStore} from './useConnection';
+import type {ConnectionFlow} from './connections';
+import {selectFlow} from './connectionSelectors';
+import {acceptAnswerCode, cancelOffer, createOffer, joinOffer} from './connectionActions';
 import {asyncTryCatch} from '../lib/asyncResult';
 
 type FlowPhase =

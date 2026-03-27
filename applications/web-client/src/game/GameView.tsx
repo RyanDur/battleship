@@ -1,8 +1,8 @@
 import {useState} from 'react';
-import {useGameState, useGameStore} from '../game/useGame';
-import {selectGameView, selectP2pGame, selectAnnouncement} from '../game/gameSelectors';
-import {fireShot, p2pFire, forfeitGame} from '../game/gameActions';
-import {occupiedCells} from '../game/board';
+import {useGameState, useGameStore} from './useGame';
+import {selectGameView, selectP2pGame, selectAnnouncement} from './gameSelectors';
+import {fireShot, p2pFire, forfeitGame} from './gameActions';
+import {occupiedCells} from './board';
 
 const ROWS = Array.from({length: 10}, (_, i) => i + 1);
 const COLS = Array.from({length: 10}, (_, i) => i + 1);

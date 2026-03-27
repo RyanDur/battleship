@@ -1,11 +1,11 @@
 import {render, screen, act, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Alerts} from './Alerts';
-import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
+import {ConnectionProvider} from './ConnectionProvider';
+import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import {introductionReceived} from '../state/connectionActions';
-import {selectPendingIntroductions} from '../state/connectionSelectors';
+import {introductionReceived} from './connectionActions';
+import {selectPendingIntroductions} from './connectionSelectors';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();

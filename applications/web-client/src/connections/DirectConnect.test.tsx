@@ -1,12 +1,12 @@
 import {render, screen, act, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {DirectConnect} from './DirectConnect';
-import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
+import {ConnectionProvider} from './ConnectionProvider';
+import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import {createOffer, peerConnected} from '../state/connectionActions';
-import {selectFlow} from '../state/connectionSelectors';
-import type {ConnectionFlow} from '../state/connections';
+import {createOffer, peerConnected} from './connectionActions';
+import {selectFlow} from './connectionSelectors';
+import type {ConnectionFlow} from './connections';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();

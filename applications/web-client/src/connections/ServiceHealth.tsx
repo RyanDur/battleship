@@ -1,4 +1,4 @@
-import type {HeartbeatState} from '../protocol/heartbeat';
+import type {HeartbeatState} from './heartbeat';
 
 interface ServiceHealthProps {
   state: HeartbeatState

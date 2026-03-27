@@ -1,7 +1,7 @@
-import {useGameState, useGameStore} from '../game/useGame';
-import {selectP2pGame, selectOpponentNames, selectBoard} from '../game/gameSelectors';
-import {p2pBoardReady, claimFirstTurn, takeFirstTurn} from '../game/gameActions';
-import {hashBoard} from '../game/hashBoard';
+import {useGameState, useGameStore} from './useGame';
+import {selectP2pGame, selectOpponentNames, selectBoard} from './gameSelectors';
+import {p2pBoardReady, claimFirstTurn, takeFirstTurn} from './gameActions';
+import {hashBoard} from './hashBoard';
 
 type Props = {
   onSetupBoard: () => void;

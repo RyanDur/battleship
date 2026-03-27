@@ -1,11 +1,11 @@
 import {render, screen, act, within, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Comms} from './Comms';
-import {ConnectionProvider} from '../state/ConnectionProvider';
-import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from '../state/connectionStore';
+import {ConnectionProvider} from './ConnectionProvider';
+import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import {messageReceived, sendMessage} from '../state/connectionActions';
-import {selectMessages} from '../state/connectionSelectors';
+import {messageReceived, sendMessage} from './connectionActions';
+import {selectMessages} from './connectionSelectors';
 import {GameProvider} from '../game/GameProvider';
 import {createGameStore} from '../game/gameStore';
 

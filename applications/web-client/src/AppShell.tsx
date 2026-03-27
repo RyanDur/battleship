@@ -1,6 +1,6 @@
 import {useEffect, useState} from 'react';
 import {App} from './App';
-import {loadConfig, type Config} from './protocol/config';
+import {loadConfig, type Config} from './connections/config';
 
 export const AppShell = () => {
   const [config, setConfig] = useState<Config | null>(null);
