@@ -418,7 +418,7 @@ export const createSignalingListener = ({config, portEmit}: SignalingListenerCon
         const game = action.gameState ?? selectP2pGameFromConnections(getState());
         if (game) {
           const signalingOpponentId = selectPeerToSignaling(getState())[game.opponentId] ?? game.opponentId;
-          handle?.send({type: 'SAVE_P2P_GAME', opponentId: signalingOpponentId, gameState: JSON.stringify(game)});
+          handle?.send({type: 'SAVE_P2P_GAME', opponentId: signalingOpponentId, gameState: JSON.stringify({...game, opponentId: signalingOpponentId})});
         }
       } else if (action.type === 'LOAD_P2P_GAME') {
         handle?.send({type: 'LOAD_P2P_GAME', opponentId: action.opponentId});

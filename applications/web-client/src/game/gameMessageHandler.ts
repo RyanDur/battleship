@@ -85,7 +85,7 @@ const p2pShotDecoder = Decoder.object({
 const gameStateSyncDecoder = Decoder.object({
   required: {
     type: Decoder.literal('GAME_STATE_SYNC'),
-    phase: Decoder.string,
+    phase: p2pPhaseDecoder,
     myShots: Decoder.array(p2pShotDecoder),
     opponentShots: Decoder.array(p2pShotDecoder),
   },
@@ -300,7 +300,27 @@ export const createGameMessageHandler = (deps: GameMessageDeps) =>
       .or(() => maybe(gameStateSyncDecoder.decode(parsed))
         .map(msg => {
           const game = deps.getP2pGame();
-          if (!game) return;
+          if (!game) {
+            const flippedPhase: P2pGamePhase = msg.phase === 'my-turn' ? 'their-turn'
+              : msg.phase === 'their-turn' ? 'my-turn'
+              : msg.phase;
+            const reconnectedGame: P2pGame = {
+              opponentId: peerId,
+              myShots: msg.opponentShots,
+              opponentShots: msg.myShots,
+              phase: flippedPhase,
+              myBoardHash: '',
+              opponentBoardHash: null,
+              myBoardReady: true,
+              opponentBoardReady: true,
+              winner: null,
+              opponentBoard: null,
+              boardVerified: null,
+              announcement: '',
+            };
+            deps.dispatch(p2pGameLoaded(reconnectedGame));
+            return;
+          }
           const myShots = msg.myShots;
           const opponentShots = msg.opponentShots;
           const shotsMatch =

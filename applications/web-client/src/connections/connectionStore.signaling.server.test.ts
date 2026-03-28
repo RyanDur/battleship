@@ -3,7 +3,7 @@ import {createConnectionStore, createSignalingListener} from './connectionStore'
 import {createStubServer} from '../test/stubServer';
 import {makeWebSocket} from '../test/makeWebSocket';
 import type {WsConnection} from '../test/stubServer';
-import {startSignaling, stopSignaling, relayOffer, relayAnswer, forgetPeer, relayIceRestart, relayIceRestartAnswer, shareEmail, stopSharingEmail, updateEmail, savePeerEmail, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided} from './connectionActions';
+import {startSignaling, stopSignaling, relayOffer, relayAnswer, forgetPeer, relayIceRestart, relayIceRestartAnswer, shareEmail, stopSharingEmail, updateEmail, savePeerEmail, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided, saveP2pGame, signalingPeerRegistered} from './connectionActions';
 import {selectOnlinePeers, selectPreviousPeers, selectP2pGame} from './connectionSelectors';
 
 const connectStore = async (serverSetup: (conn: WsConnection) => void = () => undefined) => {
@@ -308,6 +308,42 @@ describe('createSignalingMiddleware (server)', () => {
     getConn().send(JSON.stringify({type: 'P2P_GAME_LOADED', gameState: doneGame}));
     await new Promise(r => setTimeout(r, 50));
     expect(selectP2pGame(store.getState())?.phase).toBe('my-turn');
+    await cleanup();
+  });
+
+  it('SAVE_P2P_GAME sends signaling ID (not local peer ID) as opponentId in game JSON body', async () => {
+    const received: string[] = [];
+    const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
+
+    const localPeerId = 'local-bob-peer-id';
+    const signalingBobId = 'bob-sig-id';
+
+    // Establish peerToSignaling mapping: localPeerId → signalingBobId
+    store.dispatch(signalingPeerRegistered(localPeerId, signalingBobId, true));
+
+    // Set up a game with local peer ID as opponentId
+    store.dispatch(challengePeer(localPeerId));
+    store.dispatch(acceptChallenge());
+    store.dispatch(p2pBoardReady('h1'));
+    store.dispatch(opponentBoardReady('h2'));
+    store.dispatch(turnOrderDecided(true));
+
+    // Save the game — should translate opponentId to signalingBobId in the JSON body
+    store.dispatch(saveP2pGame());
+
+    await vi.waitFor(() =>
+      expect(received.map(m => JSON.parse(m))).toContainEqual(
+        expect.objectContaining({type: 'SAVE_P2P_GAME', opponentId: signalingBobId})
+      )
+    );
+
+    // The gameState JSON body must also contain the signaling ID, not the local peer ID
+    const saveMsg = received.map(m => JSON.parse(m)).find((m: {type: string}) => m.type === 'SAVE_P2P_GAME');
+    expect(saveMsg).toBeDefined();
+    const body = JSON.parse(saveMsg.gameState);
+    expect(body.opponentId).toBe(signalingBobId);
+    expect(body.opponentId).not.toBe(localPeerId);
+
     await cleanup();
   });
 

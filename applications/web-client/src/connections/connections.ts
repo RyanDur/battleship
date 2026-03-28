@@ -262,12 +262,20 @@ const coreConnectionsReducer = (state: ConnectionsState, action: ConnectionsActi
         peers: [...state.peers, {id: action.peerId}],
       };
 
-    case 'PEER_DISCONNECTED':
+    case 'PEER_DISCONNECTED': {
+      const signalingPeerId = state.handlerState.peerToSignaling[action.peerId];
+      const peerName = state.peers.find(p => p.id === action.peerId)?.name;
+      const alreadyInPrevious = signalingPeerId ? state.previousPeers.some(p => p.peerId === signalingPeerId) : true;
+      const updatedPreviousPeers = signalingPeerId && peerName && !alreadyInPrevious
+        ? [...state.previousPeers, {peerId: signalingPeerId, name: peerName, online: false}]
+        : state.previousPeers;
       return {
         ...state,
         peers: state.peers.filter(p => p.id !== action.peerId),
         peerConnectionHealth: Object.fromEntries(Object.entries(state.peerConnectionHealth).filter(([k]) => k !== action.peerId)),
+        previousPeers: updatedPreviousPeers,
       };
+    }
 
     case 'PEER_NAMED':
       return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, name: action.name} : p)};

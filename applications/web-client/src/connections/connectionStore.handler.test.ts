@@ -183,6 +183,36 @@ describe('createHandlerMiddleware (store)', () => {
     await vi.waitFor(() => expect(selectPreviousPeers(alice.getState())).toHaveLength(0));
   });
 
+  it('PEER_DISCONNECTED adds the peer to previousPeers when they have a signalingId', async () => {
+    const {alice, connect} = makePair();
+    await connect();
+    const bobPeerId = selectPeers(alice.getState()).find(p => p.name === 'Bob')!.id;
+
+    alice.dispatch(peerDisconnected(bobPeerId));
+
+    await vi.waitFor(() => {
+      const previous = selectPreviousPeers(alice.getState());
+      expect(previous).toHaveLength(1);
+      expect(previous[0].peerId).toBe('bob-sig');
+      expect(previous[0].name).toBe('Bob');
+      expect(previous[0].online).toBe(false);
+    });
+  });
+
+  it('PEER_DISCONNECTED does not duplicate an existing previousPeer entry', async () => {
+    const {alice, connect} = makePair();
+    alice.dispatch(previousPeersReceived([{peerId: 'bob-sig', name: 'Bob', online: false}]));
+    await connect();
+    // After connect, bob-sig is removed from previousPeers (PREVIOUS_PEER_CONNECTED)
+    await vi.waitFor(() => expect(selectPreviousPeers(alice.getState())).toHaveLength(0));
+    const bobPeerId = selectPeers(alice.getState()).find(p => p.name === 'Bob')!.id;
+
+    alice.dispatch(peerDisconnected(bobPeerId));
+
+    await vi.waitFor(() => expect(selectPreviousPeers(alice.getState())).toHaveLength(1));
+    expect(selectPreviousPeers(alice.getState())[0].peerId).toBe('bob-sig');
+  });
+
   it('receiving an INTRODUCTION records the relay peer in handlerState.introChannels', async () => {
     const {alice, bob, connect} = makeTriple();
     await connect();
@@ -778,6 +808,44 @@ describe('disconnected and state-mismatch game view', () => {
     const view = selectGameView(aliceGame.getState());
     expect(view).not.toBeNull();
     expect(view!.phase).toBe('state-mismatch');
+  });
+});
+
+describe('reconnect via GAME_STATE_SYNC when no local game exists', () => {
+  it('creates game from flipped perspective when Bob has no game and Alice sends GAME_STATE_SYNC', async () => {
+    const pair = makePair();
+    const {alice, bob, aliceGame, bobGame} = await setupP2pGame(pair);
+    // alicePeerId is Alice's local peer ID as seen from Bob's store
+    const alicePeerId = selectPeers(bob.getState())[0].id;
+
+    // Give Bob a board so Alice's incoming FIRE can be resolved
+    bobGame.dispatch(boardLoaded({placed: []}));
+
+    // Alice fires — Alice → their-turn, Bob → my-turn
+    alice.dispatch(p2pFire(1, 1));
+    await vi.waitFor(() => expect(selectP2pGame(aliceGame.getState())?.phase).toBe('their-turn'));
+    await vi.waitFor(() => expect(selectP2pGame(bobGame.getState())?.phase).toBe('my-turn'));
+
+    const aliceSavedGame = selectP2pGame(aliceGame.getState())!;
+
+    // Bob loses his game (simulates reload — game store starts fresh)
+    bobGame.dispatch(clearP2pGame());
+    bob.dispatch(clearP2pGame());
+
+    // Alice loads her saved game — this triggers a GAME_STATE_SYNC to Bob
+    // Bob's game is null, so the handler must create the game from Alice's perspective flipped
+    aliceGame.dispatch(p2pGameLoaded(aliceSavedGame));
+    alice.dispatch(p2pGameLoaded(aliceSavedGame));
+
+    // Bob should have a game created from Alice's flipped perspective:
+    // Alice phase=their-turn → Bob phase=my-turn
+    // Alice myShots (1 shot) → Bob opponentShots (1 shot)
+    // Alice opponentShots (0 shots) → Bob myShots (0 shots)
+    // opponentId = Alice's peer ID as seen from Bob's store
+    await vi.waitFor(() => expect(selectP2pGame(bobGame.getState())?.phase).toBe('my-turn'));
+    expect(selectP2pGame(bobGame.getState())?.opponentShots).toHaveLength(1);
+    expect(selectP2pGame(bobGame.getState())?.myShots).toHaveLength(0);
+    expect(selectP2pGame(bobGame.getState())?.opponentId).toBe(alicePeerId);
   });
 });
 

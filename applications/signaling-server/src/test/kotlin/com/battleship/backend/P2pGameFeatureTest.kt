@@ -65,15 +65,15 @@ class P2pGameFeatureTest {
         session.sendMessage(TextMessage(mapper.writeValueAsString(payload)))
 
     @Test
-    fun `SAVE_P2P_GAME persists game state keyed by sorted peer pair`() {
+    fun `SAVE_P2P_GAME persists game state keyed by player-then-opponent`() {
         val (session, _) = connect("p2p-alice")
 
         send(session, mapOf("type" to "SAVE_P2P_GAME", "opponentId" to "p2p-bob", "gameState" to gameStateJson))
 
-        // Use gateway directly to verify persistence
+        // Each player saves their own perspective under their own key
         waitFor { gateway.find("p2p-alice", "p2p-bob") }
         assertEquals(gameStateJson, gateway.find("p2p-alice", "p2p-bob"))
-        assertEquals(gameStateJson, gateway.find("p2p-bob", "p2p-alice"))
+        assertNull(gateway.find("p2p-bob", "p2p-alice"))
 
         session.close()
     }
@@ -112,7 +112,7 @@ class P2pGameFeatureTest {
     }
 
     @Test
-    fun `LOAD_P2P_GAME returns same game regardless of which peer loads`() {
+    fun `LOAD_P2P_GAME returns only the requesting player's own saved perspective`() {
         gateway.save("p2p-frank", "p2p-grace", gameStateJson)
         val (session, messages) = connect("p2p-grace")
         messages.poll(2, TimeUnit.SECONDS)
@@ -121,9 +121,9 @@ class P2pGameFeatureTest {
 
         send(session, mapOf("type" to "LOAD_P2P_GAME", "opponentId" to "p2p-frank"))
 
+        // Grace has no saved game — only frank saved; grace gets NOT_FOUND
         val response = messages.poll(2, TimeUnit.SECONDS)
-        assertEquals("P2P_GAME_LOADED", response?.get("type"))
-        assertEquals(gameStateJson, response?.get("gameState"))
+        assertEquals("P2P_GAME_NOT_FOUND", response?.get("type"))
 
         session.close()
     }

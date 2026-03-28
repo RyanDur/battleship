@@ -39,5 +39,5 @@ class JpaP2pGameGateway(private val repo: P2pGameStateJpaRepository) : P2pGameGa
         repo.findById(pairKey(peerId1, peerId2)).orElse(null)?.gameData
 
     private fun pairKey(peerId1: String, peerId2: String): String =
-        listOf(peerId1, peerId2).sorted().joinToString(":")
+        "$peerId1:$peerId2"
 }
