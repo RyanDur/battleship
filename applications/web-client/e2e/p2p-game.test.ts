@@ -412,7 +412,7 @@ test.skip('game shows disconnected status when opponent leaves mid-game', async 
 // lacks signaling ID mappings needed for loadP2pGame. The reconnect feature is covered by
 // unit-level integration tests in connectionStore.handler.test.ts. This test should be
 // unskipped once server-mediated connections are debugged in the e2e environment.
-test.skip('game resumes after peer disconnects and reconnects via server', async ({browser}) => {
+test('game resumes after peer disconnects and reconnects via server', async ({browser}) => {
   test.setTimeout(180_000);
 
   const aliceCtx = await browser.newContext();

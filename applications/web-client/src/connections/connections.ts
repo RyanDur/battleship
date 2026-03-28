@@ -133,7 +133,7 @@ export type ConnectionsAction =
   | {type: 'P2P_GAME_OVER'; winner: 'me' | 'opponent'}
   | {type: 'FORFEIT_GAME'}
   | {type: 'OPPONENT_FORFEITED'}
-  | {type: 'SAVE_P2P_GAME'}
+  | {type: 'SAVE_P2P_GAME'; gameState?: P2pGame}
   | {type: 'LOAD_P2P_GAME'; opponentId: string}
   | {type: 'P2P_GAME_LOADED'; gameState: P2pGame}
   | {type: 'P2P_STATE_SYNC'; opponentId: string; myShots: Shot[]; opponentShots: Shot[]; phase: P2pGamePhase}

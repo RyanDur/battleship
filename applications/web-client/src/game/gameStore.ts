@@ -1,9 +1,11 @@
 import {gameReducer, initialGameState} from './game';
 import type {GameState, GameAction} from './game';
 import type {ConnectionPort} from '../connections/connectionPort';
+import type {ConnectionsAction} from '../connections/connections';
 import {createGameMessageHandler} from './gameMessageHandler';
 import {selectBoard, selectAiGameState, selectP2pGame, selectOffererPeerIds} from './gameSelectors';
 import {gameStarted, fireResult, boardNotFound} from './gameActions';
+import {saveP2pGame} from '../connections/connectionActions';
 import {randomBoard, resolveFireShot} from './aiGame';
 
 export type GameListenerContext = {
@@ -28,6 +30,7 @@ type ListenerFactoryDeps = {
   dispatch: Dispatch
   getState: () => GameState
   port?: ConnectionPort
+  dispatchToConnection?: (action: ConnectionsAction) => void
 }
 
 export type GameListenerFactory = (deps: ListenerFactoryDeps) => GameListenerFn
@@ -36,6 +39,7 @@ type GameStoreConfig = {
   port?: ConnectionPort
   listenerFactories?: GameListenerFactory[]
   translatePeerId?: (signalingId: string) => string | undefined
+  dispatchToConnection?: (action: ConnectionsAction) => void
 }
 
 export const createAiGameListenerFactory: GameListenerFactory = ({dispatch, getState}) => {
@@ -60,6 +64,17 @@ export const createAiGameListenerFactory: GameListenerFactory = ({dispatch, getS
     }
   };
 };
+
+export const createSaveOnShotListenerFactory: GameListenerFactory = ({getState, dispatchToConnection}) =>
+  (action) => {
+    if (
+      action.type !== 'P2P_FIRE_RESULT' &&
+      action.type !== 'OPPONENT_FIRED' &&
+      action.type !== 'P2P_GAME_OVER'
+    ) return;
+    const game = selectP2pGame(getState());
+    if (game && dispatchToConnection) dispatchToConnection(saveP2pGame(game));
+  };
 
 const OFFLINE_FALLBACK_MS = 3_000;
 
@@ -97,7 +112,7 @@ export const createGameStore = (config?: GameStoreConfig): GameStore => {
 
   store.dispatch = baseDispatch;
 
-  const listenerDeps: ListenerFactoryDeps = {dispatch: (action) => store.dispatch(action), getState: () => state, port: config?.port};
+  const listenerDeps: ListenerFactoryDeps = {dispatch: (action) => store.dispatch(action), getState: () => state, port: config?.port, dispatchToConnection: config?.dispatchToConnection};
   config?.listenerFactories?.forEach(factory => store.addListener(factory(listenerDeps)));
 
   if (config?.port) {
