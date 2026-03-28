@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   workflow_call:
+    inputs:
+      version:
+        required: false
+        type: string
 
 jobs:
   test:
@@ -30,9 +34,14 @@ jobs:
         run: |
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             ./gradlew test :applications:signaling-server:bootJar -Pversion=${GITHUB_REF_NAME#v}
+          elif [ -n "$INPUT_VERSION" ]; then
+            VERSION="${INPUT_VERSION#v}"
+            ./gradlew test :applications:signaling-server:bootJar -Pversion="$VERSION"
           else
             ./gradlew test :applications:signaling-server:bootJar
           fi
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
 
       - name: Install frontend dependencies
         working-directory: applications/web-client

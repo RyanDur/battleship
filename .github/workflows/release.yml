@@ -3,6 +3,15 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g., v0.9.0)"
+        required: true
+        type: string
+
+env:
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 permissions:
   contents: write
@@ -16,6 +25,8 @@ concurrency:
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
+    with:
+      version: ${{ inputs.tag || '' }}
 
   build:
     needs: ci
@@ -63,7 +74,7 @@ jobs:
           echo "$RESPONSE" | grep -q "\"version\":\"$EXPECTED\"" || \
             { echo "Smoke test failed. Expected version: $EXPECTED, got: $RESPONSE"; exit 1; }
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ env.RELEASE_TAG }}
 
       - name: Select icon for platform
         shell: bash
@@ -100,7 +111,7 @@ jobs:
             --java-options "-Xmx256m" \
             --java-options "-Djava.awt.headless=false"
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ env.RELEASE_TAG }}
 
       - name: Upload installer
         uses: actions/upload-artifact@v7
@@ -126,7 +137,7 @@ jobs:
           VERSION=${TAG#v}
           echo "{\"version\":\"$VERSION\",\"serviceUrl\":\"http://localhost:8080\"}" > config.json
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ env.RELEASE_TAG }}
 
       - uses: actions/configure-pages@v5
 
@@ -150,6 +161,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
           files: "*"
           generate_release_notes: true
