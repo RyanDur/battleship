@@ -27,6 +27,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       version: ${{ inputs.tag || '' }}
+      ref: ${{ inputs.tag || '' }}
 
   build:
     needs: ci
