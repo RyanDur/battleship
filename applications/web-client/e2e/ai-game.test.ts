@@ -72,13 +72,8 @@ test('player can sink the AI fleet and win', async ({page}) => {
       if (isDisabled) continue;
 
       await btn.click();
-      // Wait for shot to resolve: shot marker text appears on the cell or game ends
-      await expect(async () => {
-        const over = await page.locator('.game-over').isVisible();
-        const text = (await btn.textContent()) ?? '';
-        const fired = /miss|hit|sunk/i.test(text);
-        expect(over || fired).toBe(true);
-      }).toPass({timeout: 10_000});
+      // Button becomes disabled after any shot resolves (!!shot || isOver)
+      await expect(btn).toBeDisabled({timeout: 10_000});
     }
 
     const gameOver = await page.locator('.game-over').isVisible();
