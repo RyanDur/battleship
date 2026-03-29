@@ -38,3 +38,17 @@ export const nothing = <T = never>(): Nothing<T> => Object.freeze({
 
 export const maybe = <T>(value: T | null | undefined): Maybe<T> =>
   value !== undefined && value !== null ? some(value) : nothing();
+
+export const createReducer = <S, A extends {type: string}>(
+  handlers: {[T in A['type']]?: (state: S, action: Extract<A, {type: T}>) => S}
+): ((state: S, action: A) => S) => {
+  const h = handlers as Record<string, ((state: S, action: A) => S) | undefined>;
+  return (state, action) => maybe(h[action.type]).map(fn => fn(state, action)).orElse(state);
+};
+
+export const createDispatch = <A extends {type: string}>(
+  handlers: {[T in A['type']]?: (action: Extract<A, {type: T}>) => void}
+): ((action: A) => boolean) => {
+  const h = handlers as Record<string, ((action: A) => void) | undefined>;
+  return (action) => maybe(h[action.type]).map(fn => { fn(action); return true; }).orElse(false);
+};
