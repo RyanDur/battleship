@@ -115,19 +115,12 @@ export type ConnectionsAction =
   | {type: 'LOAD_GAME'}
   | {type: 'GAME_STATE'; gameState: AiGameState}
   | {type: 'GAME_NOT_FOUND'}
-  | {type: 'CHALLENGE_PEER'; opponentId: string}
-  | {type: 'CHALLENGE_RECEIVED'; opponentId: string}
-  | {type: 'ACCEPT_CHALLENGE'}
-  | {type: 'DECLINE_CHALLENGE'}
-  | {type: 'CANCEL_CHALLENGE'}
-  | {type: 'P2P_BOARD_READY'; boardHash: string}
   | {type: 'CLAIM_FIRST_TURN'}
   | {type: 'TAKE_FIRST_TURN'}
   | {type: 'COIN_FLIP_COMMIT'; hash: string}
   | {type: 'COIN_FLIP_REVEAL'; value: number}
   | {type: 'TURN_ORDER_DECIDED'; iGoFirst: boolean}
   | {type: 'P2P_FIRE'; row: number; col: number}
-  | {type: 'FORFEIT_GAME'}
   | {type: 'SAVE_P2P_GAME'; gameState: P2pGame}
   | {type: 'LOAD_P2P_GAME'; opponentId: string}
   | {type: 'CLEAR_P2P_GAME'}

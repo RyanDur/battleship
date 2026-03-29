@@ -1,10 +1,9 @@
-import {useConnectionStore} from '../connections/useConnection';
-import {acceptChallenge, declineChallenge} from '../connections/connectionActions';
-import {useGameState} from './useGame';
+import {useGameState, useGameStore} from './useGame';
+import {acceptChallenge, declineChallenge} from './gameActions';
 import {selectP2pGame, selectOpponentNames} from './gameSelectors';
 
 export const ChallengeAlert = () => {
-  const store = useConnectionStore();
+  const store = useGameStore();
   const p2pGame = useGameState(selectP2pGame);
   const opponentNames = useGameState(selectOpponentNames);
 

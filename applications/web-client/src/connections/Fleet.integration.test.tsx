@@ -9,6 +9,8 @@ import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
 import type {ConnectionFlow} from './connections';
 import {serverOfferReceived, serverAnswerReceived, previousPeersReceived, reconnectViaServer, onlinePeersUpdated, createOffer, joinOffer, acceptAnswerCode} from './connectionActions';
 import {selectFlow, selectPeers, selectPreviousPeers} from './connectionSelectors';
+import {GameProvider} from '../game/GameProvider';
+import {createGameStore} from '../game/gameStore';
 
 describe('Fleet integration', () => {
   it('reconnecting to a previous peer removes them from previous peers list', async () => {
@@ -86,10 +88,10 @@ describe('Fleet integration', () => {
     render(
       <div>
         <div data-testid="alice">
-          <ConnectionProvider store={aliceStore}><Fleet /></ConnectionProvider>
+          <ConnectionProvider store={aliceStore}><GameProvider store={createGameStore()}><Fleet /></GameProvider></ConnectionProvider>
         </div>
         <div data-testid="bob">
-          <ConnectionProvider store={bobStore}><Fleet /></ConnectionProvider>
+          <ConnectionProvider store={bobStore}><GameProvider store={createGameStore()}><Fleet /></GameProvider></ConnectionProvider>
         </div>
       </div>
     );
@@ -123,13 +125,13 @@ describe('Fleet integration', () => {
     render(
       <div>
         <div data-testid="alice">
-          <ConnectionProvider store={aliceStore}><Fleet /><Alerts /></ConnectionProvider>
+          <ConnectionProvider store={aliceStore}><GameProvider store={createGameStore()}><Fleet /><Alerts /></GameProvider></ConnectionProvider>
         </div>
         <div data-testid="bob">
-          <ConnectionProvider store={bobStore}><Fleet /><Alerts /></ConnectionProvider>
+          <ConnectionProvider store={bobStore}><GameProvider store={createGameStore()}><Fleet /><Alerts /></GameProvider></ConnectionProvider>
         </div>
         <div data-testid="carol">
-          <ConnectionProvider store={carolStore}><Fleet /><Alerts /></ConnectionProvider>
+          <ConnectionProvider store={carolStore}><GameProvider store={createGameStore()}><Fleet /><Alerts /></GameProvider></ConnectionProvider>
         </div>
       </div>
     );

@@ -3,16 +3,16 @@ import userEvent from '@testing-library/user-event';
 import {ChallengeAlert} from './ChallengeAlert';
 import {GameProvider} from './GameProvider';
 import {createGameStore} from './gameStore';
+import type {GameAction} from './game';
 import {challengeReceived, peerNamed} from './gameActions';
 import {ConnectionProvider} from '../connections/ConnectionProvider';
 import {createConnectionStore} from '../connections/connectionStore';
-import type {ConnectionsAction} from '../connections/connections';
 
 const setup = () => {
   const gameStore = createGameStore();
   const connectionStore = createConnectionStore();
-  const dispatched: ConnectionsAction[] = [];
-  connectionStore.addListener((action) => { dispatched.push(action); });
+  const dispatched: GameAction[] = [];
+  gameStore.addListener((action) => { dispatched.push(action); });
   render(
     <ConnectionProvider store={connectionStore}>
       <GameProvider store={gameStore}>
@@ -51,7 +51,7 @@ describe('ChallengeAlert', () => {
     expect(screen.getByRole('button', {name: /decline/i})).toBeInTheDocument();
   });
 
-  it('clicking accept dispatches ACCEPT_CHALLENGE to connection store', async () => {
+  it('clicking accept dispatches ACCEPT_CHALLENGE to game store', async () => {
     const user = userEvent.setup();
     const {gameStore, dispatched} = setup();
     await act(async () => gameStore.dispatch(challengeReceived('peer-1')));
@@ -59,7 +59,7 @@ describe('ChallengeAlert', () => {
     expect(dispatched.some(a => a.type === 'ACCEPT_CHALLENGE')).toBe(true);
   });
 
-  it('clicking decline dispatches DECLINE_CHALLENGE to connection store', async () => {
+  it('clicking decline dispatches DECLINE_CHALLENGE to game store', async () => {
     const user = userEvent.setup();
     const {gameStore, dispatched} = setup();
     await act(async () => gameStore.dispatch(challengeReceived('peer-1')));

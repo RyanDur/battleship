@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import {useConnectionStore} from '../connections/useConnection';
-import {p2pFire, forfeitGame} from '../connections/connectionActions';
+import {p2pFire} from '../connections/connectionActions';
+import {forfeitGame} from './gameActions';
 import {useGameState, useGameStore} from './useGame';
 import {selectGameView, selectP2pGame, selectAnnouncement} from './gameSelectors';
 import {fireShot} from './gameActions';
@@ -46,7 +47,7 @@ export const Game = ({onNewGame}: Props) => {
     shots.find(s => s.cell.row === row && s.cell.col === col);
 
   const handleForfeitConfirm = () => {
-    connectionStore.dispatch(forfeitGame());
+    gameStore.dispatch(forfeitGame());
     setConfirmForfeit(false);
   };
 

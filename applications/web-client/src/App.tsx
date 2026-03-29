@@ -15,12 +15,12 @@ import {detectPlatform} from './connections/platform';
 import {createConnectionStore, createHandlerListener, createSignalingListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connections/connectionStore';
 import {startSignaling, stopSignaling, sendToPeer, saveBoard, startGame} from './connections/connectionActions';
 import {ConnectionProvider} from './connections/ConnectionProvider';
-import {selectSignalingToPeer} from './connections/connectionSelectors';
+import {selectSignalingToPeer, selectPeerToSignaling} from './connections/connectionSelectors';
 import {clearP2pGame} from './game/gameActions';
 import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './game/gameSelectors';
 import {useConnectionStore} from './connections/useConnection';
 import {useGameState, useGameStore} from './game/useGame';
-import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory} from './game/gameStore';
+import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory} from './game/gameStore';
 import {initialGameState} from './game/game';
 import {GameProvider} from './game/GameProvider';
 import {createConnectionPort} from './connections/connectionPort';
@@ -80,9 +80,10 @@ const App = ({config}: Props) => {
     );
     gs = createGameStore({
       port,
-      listenerFactories: [createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory],
+      listenerFactories: [createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory],
       translatePeerId: (signalingId) => selectSignalingToPeer(connectionStore.getState())[signalingId],
       dispatchToConnection: (action) => connectionStore.dispatch(action),
+      getPeerToSignaling: () => selectPeerToSignaling(connectionStore.getState()),
     });
     return {store: connectionStore, gameStore: gs};
   }, [config]);

@@ -7,6 +7,8 @@ import type {ConnectionsAction} from './connections';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import {peerConnected, peerNamed, peerDisconnected, grantTrust, peerTrustUpdated, introductionReceived, peerConnectionUnstable, peerConnectionRestored, previousPeersReceived, onlinePeerLeft, onlinePeersUpdated, onlinePeerJoined, reconnectViaServer, forgetPeer, savePeerEmail} from './connectionActions';
 import {selectPeers} from './connectionSelectors';
+import {GameProvider} from '../game/GameProvider';
+import {createGameStore} from '../game/gameStore';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();
@@ -14,17 +16,20 @@ const makeStore = () => {
     applyMiddleware([encodingMiddleware, codecMiddleware]),
     [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
   );
-  return {store};
+  const gameStore = createGameStore();
+  return {store, gameStore};
 };
 
 const setup = (onSelectPeer?: (id: string, name: string | null) => void) => {
-  const {store} = makeStore();
+  const {store, gameStore} = makeStore();
   render(
     <ConnectionProvider store={store}>
-      <Fleet onSelectPeer={onSelectPeer}/>
+      <GameProvider store={gameStore}>
+        <Fleet onSelectPeer={onSelectPeer}/>
+      </GameProvider>
     </ConnectionProvider>
   );
-  return {store};
+  return {store, gameStore};
 };
 
 describe('Fleet', () => {

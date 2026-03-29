@@ -5,9 +5,9 @@ import type {ConnectionsAction} from '../connections/connections';
 import {createGameMessageHandler} from './gameMessageHandler';
 import {selectBoard, selectAiGameState, selectP2pGame, selectOffererPeerIds} from './gameSelectors';
 import {gameStarted, fireResult, boardNotFound} from './gameActions';
-import {saveP2pGame} from '../connections/connectionActions';
+import {saveP2pGame, loadP2pGame} from '../connections/connectionActions';
 import {randomBoard, resolveFireShot} from './aiGame';
-import {maybe} from '../lib/maybe';
+import {maybe, createDispatch} from '../lib/maybe';
 
 export type GameListenerContext = {
   prevState: GameState
@@ -32,6 +32,7 @@ type ListenerFactoryDeps = {
   getState: () => GameState
   port?: ConnectionPort
   dispatchToConnection?: (action: ConnectionsAction) => void
+  getPeerToSignaling?: () => Record<string, string>
 }
 
 export type GameListenerFactory = (deps: ListenerFactoryDeps) => GameListenerFn
@@ -41,6 +42,7 @@ type GameStoreConfig = {
   listenerFactories?: GameListenerFactory[]
   translatePeerId?: (signalingId: string) => string | undefined
   dispatchToConnection?: (action: ConnectionsAction) => void
+  getPeerToSignaling?: () => Record<string, string>
 }
 
 export const createAiGameListenerFactory: GameListenerFactory = ({dispatch, getState}) => {
@@ -89,6 +91,49 @@ export const createReconnectListenerFactory: GameListenerFactory = ({port}) =>
     );
   };
 
+export const createGameCommandListenerFactory: GameListenerFactory = ({getState, port, dispatchToConnection, getPeerToSignaling}) => {
+  const dispatchGameCommand = createDispatch<GameAction>({
+    CHALLENGE_PEER: (action) => {
+      maybe(port?.sendToPeer).map(send => send(action.opponentId, {type: 'GAME_CHALLENGE'}));
+      if (dispatchToConnection) {
+        const signalingId = getPeerToSignaling?.()[action.opponentId];
+        if (signalingId) dispatchToConnection(loadP2pGame(signalingId));
+      }
+    },
+    ACCEPT_CHALLENGE: () => {
+      const game = selectP2pGame(getState());
+      if (game?.phase !== 'challenge-received') return;
+      maybe(port?.sendToPeer).map(send => send(game.opponentId, {type: 'GAME_ACCEPT'}));
+      if (dispatchToConnection) {
+        const signalingId = getPeerToSignaling?.()[game.opponentId];
+        if (signalingId) dispatchToConnection(loadP2pGame(signalingId));
+      }
+    },
+    DECLINE_CHALLENGE: () => {
+      const game = selectP2pGame(getState());
+      if (!game) return;
+      maybe(port?.sendToPeer).map(send => send(game.opponentId, {type: 'GAME_DECLINE'}));
+    },
+    CANCEL_CHALLENGE: () => {
+      const game = selectP2pGame(getState());
+      if (!game) return;
+      maybe(port?.sendToPeer).map(send => send(game.opponentId, {type: 'GAME_CANCEL'}));
+    },
+    P2P_BOARD_READY: (action) => {
+      const game = selectP2pGame(getState());
+      if (!game) return;
+      maybe(port?.sendToPeer).map(send => send(game.opponentId, {type: 'BOARD_READY', boardHash: action.boardHash}));
+    },
+    FORFEIT_GAME: () => {
+      const game = selectP2pGame(getState());
+      if (!game) return;
+      maybe(port?.sendToPeer).map(send => send(game.opponentId, {type: 'GAME_FORFEIT'}));
+    },
+  });
+
+  return (action) => dispatchGameCommand(action);
+};
+
 const OFFLINE_FALLBACK_MS = 3_000;
 
 export const createOfflineFallbackListenerFactory: GameListenerFactory = ({dispatch}) => {
@@ -125,7 +170,7 @@ export const createGameStore = (config?: GameStoreConfig): GameStore => {
 
   store.dispatch = baseDispatch;
 
-  const listenerDeps: ListenerFactoryDeps = {dispatch: (action) => store.dispatch(action), getState: () => state, port: config?.port, dispatchToConnection: config?.dispatchToConnection};
+  const listenerDeps: ListenerFactoryDeps = {dispatch: (action) => store.dispatch(action), getState: () => state, port: config?.port, dispatchToConnection: config?.dispatchToConnection, getPeerToSignaling: config?.getPeerToSignaling};
   config?.listenerFactories?.forEach(factory => store.addListener(factory(listenerDeps)));
 
   if (config?.port) {

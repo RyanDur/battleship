@@ -4,10 +4,9 @@ import {Game} from './GameView';
 import {GameProvider} from './GameProvider';
 import {createGameStore} from './gameStore';
 import {gameStarted, fireResult, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided, opponentForfeited, peerNamed} from './gameActions';
-import type {AiGameState, Shot} from './game';
+import type {AiGameState, Shot, GameAction} from './game';
 import {ConnectionProvider} from '../connections/ConnectionProvider';
 import {createConnectionStore} from '../connections/connectionStore';
-import type {ConnectionsAction} from '../connections/connections';
 
 const emptyGameState: AiGameState = {playerShots: [], aiShots: [], phase: 'player-turn', announcement: ''};
 
@@ -145,8 +144,8 @@ describe('P2P game forfeit', () => {
   const renderP2pGame = (iGoFirst: boolean, onNewGame = () => {}) => {
     const gameStore = createGameStore();
     const connectionStore = createConnectionStore();
-    const dispatched: ConnectionsAction[] = [];
-    connectionStore.addListener((action) => { dispatched.push(action); });
+    const dispatched: GameAction[] = [];
+    gameStore.addListener((action) => { dispatched.push(action); });
     act(() => {
       gameStore.dispatch(challengePeer('peer-bob'));
       gameStore.dispatch(peerNamed('peer-bob', 'Bob'));
@@ -177,7 +176,7 @@ describe('P2P game forfeit', () => {
     expect(screen.getByRole('button', {name: /are you sure/i})).toBeInTheDocument();
   });
 
-  it('confirming forfeit dispatches FORFEIT_GAME to connection store', async () => {
+  it('confirming forfeit dispatches FORFEIT_GAME to game store', async () => {
     const user = userEvent.setup();
     const {dispatched} = renderP2pGame(true);
     await user.click(screen.getByRole('button', {name: /^forfeit/i}));
