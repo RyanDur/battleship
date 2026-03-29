@@ -1,5 +1,5 @@
 import {gameReducer, initialGameState} from './game';
-import type {GameState, GameAction} from './game';
+import type {GameState, GameAction, P2pGame} from './game';
 import type {ConnectionPort} from '../connections/connectionPort';
 import type {ConnectionsAction} from '../connections/connections';
 import {createGameMessageHandler} from './gameMessageHandler';
@@ -7,7 +7,7 @@ import {selectBoard, selectAiGameState, selectP2pGame, selectOffererPeerIds} fro
 import {gameStarted, fireResult, boardNotFound} from './gameActions';
 import {saveP2pGame, loadP2pGame} from '../connections/connectionActions';
 import {randomBoard, resolveFireShot} from './aiGame';
-import {maybe, createDispatch} from '../lib/maybe';
+import {maybe} from '../lib/maybe';
 
 export type GameListenerContext = {
   prevState: GameState
@@ -91,47 +91,50 @@ export const createReconnectListenerFactory: GameListenerFactory = ({port}) =>
     );
   };
 
-export const createGameCommandListenerFactory: GameListenerFactory = ({getState, port, dispatchToConnection, getPeerToSignaling}) => {
-  const dispatchGameCommand = createDispatch<GameAction>({
-    CHALLENGE_PEER: (action) => {
-      maybe(port?.sendToPeer).map(send => send(action.opponentId, {type: 'GAME_CHALLENGE'}));
-      if (dispatchToConnection) {
-        const signalingId = getPeerToSignaling?.()[action.opponentId];
-        if (signalingId) dispatchToConnection(loadP2pGame(signalingId));
-      }
-    },
-    ACCEPT_CHALLENGE: () => {
-      const game = selectP2pGame(getState());
-      if (game?.phase !== 'challenge-received') return;
-      maybe(port?.sendToPeer).map(send => send(game.opponentId, {type: 'GAME_ACCEPT'}));
-      if (dispatchToConnection) {
-        const signalingId = getPeerToSignaling?.()[game.opponentId];
-        if (signalingId) dispatchToConnection(loadP2pGame(signalingId));
-      }
-    },
-    DECLINE_CHALLENGE: () => {
-      const game = selectP2pGame(getState());
-      if (!game) return;
-      maybe(port?.sendToPeer).map(send => send(game.opponentId, {type: 'GAME_DECLINE'}));
-    },
-    CANCEL_CHALLENGE: () => {
-      const game = selectP2pGame(getState());
-      if (!game) return;
-      maybe(port?.sendToPeer).map(send => send(game.opponentId, {type: 'GAME_CANCEL'}));
-    },
-    P2P_BOARD_READY: (action) => {
-      const game = selectP2pGame(getState());
-      if (!game) return;
-      maybe(port?.sendToPeer).map(send => send(game.opponentId, {type: 'BOARD_READY', boardHash: action.boardHash}));
-    },
-    FORFEIT_GAME: () => {
-      const game = selectP2pGame(getState());
-      if (!game) return;
-      maybe(port?.sendToPeer).map(send => send(game.opponentId, {type: 'GAME_FORFEIT'}));
-    },
-  });
+type GameCommandHandlers = {
+  [T in GameAction['type']]?: (action: Extract<GameAction, {type: T}>, prevGame: P2pGame | null) => void
+}
+type AnyGameCommandHandler = (action: GameAction, prevGame: P2pGame | null) => void
 
-  return (action) => dispatchGameCommand(action);
+export const createGameCommandListenerFactory: GameListenerFactory = ({port, dispatchToConnection, getPeerToSignaling}) => {
+  const sendToPeer = (peerId: string, msg: unknown) => maybe(port?.sendToPeer).map(send => send(peerId, msg));
+  const loadSavedGame = (peerId: string) => {
+    const signalingId = getPeerToSignaling?.()[peerId];
+    if (dispatchToConnection && signalingId) dispatchToConnection(loadP2pGame(signalingId));
+  };
+
+  const handlers: GameCommandHandlers = {
+    CHALLENGE_PEER: (action) => {
+      sendToPeer(action.opponentId, {type: 'GAME_CHALLENGE'});
+      loadSavedGame(action.opponentId);
+    },
+    ACCEPT_CHALLENGE: (_, prevGame) => {
+      if (prevGame?.phase !== 'challenge-received') return;
+      sendToPeer(prevGame.opponentId, {type: 'GAME_ACCEPT'});
+      loadSavedGame(prevGame.opponentId);
+    },
+    DECLINE_CHALLENGE: (_, prevGame) => {
+      if (!prevGame) return;
+      sendToPeer(prevGame.opponentId, {type: 'GAME_DECLINE'});
+    },
+    CANCEL_CHALLENGE: (_, prevGame) => {
+      if (!prevGame) return;
+      sendToPeer(prevGame.opponentId, {type: 'GAME_CANCEL'});
+    },
+    P2P_BOARD_READY: (action, prevGame) => {
+      if (!prevGame) return;
+      sendToPeer(prevGame.opponentId, {type: 'BOARD_READY', boardHash: action.boardHash});
+    },
+    FORFEIT_GAME: (_, prevGame) => {
+      if (!prevGame) return;
+      sendToPeer(prevGame.opponentId, {type: 'GAME_FORFEIT'});
+    },
+  };
+
+  return (action, {prevState}) => {
+    const prevGame = selectP2pGame(prevState);
+    maybe((handlers as Record<string, AnyGameCommandHandler | undefined>)[action.type]).map(fn => fn(action, prevGame));
+  };
 };
 
 const OFFLINE_FALLBACK_MS = 3_000;
