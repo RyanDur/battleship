@@ -7,6 +7,7 @@ import {selectBoard, selectAiGameState, selectP2pGame, selectOffererPeerIds} fro
 import {gameStarted, fireResult, boardNotFound} from './gameActions';
 import {saveP2pGame} from '../connections/connectionActions';
 import {randomBoard, resolveFireShot} from './aiGame';
+import {maybe} from '../lib/maybe';
 
 export type GameListenerContext = {
   prevState: GameState
@@ -70,10 +71,22 @@ export const createSaveOnShotListenerFactory: GameListenerFactory = ({getState, 
     if (
       action.type !== 'P2P_FIRE_RESULT' &&
       action.type !== 'OPPONENT_FIRED' &&
-      action.type !== 'P2P_GAME_OVER'
+      action.type !== 'P2P_GAME_OVER' &&
+      action.type !== 'TURN_ORDER_DECIDED'
     ) return;
     const game = selectP2pGame(getState());
     if (game && dispatchToConnection) dispatchToConnection(saveP2pGame(game));
+  };
+
+export const createReconnectListenerFactory: GameListenerFactory = ({port}) =>
+  (action, {state}) => {
+    if (action.type !== 'P2P_GAME_LOADED') return;
+    const loadedGame = selectP2pGame(state);
+    if (!loadedGame) return;
+    if (loadedGame.phase !== 'my-turn' && loadedGame.phase !== 'their-turn') return;
+    maybe(port?.sendToPeer).map(send =>
+      send(loadedGame.opponentId, {type: 'GAME_STATE_SYNC', myShots: loadedGame.myShots, opponentShots: loadedGame.opponentShots, phase: loadedGame.phase})
+    );
   };
 
 const OFFLINE_FALLBACK_MS = 3_000;

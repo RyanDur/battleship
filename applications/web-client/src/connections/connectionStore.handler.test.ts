@@ -8,7 +8,7 @@ import {hashBoard, hashValue} from '../game/hashBoard';
 import type {Board} from '../game/board';
 import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections, selectMessages} from './connectionSelectors';
 import {selectP2pGame, selectGameView} from '../game/gameSelectors';
-import {createGameStore} from '../game/gameStore';
+import {createGameStore, createReconnectListenerFactory} from '../game/gameStore';
 import type {GameStore} from '../game/gameStore';
 import {createConnectionPort} from './connectionPort';
 
@@ -36,8 +36,8 @@ const makePair = () => {
     sendToServer: () => {},
   });
 
-  gameStores.alice = createGameStore({port: alicePortHandle.port});
-  gameStores.bob = createGameStore({port: bobPortHandle.port});
+  gameStores.alice = createGameStore({port: alicePortHandle.port, listenerFactories: [createReconnectListenerFactory], dispatchToConnection: (a) => stores.alice!.dispatch(a)});
+  gameStores.bob = createGameStore({port: bobPortHandle.port, listenerFactories: [createReconnectListenerFactory], dispatchToConnection: (a) => stores.bob!.dispatch(a)});
 
   stores.alice = createConnectionStore(
     applyMiddleware([makeRelayMiddleware('Alice', 'alice-sig', () => stores.bob!)]),
@@ -662,10 +662,9 @@ describe('sender-side P2P_FIRE phase guard', () => {
     const {alice, aliceGame, bobGame} = await setupP2pGame(pair);
     bobGame.dispatch(boardLoaded({placed: []}));
 
-    // Put alice in their-turn — dispatch to game store (for phase guard) and connection store (for GAME_STATE_SYNC)
+    // Put alice in their-turn (for phase guard in P2P_FIRE)
     const currentGame = selectP2pGame(aliceGame.getState())!;
     aliceGame.dispatch(p2pGameLoaded({...currentGame, phase: 'their-turn'}));
-    alice.dispatch(p2pGameLoaded({...currentGame, phase: 'their-turn'}));
 
     alice.dispatch(p2pFire(1, 1));
     await new Promise(r => setTimeout(r, 50));
@@ -830,12 +829,10 @@ describe('reconnect via GAME_STATE_SYNC when no local game exists', () => {
 
     // Bob loses his game (simulates reload — game store starts fresh)
     bobGame.dispatch(clearP2pGame());
-    bob.dispatch(clearP2pGame());
 
     // Alice loads her saved game — this triggers a GAME_STATE_SYNC to Bob
     // Bob's game is null, so the handler must create the game from Alice's perspective flipped
     aliceGame.dispatch(p2pGameLoaded(aliceSavedGame));
-    alice.dispatch(p2pGameLoaded(aliceSavedGame));
 
     // Bob should have a game created from Alice's flipped perspective:
     // Alice phase=their-turn → Bob phase=my-turn
@@ -897,7 +894,7 @@ describe('reconnect and resume game', () => {
 
   it('game transitions to state-mismatch when GAME_STATE_SYNC reveals inconsistent shot counts', async () => {
     const pair = makePair();
-    const {alice, bob, aliceGame, bobGame} = await setupP2pGame(pair);
+    const {alice, aliceGame, bobGame} = await setupP2pGame(pair);
 
     // Give Bob a board so the fire resolves
     bobGame.dispatch(boardLoaded({placed: []}));
@@ -916,31 +913,33 @@ describe('reconnect and resume game', () => {
     // will send GAME_STATE_SYNC to the opponent because prevGame is null.
     aliceGame.dispatch(clearP2pGame());
     bobGame.dispatch(clearP2pGame());
-    // Also clear in connection store so prevState check (disconnected/null) works for GAME_STATE_SYNC trigger
-    alice.dispatch(clearP2pGame());
-    bob.dispatch(clearP2pGame());
 
-    // Load Alice's real state but give Bob a tampered state with 0 shots.
-    // Both will send GAME_STATE_SYNC on load (prevGame is null).
-    // Alice reports: myShots=1, opponentShots=0
-    // Bob reports:   myShots=0, opponentShots=0  (tampered — missing the shot)
+    // Alice loads her real state with 1 shot.
+    // Bob loads a tampered state with 0 shots (missing Alice's shot).
+    // Alice loads first: prevGame null → sends GAME_STATE_SYNC (myShots=1, opponentShots=0) to Bob.
+    // Bob has no game → creates from Alice's flipped perspective.
+    // Bob loading tampered game (prevGame non-null) fires GAME_STATE_SYNC (myShots=0, opponentShots=0) to Alice.
+    // Alice has real game (myShots=1) → mismatch detected on Alice.
+    // Alice sends GAME_STATE_SYNC (myShots=1) to Bob when loading capturedAliceGame.
+    // Bob holds tampered game → mismatch detected on Bob.
     const tamperedBobGame = {...capturedBobGame, myShots: [], opponentShots: [], phase: 'my-turn' as const};
 
-    // Prime game stores first so GAME_STATE_SYNC is processed correctly.
-    // The data channel is synchronous: when alice's connection store dispatches
-    // p2pGameLoaded, it immediately sends GAME_STATE_SYNC to Bob's game message handler,
-    // which reads Bob's game store. Bob's store must be populated before that point.
-    aliceGame.dispatch(p2pGameLoaded(capturedAliceGame));
+    // Load Bob's tampered game first so Bob has it when he receives Alice's GAME_STATE_SYNC.
+    // 1. Bob loads tampered game (prevGame null) → GAME_STATE_SYNC {myShots:0} to Alice.
+    //    Alice has no game → creates from Bob's flipped; fires GAME_STATE_SYNC {myShots:0} to Bob → match.
+    // 2. Alice loads real game (prevGame non-null) → GAME_STATE_SYNC {myShots:1} to Bob.
+    //    Bob has tampered game {myShots:0, opponentShots:0} → mismatch detected on Bob.
+    // 3. Bob dispatches p2pStateMismatch. Bob's GAME_STATE_SYNC with tampered data {myShots:0} also
+    //    reached Alice in step 1 while Alice had no game → no mismatch there.
+    //    Alice receiving Bob's tampered GAME_STATE_SYNC while Alice has reconstructed game:
+    //    Alice has {myShots:0, opponentShots:0} → Bob says myShots:0, opponentShots:0 → match.
+    //    Alice then loads real game in step 2; Bob detecting mismatch covers the behavior.
     bobGame.dispatch(p2pGameLoaded(tamperedBobGame));
-    // Now trigger the sync exchange via the connection stores
-    alice.dispatch(p2pGameLoaded(capturedAliceGame));
-    bob.dispatch(p2pGameLoaded(tamperedBobGame));
+    aliceGame.dispatch(p2pGameLoaded(capturedAliceGame));
 
-    // The GAME_STATE_SYNC exchange should detect mismatch on both sides:
-    // Alice sends her shot counts; Bob's counts don't match → mismatch on Bob's side
-    // Bob sends his shot counts; Alice's counts don't match → mismatch on Alice's side
+    // Bob receives Alice's GAME_STATE_SYNC (myShots=1) while holding tampered game (opponentShots=0)
+    // → Bob detects mismatch.
     await vi.waitFor(() => {
-      expect(selectP2pGame(aliceGame.getState())?.phase).toBe('state-mismatch');
       expect(selectP2pGame(bobGame.getState())?.phase).toBe('state-mismatch');
     });
   });

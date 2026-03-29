@@ -104,7 +104,7 @@ export const opponentFired = (shot: Shot) => ({type: 'OPPONENT_FIRED' as const, 
 export const p2pGameOver = (winner: 'me' | 'opponent') => ({type: 'P2P_GAME_OVER' as const, winner});
 export const forfeitGame = () => ({type: 'FORFEIT_GAME' as const});
 export const opponentForfeited = () => ({type: 'OPPONENT_FORFEITED' as const});
-export const saveP2pGame = (gameState?: P2pGame) => ({type: 'SAVE_P2P_GAME' as const, gameState});
+export const saveP2pGame = (gameState: P2pGame) => ({type: 'SAVE_P2P_GAME' as const, gameState});
 export const loadP2pGame = (opponentId: string) => ({type: 'LOAD_P2P_GAME' as const, opponentId});
 export const p2pGameLoaded = (gameState: P2pGame) => ({type: 'P2P_GAME_LOADED' as const, gameState});
 export const p2pStateSync = (opponentId: string, myShots: Shot[], opponentShots: Shot[], phase: P2pGamePhase) =>

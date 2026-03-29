@@ -4,11 +4,11 @@ import type {ConnectionsState, ConnectionsAction} from './connections';
 import type {P2pGame} from '../game/game';
 import {tryCatch} from '../lib/result';
 import {createDispatch} from '../lib/maybe';
-import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling, selectSignalingToPeer, selectP2pGame as selectP2pGameFromConnections} from './connectionSelectors';
+import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling, selectSignalingToPeer} from './connectionSelectors';
 import {selectP2pGame as selectGameStoreP2pGame} from '../game/gameSelectors';
 import type {GameState, GameAction} from '../game/game';
-import {acceptChallenge as gameAcceptChallenge, declineChallenge as gameDeclineChallenge, cancelChallenge as gameCancelChallenge, challengePeer as gameChallengePeer, turnOrderDecided as gameTurnOrderDecided, p2pBoardReady as gameP2pBoardReady, peerDisconnected as gamePeerDisconnected, saveBoard as gameSaveBoard, startGame as gameStartGame, clearP2pGame as gameClearP2pGame, forfeitGame as gameForfeitGame} from '../game/gameActions';
-import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, p2pGameLoaded, saveP2pGame, loadP2pGame, turnOrderDecided} from './connectionActions';
+import {acceptChallenge as gameAcceptChallenge, declineChallenge as gameDeclineChallenge, cancelChallenge as gameCancelChallenge, challengePeer as gameChallengePeer, turnOrderDecided as gameTurnOrderDecided, p2pBoardReady as gameP2pBoardReady, peerDisconnected as gamePeerDisconnected, saveBoard as gameSaveBoard, startGame as gameStartGame, clearP2pGame as gameClearP2pGame, forfeitGame as gameForfeitGame, p2pGameLoaded as gameP2pGameLoaded} from '../game/gameActions';
+import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, loadP2pGame, turnOrderDecided} from './connectionActions';
 import type {PeerEvent} from './connectionHandler';
 import {encodeConnectionCode, decodeConnectionCode} from './connectionCode';
 import {createPeerHandler} from './connectionHandler';
@@ -222,20 +222,6 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit, get
         },
         TURN_ORDER_DECIDED: (action) => {
           dispatchToGame?.(gameTurnOrderDecided(action.iGoFirst));
-          if (getGame()) dispatch(saveP2pGame());
-        },
-        P2P_FIRE_RESULT: () => { if (getGame()) dispatch(saveP2pGame()); },
-        OPPONENT_FIRED: () => { if (getGame()) dispatch(saveP2pGame()); },
-        P2P_GAME_OVER: () => { if (getGame()) dispatch(saveP2pGame()); },
-        P2P_GAME_LOADED: () => {
-          const prevGame = selectP2pGameFromConnections(prevState);
-          const loadedGame = selectP2pGameFromConnections(state);
-          // Send sync only on reconnect: game restored from null (refreshed) or disconnected
-          if (loadedGame && (loadedGame.phase === 'my-turn' || loadedGame.phase === 'their-turn')) {
-            if (!prevGame || prevGame.phase === 'disconnected') {
-              send({type: 'GAME_STATE_SYNC', myShots: loadedGame.myShots, opponentShots: loadedGame.opponentShots, phase: loadedGame.phase});
-            }
-          }
         },
       });
       dispatchGameAction(action);
@@ -308,9 +294,10 @@ const p2pGameStateDecoder = Decoder.object({
 type SignalingListenerConfig = {
   config: SignalingConfig
   portEmit?: (event: ConnectionEvent) => void
+  dispatchToGame?: (action: GameAction) => void
 }
 
-export const createSignalingListener = ({config, portEmit}: SignalingListenerConfig): ListenerFactory =>
+export const createSignalingListener = ({config, portEmit, dispatchToGame}: SignalingListenerConfig): ListenerFactory =>
   ({dispatch, getState}) => {
     let handle: SignalingHandle | null = null;
 
@@ -379,7 +366,7 @@ export const createSignalingListener = ({config, portEmit}: SignalingListenerCon
                 boardVerified: null,
                 announcement: '',
               };
-              dispatch(p2pGameLoaded(game));
+              dispatchToGame?.(gameP2pGameLoaded(game));
             }
           });
       },
@@ -406,11 +393,9 @@ export const createSignalingListener = ({config, portEmit}: SignalingListenerCon
       FIRE_SHOT: (action) => handle?.send({type: 'FIRE', row: action.row, col: action.col}),
       LOAD_GAME: () => handle?.send({type: 'LOAD_GAME'}),
       SAVE_P2P_GAME: (action) => {
-        const game = action.gameState ?? selectP2pGameFromConnections(getState());
-        if (game) {
-          const signalingOpponentId = selectPeerToSignaling(getState())[game.opponentId] ?? game.opponentId;
-          handle?.send({type: 'SAVE_P2P_GAME', opponentId: signalingOpponentId, gameState: JSON.stringify({...game, opponentId: signalingOpponentId})});
-        }
+        const game = action.gameState;
+        const signalingOpponentId = selectPeerToSignaling(getState())[game.opponentId] ?? game.opponentId;
+        handle?.send({type: 'SAVE_P2P_GAME', opponentId: signalingOpponentId, gameState: JSON.stringify({...game, opponentId: signalingOpponentId})});
       },
       LOAD_P2P_GAME: (action) => handle?.send({type: 'LOAD_P2P_GAME', opponentId: action.opponentId}),
     });

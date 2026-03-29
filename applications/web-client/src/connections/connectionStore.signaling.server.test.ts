@@ -3,8 +3,12 @@ import {createConnectionStore, createSignalingListener} from './connectionStore'
 import {createStubServer} from '../test/stubServer';
 import {makeWebSocket} from '../test/makeWebSocket';
 import type {WsConnection} from '../test/stubServer';
-import {startSignaling, stopSignaling, relayOffer, relayAnswer, forgetPeer, relayIceRestart, relayIceRestartAnswer, shareEmail, stopSharingEmail, updateEmail, savePeerEmail, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided, saveP2pGame, signalingPeerRegistered} from './connectionActions';
-import {selectOnlinePeers, selectPreviousPeers, selectP2pGame} from './connectionSelectors';
+import {startSignaling, stopSignaling, relayOffer, relayAnswer, forgetPeer, relayIceRestart, relayIceRestartAnswer, shareEmail, stopSharingEmail, updateEmail, savePeerEmail, signalingPeerRegistered, saveP2pGame} from './connectionActions';
+import {selectOnlinePeers, selectPreviousPeers} from './connectionSelectors';
+import {selectP2pGame} from '../game/gameSelectors';
+import {createGameStore} from '../game/gameStore';
+import {challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided} from '../game/gameActions';
+import type {P2pGame} from '../game/game';
 
 const connectStore = async (serverSetup: (conn: WsConnection) => void = () => undefined) => {
   let wsConn: WsConnection | undefined;
@@ -12,6 +16,8 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
     routes: {'GET /session': (_req, res) => { res.writeHead(200); res.end(); }},
     ws: {'/ws/signaling': conn => { wsConn = conn; serverSetup(conn); }},
   });
+
+  let gameStoreRef: ReturnType<typeof createGameStore> | null = null;
 
   const store = createConnectionStore(undefined, [
     createSignalingListener({
@@ -21,8 +27,13 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
         url: `${server.url.replace('http://', 'ws://')}/ws/signaling`,
         name: 'Player',
       },
+      dispatchToGame: (action) => gameStoreRef?.dispatch(action),
     }),
   ]);
+
+  gameStoreRef = createGameStore({
+    dispatchToConnection: (action) => store.dispatch(action),
+  });
 
   store.dispatch(startSignaling());
   await vi.waitFor(() => expect(wsConn).toBeDefined());
@@ -32,7 +43,7 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
     await server.close();
   };
 
-  return {store, getConn: () => wsConn!, cleanup};
+  return {store, gameStore: gameStoreRef, getConn: () => wsConn!, cleanup};
 };
 
 describe('createSignalingMiddleware (server)', () => {
@@ -239,12 +250,12 @@ describe('createSignalingMiddleware (server)', () => {
   });
 
   it('P2P_GAME_LOADED with valid active game resumes p2pGame shots and phase', async () => {
-    const {store, getConn, cleanup} = await connectStore();
-    store.dispatch(challengePeer('peer-bob'));
-    store.dispatch(acceptChallenge());
-    store.dispatch(p2pBoardReady('h1'));
-    store.dispatch(opponentBoardReady('h2'));
-    store.dispatch(turnOrderDecided(true));
+    const {gameStore, getConn, cleanup} = await connectStore();
+    gameStore.dispatch(challengePeer('peer-bob'));
+    gameStore.dispatch(acceptChallenge());
+    gameStore.dispatch(p2pBoardReady('h1'));
+    gameStore.dispatch(opponentBoardReady('h2'));
+    gameStore.dispatch(turnOrderDecided(true));
 
     const savedGame = JSON.stringify({
       opponentId: 'peer-bob',
@@ -258,46 +269,46 @@ describe('createSignalingMiddleware (server)', () => {
     });
     getConn().send(JSON.stringify({type: 'P2P_GAME_LOADED', gameState: savedGame}));
 
-    await vi.waitFor(() => expect(selectP2pGame(store.getState())?.phase).toBe('their-turn'));
-    expect(selectP2pGame(store.getState())?.myShots).toHaveLength(1);
+    await vi.waitFor(() => expect(selectP2pGame(gameStore.getState())?.phase).toBe('their-turn'));
+    expect(selectP2pGame(gameStore.getState())?.myShots).toHaveLength(1);
     await cleanup();
   });
 
   it('P2P_GAME_LOADED with invalid JSON does not update p2pGame', async () => {
-    const {store, getConn, cleanup} = await connectStore();
-    store.dispatch(challengePeer('peer-bob'));
-    store.dispatch(acceptChallenge());
-    store.dispatch(p2pBoardReady('h1'));
-    store.dispatch(opponentBoardReady('h2'));
-    store.dispatch(turnOrderDecided(true));
+    const {gameStore, getConn, cleanup} = await connectStore();
+    gameStore.dispatch(challengePeer('peer-bob'));
+    gameStore.dispatch(acceptChallenge());
+    gameStore.dispatch(p2pBoardReady('h1'));
+    gameStore.dispatch(opponentBoardReady('h2'));
+    gameStore.dispatch(turnOrderDecided(true));
 
     getConn().send(JSON.stringify({type: 'P2P_GAME_LOADED', gameState: 'not-json{'}));
     await new Promise(r => setTimeout(r, 50));
-    expect(selectP2pGame(store.getState())?.phase).toBe('my-turn');
+    expect(selectP2pGame(gameStore.getState())?.phase).toBe('my-turn');
     await cleanup();
   });
 
   it('P2P_GAME_LOADED with invalid shape does not update p2pGame', async () => {
-    const {store, getConn, cleanup} = await connectStore();
-    store.dispatch(challengePeer('peer-bob'));
-    store.dispatch(acceptChallenge());
-    store.dispatch(p2pBoardReady('h1'));
-    store.dispatch(opponentBoardReady('h2'));
-    store.dispatch(turnOrderDecided(true));
+    const {gameStore, getConn, cleanup} = await connectStore();
+    gameStore.dispatch(challengePeer('peer-bob'));
+    gameStore.dispatch(acceptChallenge());
+    gameStore.dispatch(p2pBoardReady('h1'));
+    gameStore.dispatch(opponentBoardReady('h2'));
+    gameStore.dispatch(turnOrderDecided(true));
 
     getConn().send(JSON.stringify({type: 'P2P_GAME_LOADED', gameState: JSON.stringify({corrupted: true})}));
     await new Promise(r => setTimeout(r, 50));
-    expect(selectP2pGame(store.getState())?.phase).toBe('my-turn');
+    expect(selectP2pGame(gameStore.getState())?.phase).toBe('my-turn');
     await cleanup();
   });
 
   it('P2P_GAME_LOADED with non-resumable phase is ignored', async () => {
-    const {store, getConn, cleanup} = await connectStore();
-    store.dispatch(challengePeer('peer-bob'));
-    store.dispatch(acceptChallenge());
-    store.dispatch(p2pBoardReady('h1'));
-    store.dispatch(opponentBoardReady('h2'));
-    store.dispatch(turnOrderDecided(true));
+    const {gameStore, getConn, cleanup} = await connectStore();
+    gameStore.dispatch(challengePeer('peer-bob'));
+    gameStore.dispatch(acceptChallenge());
+    gameStore.dispatch(p2pBoardReady('h1'));
+    gameStore.dispatch(opponentBoardReady('h2'));
+    gameStore.dispatch(turnOrderDecided(true));
 
     const doneGame = JSON.stringify({
       opponentId: 'peer-bob', phase: 'game-over',
@@ -307,13 +318,13 @@ describe('createSignalingMiddleware (server)', () => {
     });
     getConn().send(JSON.stringify({type: 'P2P_GAME_LOADED', gameState: doneGame}));
     await new Promise(r => setTimeout(r, 50));
-    expect(selectP2pGame(store.getState())?.phase).toBe('my-turn');
+    expect(selectP2pGame(gameStore.getState())?.phase).toBe('my-turn');
     await cleanup();
   });
 
   it('SAVE_P2P_GAME sends signaling ID (not local peer ID) as opponentId in game JSON body', async () => {
     const received: string[] = [];
-    const {store, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
+    const {store, gameStore, cleanup} = await connectStore(conn => conn.onMessage(msg => received.push(msg)));
 
     const localPeerId = 'local-bob-peer-id';
     const signalingBobId = 'bob-sig-id';
@@ -322,14 +333,15 @@ describe('createSignalingMiddleware (server)', () => {
     store.dispatch(signalingPeerRegistered(localPeerId, signalingBobId, true));
 
     // Set up a game with local peer ID as opponentId
-    store.dispatch(challengePeer(localPeerId));
-    store.dispatch(acceptChallenge());
-    store.dispatch(p2pBoardReady('h1'));
-    store.dispatch(opponentBoardReady('h2'));
-    store.dispatch(turnOrderDecided(true));
+    gameStore.dispatch(challengePeer(localPeerId));
+    gameStore.dispatch(acceptChallenge());
+    gameStore.dispatch(p2pBoardReady('h1'));
+    gameStore.dispatch(opponentBoardReady('h2'));
+    gameStore.dispatch(turnOrderDecided(true));
 
     // Save the game — should translate opponentId to signalingBobId in the JSON body
-    store.dispatch(saveP2pGame());
+    const game = selectP2pGame(gameStore.getState()) as P2pGame;
+    store.dispatch(saveP2pGame(game));
 
     await vi.waitFor(() =>
       expect(received.map(m => JSON.parse(m))).toContainEqual(

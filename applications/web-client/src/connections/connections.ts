@@ -1,5 +1,5 @@
 import type {Board} from '../game/board';
-import type {Shot, P2pGamePhase, P2pGame, AiGamePhase, AiGameState} from '../game/game';
+import type {Shot, P2pGame, P2pGamePhase, AiGamePhase, AiGameState} from '../game/game';
 import {createReducer} from '../lib/maybe';
 
 export type Peer = {id: string; name?: string; trusted?: boolean; trustsMe?: boolean}
@@ -43,7 +43,6 @@ export type ConnectionsState = {
   board: Board | null
   boardLoading: boolean
   gameState: AiGameState | null
-  p2pGame: P2pGame | null
 }
 
 export type ConnectionsAction =
@@ -134,7 +133,7 @@ export type ConnectionsAction =
   | {type: 'P2P_GAME_OVER'; winner: 'me' | 'opponent'}
   | {type: 'FORFEIT_GAME'}
   | {type: 'OPPONENT_FORFEITED'}
-  | {type: 'SAVE_P2P_GAME'; gameState?: P2pGame}
+  | {type: 'SAVE_P2P_GAME'; gameState: P2pGame}
   | {type: 'LOAD_P2P_GAME'; opponentId: string}
   | {type: 'P2P_GAME_LOADED'; gameState: P2pGame}
   | {type: 'P2P_STATE_SYNC'; opponentId: string; myShots: Shot[]; opponentShots: Shot[]; phase: P2pGamePhase}
@@ -164,7 +163,6 @@ export const initialState: ConnectionsState = {
   board: null,
   boardLoading: true,
   gameState: null,
-  p2pGame: null,
 };
 
 const handlerReducer = createReducer<HandlerState, ConnectionsAction>({
@@ -309,80 +307,7 @@ const coreConnectionsReducer = createReducer<ConnectionsState, ConnectionsAction
   GAME_NOT_FOUND: (state) => ({...state, gameState: null}),
 });
 
-const p2pGameInitial: P2pGame = {
-  opponentId: '',
-  phase: 'challenged',
-  myBoardHash: '',
-  opponentBoardHash: null,
-  myShots: [],
-  opponentShots: [],
-  myBoardReady: false,
-  opponentBoardReady: false,
-  winner: null,
-  opponentBoard: null,
-  boardVerified: null,
-  announcement: '',
-};
-
-const p2pGameReducer = createReducer<P2pGame | null, ConnectionsAction>({
-  CHALLENGE_PEER: (_, action) => ({...p2pGameInitial, phase: 'challenged', opponentId: action.opponentId}),
-  CHALLENGE_RECEIVED: (_, action) => ({...p2pGameInitial, phase: 'challenge-received', opponentId: action.opponentId}),
-  ACCEPT_CHALLENGE: (game) => game ? {...game, phase: 'placing'} : game,
-  DECLINE_CHALLENGE: () => null,
-  CANCEL_CHALLENGE: () => null,
-  P2P_BOARD_READY: (game, action) => {
-    if (!game) return game;
-    const updated = {...game, myBoardReady: true, myBoardHash: action.boardHash};
-    return updated.opponentBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
-  },
-  OPPONENT_BOARD_READY: (game, action) => {
-    if (!game) return game;
-    const updated = {...game, opponentBoardReady: true, opponentBoardHash: action.boardHash};
-    return updated.myBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
-  },
-  TURN_ORDER_DECIDED: (game, action) => {
-    if (!game) return game;
-    return {...game, phase: action.iGoFirst ? 'my-turn' : 'their-turn'};
-  },
-  P2P_FIRE_RESULT: (game, action) => {
-    if (!game) return game;
-    const announcement = action.shot.result === 'sunk' && action.shot.ship ? `${action.shot.ship.name} sunk!` : '';
-    return {...game, myShots: [...game.myShots, action.shot], phase: 'their-turn', announcement};
-  },
-  OPPONENT_FIRED: (game, action) => {
-    if (!game) return game;
-    return {...game, opponentShots: [...game.opponentShots, action.shot], phase: 'my-turn', announcement: ''};
-  },
-  P2P_GAME_OVER: (game, action) => {
-    if (!game) return game;
-    return {...game, phase: 'game-over', winner: action.winner, announcement: ''};
-  },
-  FORFEIT_GAME: (game) => game ? {...game, phase: 'game-over', winner: 'opponent', announcement: ''} : game,
-  OPPONENT_FORFEITED: (game) => game ? {...game, phase: 'game-over', winner: 'me', forfeited: true, announcement: ''} : game,
-  P2P_GAME_LOADED: (game, action) => {
-    const resumable = action.gameState.phase === 'my-turn' || action.gameState.phase === 'their-turn';
-    if (!resumable) return game;
-    // winner is always null for resumable phases — the decoder strips it to avoid null/string mismatch
-    const base = {...action.gameState, winner: null as P2pGame['winner']};
-    // Use mapped opponentId from action when restoring from disconnected or null (refreshed peer).
-    // Only preserve existing game.opponentId during challenge flow (game exists in non-disconnected phase).
-    return game && game.phase !== 'disconnected' ? {...base, opponentId: game.opponentId} : base;
-  },
-  P2P_STATE_MISMATCH: (game) => game ? {...game, phase: 'state-mismatch'} : game,
-  OPPONENT_BOARD_REVEALED: (game, action) => {
-    if (!game || game.phase !== 'game-over' || game.winner !== 'me') return game;
-    return {...game, opponentBoard: action.board, boardVerified: action.verified};
-  },
-  CLEAR_P2P_GAME: () => null,
-  PEER_DISCONNECTED: (game, action) => {
-    if (!game || game.opponentId !== action.peerId) return game;
-    if (game.phase === 'game-over' || game.phase === 'disconnected' || game.phase === 'state-mismatch') return game;
-    return {...game, phase: 'disconnected'};
-  },
-});
-
 export const connectionsReducer = (state: ConnectionsState, action: ConnectionsAction): ConnectionsState => ({
   ...coreConnectionsReducer(state, action),
   handlerState: handlerReducer(state.handlerState, action),
-  p2pGame: p2pGameReducer(state.p2pGame, action),
 });
