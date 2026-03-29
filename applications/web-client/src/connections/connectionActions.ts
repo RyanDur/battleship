@@ -1,5 +1,5 @@
 import type {OnlinePeer, PreviousPeer} from './connections';
-import type {AiGameState, Shot, AiGamePhase, P2pGame, P2pGamePhase} from '../game/game';
+import type {AiGameState, Shot, AiGamePhase, P2pGame} from '../game/game';
 import type {Board} from '../game/board';
 
 export const createOffer = (passphrase: string) => ({type: 'CREATE_OFFER' as const, passphrase});
@@ -92,24 +92,14 @@ export const acceptChallenge = () => ({type: 'ACCEPT_CHALLENGE' as const});
 export const declineChallenge = () => ({type: 'DECLINE_CHALLENGE' as const});
 export const cancelChallenge = () => ({type: 'CANCEL_CHALLENGE' as const});
 export const p2pBoardReady = (boardHash: string) => ({type: 'P2P_BOARD_READY' as const, boardHash});
-export const opponentBoardReady = (boardHash: string) => ({type: 'OPPONENT_BOARD_READY' as const, boardHash});
 export const claimFirstTurn = () => ({type: 'CLAIM_FIRST_TURN' as const});
 export const takeFirstTurn = () => ({type: 'TAKE_FIRST_TURN' as const});
 export const coinFlipCommit = (hash: string) => ({type: 'COIN_FLIP_COMMIT' as const, hash});
 export const coinFlipReveal = (value: number) => ({type: 'COIN_FLIP_REVEAL' as const, value});
 export const turnOrderDecided = (iGoFirst: boolean) => ({type: 'TURN_ORDER_DECIDED' as const, iGoFirst});
 export const p2pFire = (row: number, col: number) => ({type: 'P2P_FIRE' as const, row, col});
-export const p2pFireResult = (shot: Shot) => ({type: 'P2P_FIRE_RESULT' as const, shot});
-export const opponentFired = (shot: Shot) => ({type: 'OPPONENT_FIRED' as const, shot});
-export const p2pGameOver = (winner: 'me' | 'opponent') => ({type: 'P2P_GAME_OVER' as const, winner});
 export const forfeitGame = () => ({type: 'FORFEIT_GAME' as const});
-export const opponentForfeited = () => ({type: 'OPPONENT_FORFEITED' as const});
 export const saveP2pGame = (gameState: P2pGame) => ({type: 'SAVE_P2P_GAME' as const, gameState});
 export const loadP2pGame = (opponentId: string) => ({type: 'LOAD_P2P_GAME' as const, opponentId});
-export const p2pGameLoaded = (gameState: P2pGame) => ({type: 'P2P_GAME_LOADED' as const, gameState});
-export const p2pStateSync = (opponentId: string, myShots: Shot[], opponentShots: Shot[], phase: P2pGamePhase) =>
-  ({type: 'P2P_STATE_SYNC' as const, opponentId, myShots, opponentShots, phase});
-export const p2pStateMismatch = () => ({type: 'P2P_STATE_MISMATCH' as const});
 export const clearP2pGame = () => ({type: 'CLEAR_P2P_GAME' as const});
-export const opponentBoardRevealed = (board: Board, verified: boolean) => ({type: 'OPPONENT_BOARD_REVEALED' as const, board, verified});
 export const sendToPeer = (peerId: string, message: Record<string, unknown>) => ({type: 'SEND_TO_PEER' as const, peerId, message});

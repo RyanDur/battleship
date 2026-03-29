@@ -1,5 +1,5 @@
 import type {Board} from '../game/board';
-import type {Shot, P2pGame, P2pGamePhase, AiGamePhase, AiGameState} from '../game/game';
+import type {Shot, P2pGame, AiGamePhase, AiGameState} from '../game/game';
 import {createReducer} from '../lib/maybe';
 
 export type Peer = {id: string; name?: string; trusted?: boolean; trustsMe?: boolean}
@@ -121,25 +121,16 @@ export type ConnectionsAction =
   | {type: 'DECLINE_CHALLENGE'}
   | {type: 'CANCEL_CHALLENGE'}
   | {type: 'P2P_BOARD_READY'; boardHash: string}
-  | {type: 'OPPONENT_BOARD_READY'; boardHash: string}
   | {type: 'CLAIM_FIRST_TURN'}
   | {type: 'TAKE_FIRST_TURN'}
   | {type: 'COIN_FLIP_COMMIT'; hash: string}
   | {type: 'COIN_FLIP_REVEAL'; value: number}
   | {type: 'TURN_ORDER_DECIDED'; iGoFirst: boolean}
   | {type: 'P2P_FIRE'; row: number; col: number}
-  | {type: 'P2P_FIRE_RESULT'; shot: Shot}
-  | {type: 'OPPONENT_FIRED'; shot: Shot}
-  | {type: 'P2P_GAME_OVER'; winner: 'me' | 'opponent'}
   | {type: 'FORFEIT_GAME'}
-  | {type: 'OPPONENT_FORFEITED'}
   | {type: 'SAVE_P2P_GAME'; gameState: P2pGame}
   | {type: 'LOAD_P2P_GAME'; opponentId: string}
-  | {type: 'P2P_GAME_LOADED'; gameState: P2pGame}
-  | {type: 'P2P_STATE_SYNC'; opponentId: string; myShots: Shot[]; opponentShots: Shot[]; phase: P2pGamePhase}
-  | {type: 'P2P_STATE_MISMATCH'}
   | {type: 'CLEAR_P2P_GAME'}
-  | {type: 'OPPONENT_BOARD_REVEALED'; board: Board; verified: boolean}
   | {type: 'SEND_TO_PEER'; peerId: string; message: Record<string, unknown>}
 
 const handlerInitialState: HandlerState = {
