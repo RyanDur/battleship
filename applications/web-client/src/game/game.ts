@@ -1,4 +1,5 @@
 import type {Board} from './board';
+import {maybe} from '../lib/maybe';
 
 export type ShotResult = 'hit' | 'miss' | 'sunk'
 export type AiGamePhase = 'player-turn' | 'computer-turn' | 'player-won' | 'computer-won'
@@ -114,101 +115,120 @@ const p2pGameInitial: P2pGame = {
   announcement: '',
 };
 
-const p2pGameReducer = (game: P2pGame | null, action: GameAction): P2pGame | null => {
-  switch (action.type) {
-    case 'CHALLENGE_PEER':
-      return {...p2pGameInitial, phase: 'challenged', opponentId: action.opponentId};
-    case 'CHALLENGE_RECEIVED':
-      return {...p2pGameInitial, phase: 'challenge-received', opponentId: action.opponentId};
-    case 'ACCEPT_CHALLENGE':
-      if (!game) return game;
-      return {...game, phase: 'placing'};
-    case 'DECLINE_CHALLENGE':
-    case 'CANCEL_CHALLENGE':
-      return null;
-    case 'P2P_BOARD_READY': {
-      if (!game) return game;
-      const updated = {...game, myBoardReady: true, myBoardHash: action.boardHash};
-      return updated.opponentBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
-    }
-    case 'OPPONENT_BOARD_READY': {
-      if (!game) return game;
-      const updated = {...game, opponentBoardReady: true, opponentBoardHash: action.boardHash};
-      return updated.myBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
-    }
-    case 'TURN_ORDER_DECIDED':
-      if (!game) return game;
-      return {...game, phase: action.iGoFirst ? 'my-turn' : 'their-turn'};
-    case 'P2P_FIRE_RESULT': {
-      if (!game) return game;
-      const announcement = action.shot.result === 'sunk' && action.shot.ship ? `${action.shot.ship.name} sunk!` : '';
-      return {...game, myShots: [...game.myShots, action.shot], phase: 'their-turn', announcement};
-    }
-    case 'OPPONENT_FIRED':
-      if (!game) return game;
-      return {...game, opponentShots: [...game.opponentShots, action.shot], phase: 'my-turn', announcement: ''};
-    case 'P2P_GAME_OVER':
-      if (!game) return game;
-      return {...game, phase: 'game-over', winner: action.winner, announcement: ''};
-    case 'FORFEIT_GAME':
-      if (!game) return game;
-      return {...game, phase: 'game-over', winner: 'opponent', announcement: ''};
-    case 'OPPONENT_FORFEITED':
-      if (!game) return game;
-      return {...game, phase: 'game-over', winner: 'me', forfeited: true, announcement: ''};
-    case 'P2P_GAME_LOADED': {
-      const resumable = action.gameState.phase === 'my-turn' || action.gameState.phase === 'their-turn';
-      if (!resumable) return game;
-      const base = {...action.gameState, winner: null as P2pGame['winner']};
-      return game && game.phase !== 'disconnected' ? {...base, opponentId: game.opponentId} : base;
-    }
-    case 'P2P_STATE_MISMATCH':
-      if (!game) return game;
-      return {...game, phase: 'state-mismatch'};
-    case 'OPPONENT_BOARD_REVEALED':
-      if (!game || game.phase !== 'game-over' || game.winner !== 'me') return game;
-      return {...game, opponentBoard: action.board, boardVerified: action.verified};
-    case 'CLEAR_P2P_GAME':
-      return null;
-    case 'PEER_DISCONNECTED':
-      if (!game || game.opponentId !== action.peerId) return game;
-      if (game.phase === 'game-over' || game.phase === 'disconnected' || game.phase === 'state-mismatch') return game;
-      return {...game, phase: 'disconnected'};
-    default:
-      return game;
-  }
+const gameP2pHandlers: Partial<Record<GameAction['type'], (game: P2pGame | null, action: GameAction) => P2pGame | null>> = {
+  CHALLENGE_PEER: (_, action) => {
+    if (action.type !== 'CHALLENGE_PEER') return null;
+    return {...p2pGameInitial, phase: 'challenged', opponentId: action.opponentId};
+  },
+  CHALLENGE_RECEIVED: (_, action) => {
+    if (action.type !== 'CHALLENGE_RECEIVED') return null;
+    return {...p2pGameInitial, phase: 'challenge-received', opponentId: action.opponentId};
+  },
+  ACCEPT_CHALLENGE: (game) => game ? {...game, phase: 'placing'} : game,
+  DECLINE_CHALLENGE: () => null,
+  CANCEL_CHALLENGE: () => null,
+  P2P_BOARD_READY: (game, action) => {
+    if (action.type !== 'P2P_BOARD_READY') return game;
+    if (!game) return game;
+    const updated = {...game, myBoardReady: true, myBoardHash: action.boardHash};
+    return updated.opponentBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
+  },
+  OPPONENT_BOARD_READY: (game, action) => {
+    if (action.type !== 'OPPONENT_BOARD_READY') return game;
+    if (!game) return game;
+    const updated = {...game, opponentBoardReady: true, opponentBoardHash: action.boardHash};
+    return updated.myBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
+  },
+  TURN_ORDER_DECIDED: (game, action) => {
+    if (action.type !== 'TURN_ORDER_DECIDED') return game;
+    if (!game) return game;
+    return {...game, phase: action.iGoFirst ? 'my-turn' : 'their-turn'};
+  },
+  P2P_FIRE_RESULT: (game, action) => {
+    if (action.type !== 'P2P_FIRE_RESULT') return game;
+    if (!game) return game;
+    const announcement = action.shot.result === 'sunk' && action.shot.ship ? `${action.shot.ship.name} sunk!` : '';
+    return {...game, myShots: [...game.myShots, action.shot], phase: 'their-turn', announcement};
+  },
+  OPPONENT_FIRED: (game, action) => {
+    if (action.type !== 'OPPONENT_FIRED') return game;
+    if (!game) return game;
+    return {...game, opponentShots: [...game.opponentShots, action.shot], phase: 'my-turn', announcement: ''};
+  },
+  P2P_GAME_OVER: (game, action) => {
+    if (action.type !== 'P2P_GAME_OVER') return game;
+    if (!game) return game;
+    return {...game, phase: 'game-over', winner: action.winner, announcement: ''};
+  },
+  FORFEIT_GAME: (game) => game ? {...game, phase: 'game-over', winner: 'opponent', announcement: ''} : game,
+  OPPONENT_FORFEITED: (game) => game ? {...game, phase: 'game-over', winner: 'me', forfeited: true, announcement: ''} : game,
+  P2P_GAME_LOADED: (game, action) => {
+    if (action.type !== 'P2P_GAME_LOADED') return game;
+    const resumable = action.gameState.phase === 'my-turn' || action.gameState.phase === 'their-turn';
+    if (!resumable) return game;
+    const base = {...action.gameState, winner: null as P2pGame['winner']};
+    return game && game.phase !== 'disconnected' ? {...base, opponentId: game.opponentId} : base;
+  },
+  P2P_STATE_MISMATCH: (game) => game ? {...game, phase: 'state-mismatch'} : game,
+  OPPONENT_BOARD_REVEALED: (game, action) => {
+    if (action.type !== 'OPPONENT_BOARD_REVEALED') return game;
+    if (!game || game.phase !== 'game-over' || game.winner !== 'me') return game;
+    return {...game, opponentBoard: action.board, boardVerified: action.verified};
+  },
+  CLEAR_P2P_GAME: () => null,
+  PEER_DISCONNECTED: (game, action) => {
+    if (action.type !== 'PEER_DISCONNECTED') return game;
+    if (!game || game.opponentId !== action.peerId) return game;
+    if (game.phase === 'game-over' || game.phase === 'disconnected' || game.phase === 'state-mismatch') return game;
+    return {...game, phase: 'disconnected'};
+  },
 };
 
-export const gameReducer = (state: GameState, action: GameAction): GameState => {
-  switch (action.type) {
-    case 'LOAD_BOARD':
-      return {...state, boardLoading: true};
-    case 'BOARD_LOADED':
-      return {...state, board: action.board, boardLoading: false};
-    case 'BOARD_NOT_FOUND':
-      return {...state, boardLoading: false};
-    case 'SAVE_BOARD':
-      return {...state, board: action.board};
-    case 'GAME_STARTED':
-    case 'GAME_STATE':
-      return {...state, aiGameState: action.gameState};
-    case 'FIRE_RESULT': {
-      const aiGameState = state.aiGameState;
-      if (!aiGameState) return state;
-      const playerShots = [...aiGameState.playerShots, action.playerShot];
-      const aiShots = action.aiShot ? [...aiGameState.aiShots, action.aiShot] : aiGameState.aiShots;
-      const announcement = action.playerShot.result === 'sunk' && action.playerShot.ship
-        ? `${action.playerShot.ship.name} sunk!` : '';
-      return {...state, aiGameState: {...aiGameState, playerShots, aiShots, phase: action.phase, announcement}};
-    }
-    case 'GAME_NOT_FOUND':
-      return {...state, aiGameState: null};
-    case 'PEER_NAMED':
-      return {...state, opponentNames: {...state.opponentNames, [action.peerId]: action.name}};
-    case 'PEER_CONNECTED':
-      if (!action.isOfferer) return state;
-      return {...state, offererPeerIds: [...state.offererPeerIds, action.peerId]};
-    default:
-      return {...state, p2pGame: p2pGameReducer(state.p2pGame, action)};
-  }
+const p2pGameReducer = (game: P2pGame | null, action: GameAction): P2pGame | null =>
+  maybe(gameP2pHandlers[action.type]).map(fn => fn(game, action)).orElse(game);
+
+const gameHandlers: Partial<Record<GameAction['type'], (state: GameState, action: GameAction) => GameState>> = {
+  LOAD_BOARD: (state) => ({...state, boardLoading: true}),
+  BOARD_LOADED: (state, action) => {
+    if (action.type !== 'BOARD_LOADED') return state;
+    return {...state, board: action.board, boardLoading: false};
+  },
+  BOARD_NOT_FOUND: (state) => ({...state, boardLoading: false}),
+  SAVE_BOARD: (state, action) => {
+    if (action.type !== 'SAVE_BOARD') return state;
+    return {...state, board: action.board};
+  },
+  GAME_STARTED: (state, action) => {
+    if (action.type !== 'GAME_STARTED') return state;
+    return {...state, aiGameState: action.gameState};
+  },
+  GAME_STATE: (state, action) => {
+    if (action.type !== 'GAME_STATE') return state;
+    return {...state, aiGameState: action.gameState};
+  },
+  FIRE_RESULT: (state, action) => {
+    if (action.type !== 'FIRE_RESULT') return state;
+    const aiGameState = state.aiGameState;
+    if (!aiGameState) return state;
+    const playerShots = [...aiGameState.playerShots, action.playerShot];
+    const aiShots = action.aiShot ? [...aiGameState.aiShots, action.aiShot] : aiGameState.aiShots;
+    const announcement = action.playerShot.result === 'sunk' && action.playerShot.ship
+      ? `${action.playerShot.ship.name} sunk!` : '';
+    return {...state, aiGameState: {...aiGameState, playerShots, aiShots, phase: action.phase, announcement}};
+  },
+  GAME_NOT_FOUND: (state) => ({...state, aiGameState: null}),
+  PEER_NAMED: (state, action) => {
+    if (action.type !== 'PEER_NAMED') return state;
+    return {...state, opponentNames: {...state.opponentNames, [action.peerId]: action.name}};
+  },
+  PEER_CONNECTED: (state, action) => {
+    if (action.type !== 'PEER_CONNECTED') return state;
+    if (!action.isOfferer) return state;
+    return {...state, offererPeerIds: [...state.offererPeerIds, action.peerId]};
+  },
 };
+
+export const gameReducer = (state: GameState, action: GameAction): GameState =>
+  maybe(gameHandlers[action.type])
+    .map(fn => fn(state, action))
+    .orElse({...state, p2pGame: p2pGameReducer(state.p2pGame, action)});

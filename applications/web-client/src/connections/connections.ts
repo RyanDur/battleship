@@ -1,5 +1,6 @@
 import type {Board} from '../game/board';
 import type {Shot, P2pGamePhase, P2pGame, AiGamePhase, AiGameState} from '../game/game';
+import {maybe} from '../lib/maybe';
 
 export type Peer = {id: string; name?: string; trusted?: boolean; trustsMe?: boolean}
 
@@ -166,219 +167,266 @@ export const initialState: ConnectionsState = {
   p2pGame: null,
 };
 
-const handlerReducer = (state: HandlerState, action: ConnectionsAction): HandlerState => {
-  switch (action.type) {
-    case 'SIGNALING_PEER_REGISTERED':
-      return {
-        ...state,
-        signalingToPeer: {...state.signalingToPeer, [action.signalingPeerId]: action.localPeerId},
-        peerToSignaling: {...state.peerToSignaling, [action.localPeerId]: action.signalingPeerId},
-        offererPeerIds: action.isOfferer ? [...state.offererPeerIds, action.localPeerId] : state.offererPeerIds,
-      };
-    case 'ICE_RESTART_ATTEMPTED':
-      return {
-        ...state,
-        iceRestartAttempts: {...state.iceRestartAttempts, [action.peerId]: (state.iceRestartAttempts[action.peerId] ?? 0) + 1},
-      };
-    case 'PEER_CONNECTION_RESTORED':
-      return {
-        ...state,
-        iceRestartAttempts: Object.fromEntries(Object.entries(state.iceRestartAttempts).filter(([k]) => k !== action.peerId)),
-      };
-    case 'INTRO_CHANNEL_REGISTERED':
-      return {...state, introChannels: {...state.introChannels, [action.introId]: action.relayPeerId}};
-    case 'INTRO_CONNECTION_REGISTERED':
-      return {...state, introConnections: {...state.introConnections, [action.introId]: action.newPeerId}};
-    case 'INTRO_CONNECTION_CLEARED':
-      return {
-        ...state,
-        introConnections: Object.fromEntries(Object.entries(state.introConnections).filter(([k]) => k !== action.introId)),
-      };
-    case 'ACCEPT_INTRODUCTION':
-    case 'DECLINE_INTRODUCTION':
-      return {
-        ...state,
-        introChannels: Object.fromEntries(Object.entries(state.introChannels).filter(([k]) => k !== action.introId)),
-      };
-    case 'PEER_DISCONNECTED': {
-      const signalingPeerId = state.peerToSignaling[action.peerId];
-      const clearedIntroChannels = Object.fromEntries(
-        Object.entries(state.introChannels).filter(([, v]) => v !== action.peerId)
-      );
-      const clearedIntroConnections = Object.fromEntries(
-        Object.entries(state.introConnections).filter(([, v]) => v !== action.peerId)
-      );
-      return {
-        ...state,
-        signalingToPeer: signalingPeerId
-          ? Object.fromEntries(Object.entries(state.signalingToPeer).filter(([k]) => k !== signalingPeerId))
-          : state.signalingToPeer,
-        peerToSignaling: Object.fromEntries(Object.entries(state.peerToSignaling).filter(([k]) => k !== action.peerId)),
-        offererPeerIds: state.offererPeerIds.filter(id => id !== action.peerId),
-        iceRestartAttempts: Object.fromEntries(Object.entries(state.iceRestartAttempts).filter(([k]) => k !== action.peerId)),
-        introChannels: clearedIntroChannels,
-        introConnections: clearedIntroConnections,
-      };
-    }
-    default:
-      return state;
-  }
+const handlerHandlers: Partial<Record<ConnectionsAction['type'], (state: HandlerState, action: ConnectionsAction) => HandlerState>> = {
+  SIGNALING_PEER_REGISTERED: (state, action) => {
+    if (action.type !== 'SIGNALING_PEER_REGISTERED') return state;
+    return {
+      ...state,
+      signalingToPeer: {...state.signalingToPeer, [action.signalingPeerId]: action.localPeerId},
+      peerToSignaling: {...state.peerToSignaling, [action.localPeerId]: action.signalingPeerId},
+      offererPeerIds: action.isOfferer ? [...state.offererPeerIds, action.localPeerId] : state.offererPeerIds,
+    };
+  },
+  ICE_RESTART_ATTEMPTED: (state, action) => {
+    if (action.type !== 'ICE_RESTART_ATTEMPTED') return state;
+    return {
+      ...state,
+      iceRestartAttempts: {...state.iceRestartAttempts, [action.peerId]: (state.iceRestartAttempts[action.peerId] ?? 0) + 1},
+    };
+  },
+  PEER_CONNECTION_RESTORED: (state, action) => {
+    if (action.type !== 'PEER_CONNECTION_RESTORED') return state;
+    return {
+      ...state,
+      iceRestartAttempts: Object.fromEntries(Object.entries(state.iceRestartAttempts).filter(([k]) => k !== action.peerId)),
+    };
+  },
+  INTRO_CHANNEL_REGISTERED: (state, action) => {
+    if (action.type !== 'INTRO_CHANNEL_REGISTERED') return state;
+    return {...state, introChannels: {...state.introChannels, [action.introId]: action.relayPeerId}};
+  },
+  INTRO_CONNECTION_REGISTERED: (state, action) => {
+    if (action.type !== 'INTRO_CONNECTION_REGISTERED') return state;
+    return {...state, introConnections: {...state.introConnections, [action.introId]: action.newPeerId}};
+  },
+  INTRO_CONNECTION_CLEARED: (state, action) => {
+    if (action.type !== 'INTRO_CONNECTION_CLEARED') return state;
+    return {
+      ...state,
+      introConnections: Object.fromEntries(Object.entries(state.introConnections).filter(([k]) => k !== action.introId)),
+    };
+  },
+  ACCEPT_INTRODUCTION: (state, action) => {
+    if (action.type !== 'ACCEPT_INTRODUCTION') return state;
+    return {
+      ...state,
+      introChannels: Object.fromEntries(Object.entries(state.introChannels).filter(([k]) => k !== action.introId)),
+    };
+  },
+  DECLINE_INTRODUCTION: (state, action) => {
+    if (action.type !== 'DECLINE_INTRODUCTION') return state;
+    return {
+      ...state,
+      introChannels: Object.fromEntries(Object.entries(state.introChannels).filter(([k]) => k !== action.introId)),
+    };
+  },
+  PEER_DISCONNECTED: (state, action) => {
+    if (action.type !== 'PEER_DISCONNECTED') return state;
+    const signalingPeerId = state.peerToSignaling[action.peerId];
+    const clearedIntroChannels = Object.fromEntries(
+      Object.entries(state.introChannels).filter(([, v]) => v !== action.peerId)
+    );
+    const clearedIntroConnections = Object.fromEntries(
+      Object.entries(state.introConnections).filter(([, v]) => v !== action.peerId)
+    );
+    return {
+      ...state,
+      signalingToPeer: signalingPeerId
+        ? Object.fromEntries(Object.entries(state.signalingToPeer).filter(([k]) => k !== signalingPeerId))
+        : state.signalingToPeer,
+      peerToSignaling: Object.fromEntries(Object.entries(state.peerToSignaling).filter(([k]) => k !== action.peerId)),
+      offererPeerIds: state.offererPeerIds.filter(id => id !== action.peerId),
+      iceRestartAttempts: Object.fromEntries(Object.entries(state.iceRestartAttempts).filter(([k]) => k !== action.peerId)),
+      introChannels: clearedIntroChannels,
+      introConnections: clearedIntroConnections,
+    };
+  },
 };
 
-const coreConnectionsReducer = (state: ConnectionsState, action: ConnectionsAction): ConnectionsState => {
-  switch (action.type) {
-    case 'CREATE_OFFER':
-      return {...state, flow: {phase: 'creating', passphrase: action.passphrase}};
+const handlerReducer = (state: HandlerState, action: ConnectionsAction): HandlerState =>
+  maybe(handlerHandlers[action.type]).map(fn => fn(state, action)).orElse(state);
 
-    case 'OFFER_SDP_READY':
-      if (state.flow.phase !== 'creating') return state;
-      return {...state, flow: {phase: 'encoding-offer', peerId: action.peerId, sdp: action.sdp, passphrase: state.flow.passphrase}};
-
-    case 'OFFER_ENCODED':
-      if (state.flow.phase !== 'encoding-offer') return state;
-      return {...state, flow: {phase: 'offer-ready', peerId: action.peerId, code: action.code, passphrase: state.flow.passphrase}};
-
-    case 'JOIN_OFFER':
-      return {...state, flow: {phase: 'joining', passphrase: action.passphrase}};
-
-    case 'ANSWER_SDP_READY':
-      if (state.flow.phase !== 'joining') return state;
-      return {...state, flow: {phase: 'encoding-answer', sdp: action.sdp, passphrase: state.flow.passphrase}};
-
-    case 'ANSWER_ENCODED':
-      return {...state, flow: {phase: 'answer-ready', code: action.code}};
-
-    case 'DECODE_FAILED':
-    case 'CANCEL_OFFER':
-      return {...state, flow: {phase: 'idle'}};
-
-    case 'OFFER_FAILED':
-      return {...state, flow: {phase: 'offer-failed'}};
-
-    case 'PEER_CONNECTED':
-      return {
-        ...state,
-        flow: 'peerId' in state.flow && state.flow.peerId === action.peerId ? {phase: 'idle' as const} : state.flow,
-        peers: [...state.peers, {id: action.peerId}],
-      };
-
-    case 'PEER_DISCONNECTED': {
-      const signalingPeerId = state.handlerState.peerToSignaling[action.peerId];
-      const peerName = state.peers.find(p => p.id === action.peerId)?.name;
-      const alreadyInPrevious = signalingPeerId ? state.previousPeers.some(p => p.peerId === signalingPeerId) : true;
-      const updatedPreviousPeers = signalingPeerId && peerName && !alreadyInPrevious
-        ? [...state.previousPeers, {peerId: signalingPeerId, name: peerName, online: false}]
-        : state.previousPeers;
-      return {
-        ...state,
-        peers: state.peers.filter(p => p.id !== action.peerId),
-        peerConnectionHealth: Object.fromEntries(Object.entries(state.peerConnectionHealth).filter(([k]) => k !== action.peerId)),
-        previousPeers: updatedPreviousPeers,
-      };
-    }
-
-    case 'PEER_NAMED':
-      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, name: action.name} : p)};
-
-    case 'GRANT_TRUST':
-      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trusted: true} : p)};
-
-    case 'REVOKE_TRUST':
-      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trusted: false} : p)};
-
-    case 'PEER_TRUST_UPDATED':
-      return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trustsMe: action.trusts} : p)};
-
-    case 'INTRODUCTION_RECEIVED':
-      return {...state, pendingIntroductions: [...state.pendingIntroductions, {introId: action.introId, from: action.from, peer: action.peer}]};
-
-    case 'INTRODUCTION_RESOLVED':
-    case 'ACCEPT_INTRODUCTION':
-    case 'DECLINE_INTRODUCTION':
-      return {...state, pendingIntroductions: state.pendingIntroductions.filter(i => i.introId !== action.introId)};
-
-    case 'ONLINE_PEERS_UPDATED':
-      return {...state, onlinePeers: action.peers};
-
-    case 'ONLINE_PEER_JOINED':
-      return {
-        ...state,
-        onlinePeers: [...state.onlinePeers, {peerId: action.peerId, name: action.name}],
-        previousPeers: state.previousPeers.map(p => p.peerId === action.peerId ? {...p, online: true} : p),
-      };
-
-    case 'ONLINE_PEER_LEFT':
-      return {
-        ...state,
-        onlinePeers: state.onlinePeers.filter(p => p.peerId !== action.peerId),
-        previousPeers: state.previousPeers.map(p => p.peerId === action.peerId ? {...p, online: false} : p),
-      };
-
-    case 'PREVIOUS_PEERS_RECEIVED':
-      return {...state, previousPeers: action.peers};
-
-    case 'PREVIOUS_PEER_CONNECTED':
-      return {...state, previousPeers: state.previousPeers.filter(p => p.peerId !== action.signalingPeerId)};
-
-    case 'FORGET_PEER':
-      return {...state, previousPeers: state.previousPeers.filter(p => p.peerId !== action.peerId)};
-
-    case 'EMAIL_SHARED_RECEIVED':
-      return {...state, previousPeers: state.previousPeers.map(p => p.peerId === action.fromPeerId ? {...p, email: action.email} : p)};
-
-    case 'EMAIL_REVOKED_RECEIVED':
-      return {...state, previousPeers: state.previousPeers.map(p =>
-        p.peerId !== action.fromPeerId ? p : {peerId: p.peerId, name: p.name, online: p.online}
-      )};
-
-    case 'SAVE_PEER_EMAIL':
-      return {...state, previousPeers: state.previousPeers.map(p => p.peerId === action.peerId ? {...p, email: action.email} : p)};
-
-    case 'MESSAGE_RECEIVED':
-      return {...state, messages: [...state.messages, {peerId: action.peerId, text: action.text, fromSelf: false}]};
-
-    case 'SEND_MESSAGE':
-      return {...state, messages: [...state.messages, {peerId: action.peerId, text: action.text, fromSelf: true}]};
-
-    case 'PEER_CONNECTION_UNSTABLE':
-      return {...state, peerConnectionHealth: {...state.peerConnectionHealth, [action.peerId]: 'unstable'}};
-
-    case 'PEER_CONNECTION_RESTORED':
-      return {...state, peerConnectionHealth: {...state.peerConnectionHealth, [action.peerId]: 'stable'}};
-
-    case 'LOAD_BOARD':
-      return {...state, boardLoading: true};
-
-    case 'BOARD_LOADED':
-      return {...state, board: action.board, boardLoading: false};
-
-    case 'BOARD_NOT_FOUND':
-      return {...state, board: null, boardLoading: false};
-
-    case 'SAVE_BOARD':
-      return {...state, board: action.board};
-
-    case 'GAME_STARTED':
-    case 'GAME_STATE':
-      return {...state, gameState: action.gameState};
-
-    case 'FIRE_RESULT': {
-      const gameState = state.gameState;
-      if (!gameState) return state;
-      const playerShots = [...gameState.playerShots, action.playerShot];
-      const aiShots = action.aiShot ? [...gameState.aiShots, action.aiShot] : gameState.aiShots;
-      const announcement = action.playerShot.result === 'sunk' && action.playerShot.ship
-        ? `${action.playerShot.ship.name} sunk!` : '';
-      return {...state, gameState: {...gameState, playerShots, aiShots, phase: action.phase, announcement}};
-    }
-
-    case 'GAME_NOT_FOUND':
-      return {...state, gameState: null};
-
-    default:
-      return state;
-  }
+const coreHandlers: Partial<Record<ConnectionsAction['type'], (state: ConnectionsState, action: ConnectionsAction) => ConnectionsState>> = {
+  CREATE_OFFER: (state, action) => {
+    if (action.type !== 'CREATE_OFFER') return state;
+    return {...state, flow: {phase: 'creating', passphrase: action.passphrase}};
+  },
+  OFFER_SDP_READY: (state, action) => {
+    if (action.type !== 'OFFER_SDP_READY') return state;
+    if (state.flow.phase !== 'creating') return state;
+    return {...state, flow: {phase: 'encoding-offer', peerId: action.peerId, sdp: action.sdp, passphrase: state.flow.passphrase}};
+  },
+  OFFER_ENCODED: (state, action) => {
+    if (action.type !== 'OFFER_ENCODED') return state;
+    if (state.flow.phase !== 'encoding-offer') return state;
+    return {...state, flow: {phase: 'offer-ready', peerId: action.peerId, code: action.code, passphrase: state.flow.passphrase}};
+  },
+  JOIN_OFFER: (state, action) => {
+    if (action.type !== 'JOIN_OFFER') return state;
+    return {...state, flow: {phase: 'joining', passphrase: action.passphrase}};
+  },
+  ANSWER_SDP_READY: (state, action) => {
+    if (action.type !== 'ANSWER_SDP_READY') return state;
+    if (state.flow.phase !== 'joining') return state;
+    return {...state, flow: {phase: 'encoding-answer', sdp: action.sdp, passphrase: state.flow.passphrase}};
+  },
+  ANSWER_ENCODED: (state, action) => {
+    if (action.type !== 'ANSWER_ENCODED') return state;
+    return {...state, flow: {phase: 'answer-ready', code: action.code}};
+  },
+  DECODE_FAILED: (state) => ({...state, flow: {phase: 'idle'}}),
+  CANCEL_OFFER: (state) => ({...state, flow: {phase: 'idle'}}),
+  OFFER_FAILED: (state) => ({...state, flow: {phase: 'offer-failed'}}),
+  PEER_CONNECTED: (state, action) => {
+    if (action.type !== 'PEER_CONNECTED') return state;
+    return {
+      ...state,
+      flow: 'peerId' in state.flow && state.flow.peerId === action.peerId ? {phase: 'idle' as const} : state.flow,
+      peers: [...state.peers, {id: action.peerId}],
+    };
+  },
+  PEER_DISCONNECTED: (state, action) => {
+    if (action.type !== 'PEER_DISCONNECTED') return state;
+    const signalingPeerId = state.handlerState.peerToSignaling[action.peerId];
+    const peerName = state.peers.find(p => p.id === action.peerId)?.name;
+    const alreadyInPrevious = signalingPeerId ? state.previousPeers.some(p => p.peerId === signalingPeerId) : true;
+    const updatedPreviousPeers = signalingPeerId && peerName && !alreadyInPrevious
+      ? [...state.previousPeers, {peerId: signalingPeerId, name: peerName, online: false}]
+      : state.previousPeers;
+    return {
+      ...state,
+      peers: state.peers.filter(p => p.id !== action.peerId),
+      peerConnectionHealth: Object.fromEntries(Object.entries(state.peerConnectionHealth).filter(([k]) => k !== action.peerId)),
+      previousPeers: updatedPreviousPeers,
+    };
+  },
+  PEER_NAMED: (state, action) => {
+    if (action.type !== 'PEER_NAMED') return state;
+    return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, name: action.name} : p)};
+  },
+  GRANT_TRUST: (state, action) => {
+    if (action.type !== 'GRANT_TRUST') return state;
+    return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trusted: true} : p)};
+  },
+  REVOKE_TRUST: (state, action) => {
+    if (action.type !== 'REVOKE_TRUST') return state;
+    return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trusted: false} : p)};
+  },
+  PEER_TRUST_UPDATED: (state, action) => {
+    if (action.type !== 'PEER_TRUST_UPDATED') return state;
+    return {...state, peers: state.peers.map(p => p.id === action.peerId ? {...p, trustsMe: action.trusts} : p)};
+  },
+  INTRODUCTION_RECEIVED: (state, action) => {
+    if (action.type !== 'INTRODUCTION_RECEIVED') return state;
+    return {...state, pendingIntroductions: [...state.pendingIntroductions, {introId: action.introId, from: action.from, peer: action.peer}]};
+  },
+  INTRODUCTION_RESOLVED: (state, action) => {
+    if (action.type !== 'INTRODUCTION_RESOLVED') return state;
+    return {...state, pendingIntroductions: state.pendingIntroductions.filter(i => i.introId !== action.introId)};
+  },
+  ACCEPT_INTRODUCTION: (state, action) => {
+    if (action.type !== 'ACCEPT_INTRODUCTION') return state;
+    return {...state, pendingIntroductions: state.pendingIntroductions.filter(i => i.introId !== action.introId)};
+  },
+  DECLINE_INTRODUCTION: (state, action) => {
+    if (action.type !== 'DECLINE_INTRODUCTION') return state;
+    return {...state, pendingIntroductions: state.pendingIntroductions.filter(i => i.introId !== action.introId)};
+  },
+  ONLINE_PEERS_UPDATED: (state, action) => {
+    if (action.type !== 'ONLINE_PEERS_UPDATED') return state;
+    return {...state, onlinePeers: action.peers};
+  },
+  ONLINE_PEER_JOINED: (state, action) => {
+    if (action.type !== 'ONLINE_PEER_JOINED') return state;
+    return {
+      ...state,
+      onlinePeers: [...state.onlinePeers, {peerId: action.peerId, name: action.name}],
+      previousPeers: state.previousPeers.map(p => p.peerId === action.peerId ? {...p, online: true} : p),
+    };
+  },
+  ONLINE_PEER_LEFT: (state, action) => {
+    if (action.type !== 'ONLINE_PEER_LEFT') return state;
+    return {
+      ...state,
+      onlinePeers: state.onlinePeers.filter(p => p.peerId !== action.peerId),
+      previousPeers: state.previousPeers.map(p => p.peerId === action.peerId ? {...p, online: false} : p),
+    };
+  },
+  PREVIOUS_PEERS_RECEIVED: (state, action) => {
+    if (action.type !== 'PREVIOUS_PEERS_RECEIVED') return state;
+    return {...state, previousPeers: action.peers};
+  },
+  PREVIOUS_PEER_CONNECTED: (state, action) => {
+    if (action.type !== 'PREVIOUS_PEER_CONNECTED') return state;
+    return {...state, previousPeers: state.previousPeers.filter(p => p.peerId !== action.signalingPeerId)};
+  },
+  FORGET_PEER: (state, action) => {
+    if (action.type !== 'FORGET_PEER') return state;
+    return {...state, previousPeers: state.previousPeers.filter(p => p.peerId !== action.peerId)};
+  },
+  EMAIL_SHARED_RECEIVED: (state, action) => {
+    if (action.type !== 'EMAIL_SHARED_RECEIVED') return state;
+    return {...state, previousPeers: state.previousPeers.map(p => p.peerId === action.fromPeerId ? {...p, email: action.email} : p)};
+  },
+  EMAIL_REVOKED_RECEIVED: (state, action) => {
+    if (action.type !== 'EMAIL_REVOKED_RECEIVED') return state;
+    return {...state, previousPeers: state.previousPeers.map(p =>
+      p.peerId !== action.fromPeerId ? p : {peerId: p.peerId, name: p.name, online: p.online}
+    )};
+  },
+  SAVE_PEER_EMAIL: (state, action) => {
+    if (action.type !== 'SAVE_PEER_EMAIL') return state;
+    return {...state, previousPeers: state.previousPeers.map(p => p.peerId === action.peerId ? {...p, email: action.email} : p)};
+  },
+  MESSAGE_RECEIVED: (state, action) => {
+    if (action.type !== 'MESSAGE_RECEIVED') return state;
+    return {...state, messages: [...state.messages, {peerId: action.peerId, text: action.text, fromSelf: false}]};
+  },
+  SEND_MESSAGE: (state, action) => {
+    if (action.type !== 'SEND_MESSAGE') return state;
+    return {...state, messages: [...state.messages, {peerId: action.peerId, text: action.text, fromSelf: true}]};
+  },
+  PEER_CONNECTION_UNSTABLE: (state, action) => {
+    if (action.type !== 'PEER_CONNECTION_UNSTABLE') return state;
+    return {...state, peerConnectionHealth: {...state.peerConnectionHealth, [action.peerId]: 'unstable'}};
+  },
+  PEER_CONNECTION_RESTORED: (state, action) => {
+    if (action.type !== 'PEER_CONNECTION_RESTORED') return state;
+    return {...state, peerConnectionHealth: {...state.peerConnectionHealth, [action.peerId]: 'stable'}};
+  },
+  LOAD_BOARD: (state) => ({...state, boardLoading: true}),
+  BOARD_LOADED: (state, action) => {
+    if (action.type !== 'BOARD_LOADED') return state;
+    return {...state, board: action.board, boardLoading: false};
+  },
+  BOARD_NOT_FOUND: (state) => ({...state, board: null, boardLoading: false}),
+  SAVE_BOARD: (state, action) => {
+    if (action.type !== 'SAVE_BOARD') return state;
+    return {...state, board: action.board};
+  },
+  GAME_STARTED: (state, action) => {
+    if (action.type !== 'GAME_STARTED') return state;
+    return {...state, gameState: action.gameState};
+  },
+  GAME_STATE: (state, action) => {
+    if (action.type !== 'GAME_STATE') return state;
+    return {...state, gameState: action.gameState};
+  },
+  FIRE_RESULT: (state, action) => {
+    if (action.type !== 'FIRE_RESULT') return state;
+    const gameState = state.gameState;
+    if (!gameState) return state;
+    const playerShots = [...gameState.playerShots, action.playerShot];
+    const aiShots = action.aiShot ? [...gameState.aiShots, action.aiShot] : gameState.aiShots;
+    const announcement = action.playerShot.result === 'sunk' && action.playerShot.ship
+      ? `${action.playerShot.ship.name} sunk!` : '';
+    return {...state, gameState: {...gameState, playerShots, aiShots, phase: action.phase, announcement}};
+  },
+  GAME_NOT_FOUND: (state) => ({...state, gameState: null}),
 };
+
+const coreConnectionsReducer = (state: ConnectionsState, action: ConnectionsAction): ConnectionsState =>
+  maybe(coreHandlers[action.type]).map(fn => fn(state, action)).orElse(state);
 
 const p2pGameInitial: P2pGame = {
   opponentId: '',
@@ -395,90 +443,80 @@ const p2pGameInitial: P2pGame = {
   announcement: '',
 };
 
-const p2pGameReducer = (game: P2pGame | null, action: ConnectionsAction): P2pGame | null => {
-  switch (action.type) {
-    case 'CHALLENGE_PEER':
-      return {...p2pGameInitial, phase: 'challenged', opponentId: action.opponentId};
-
-    case 'CHALLENGE_RECEIVED':
-      return {...p2pGameInitial, phase: 'challenge-received', opponentId: action.opponentId};
-
-    case 'ACCEPT_CHALLENGE':
-      if (!game) return game;
-      return {...game, phase: 'placing'};
-
-    case 'DECLINE_CHALLENGE':
-    case 'CANCEL_CHALLENGE':
-      return null;
-
-    case 'P2P_BOARD_READY': {
-      if (!game) return game;
-      const updated = {...game, myBoardReady: true, myBoardHash: action.boardHash};
-      return updated.opponentBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
-    }
-
-    case 'OPPONENT_BOARD_READY': {
-      if (!game) return game;
-      const updated = {...game, opponentBoardReady: true, opponentBoardHash: action.boardHash};
-      return updated.myBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
-    }
-
-    case 'TURN_ORDER_DECIDED':
-      if (!game) return game;
-      return {...game, phase: action.iGoFirst ? 'my-turn' : 'their-turn'};
-
-    case 'P2P_FIRE_RESULT': {
-      if (!game) return game;
-      const announcement = action.shot.result === 'sunk' && action.shot.ship ? `${action.shot.ship.name} sunk!` : '';
-      return {...game, myShots: [...game.myShots, action.shot], phase: 'their-turn', announcement};
-    }
-
-    case 'OPPONENT_FIRED':
-      if (!game) return game;
-      return {...game, opponentShots: [...game.opponentShots, action.shot], phase: 'my-turn', announcement: ''};
-
-    case 'P2P_GAME_OVER':
-      if (!game) return game;
-      return {...game, phase: 'game-over', winner: action.winner, announcement: ''};
-
-    case 'FORFEIT_GAME':
-      if (!game) return game;
-      return {...game, phase: 'game-over', winner: 'opponent', announcement: ''};
-
-    case 'OPPONENT_FORFEITED':
-      if (!game) return game;
-      return {...game, phase: 'game-over', winner: 'me', forfeited: true, announcement: ''};
-
-    case 'P2P_GAME_LOADED': {
-      const resumable = action.gameState.phase === 'my-turn' || action.gameState.phase === 'their-turn';
-      if (!resumable) return game;
-      // winner is always null for resumable phases — the decoder strips it to avoid null/string mismatch
-      const base = {...action.gameState, winner: null as P2pGame['winner']};
-      // Use mapped opponentId from action when restoring from disconnected or null (refreshed peer).
-      // Only preserve existing game.opponentId during challenge flow (game exists in non-disconnected phase).
-      return game && game.phase !== 'disconnected' ? {...base, opponentId: game.opponentId} : base;
-    }
-
-    case 'P2P_STATE_MISMATCH':
-      if (!game) return game;
-      return {...game, phase: 'state-mismatch'};
-
-    case 'OPPONENT_BOARD_REVEALED':
-      if (!game || game.phase !== 'game-over' || game.winner !== 'me') return game;
-      return {...game, opponentBoard: action.board, boardVerified: action.verified};
-
-    case 'CLEAR_P2P_GAME':
-      return null;
-
-    case 'PEER_DISCONNECTED':
-      if (!game || game.opponentId !== action.peerId) return game;
-      if (game.phase === 'game-over' || game.phase === 'disconnected' || game.phase === 'state-mismatch') return game;
-      return {...game, phase: 'disconnected'};
-
-    default:
-      return game;
-  }
+const p2pGameHandlers: Partial<Record<ConnectionsAction['type'], (game: P2pGame | null, action: ConnectionsAction) => P2pGame | null>> = {
+  CHALLENGE_PEER: (_, action) => {
+    if (action.type !== 'CHALLENGE_PEER') return null;
+    return {...p2pGameInitial, phase: 'challenged', opponentId: action.opponentId};
+  },
+  CHALLENGE_RECEIVED: (_, action) => {
+    if (action.type !== 'CHALLENGE_RECEIVED') return null;
+    return {...p2pGameInitial, phase: 'challenge-received', opponentId: action.opponentId};
+  },
+  ACCEPT_CHALLENGE: (game) => game ? {...game, phase: 'placing'} : game,
+  DECLINE_CHALLENGE: () => null,
+  CANCEL_CHALLENGE: () => null,
+  P2P_BOARD_READY: (game, action) => {
+    if (action.type !== 'P2P_BOARD_READY') return game;
+    if (!game) return game;
+    const updated = {...game, myBoardReady: true, myBoardHash: action.boardHash};
+    return updated.opponentBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
+  },
+  OPPONENT_BOARD_READY: (game, action) => {
+    if (action.type !== 'OPPONENT_BOARD_READY') return game;
+    if (!game) return game;
+    const updated = {...game, opponentBoardReady: true, opponentBoardHash: action.boardHash};
+    return updated.myBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
+  },
+  TURN_ORDER_DECIDED: (game, action) => {
+    if (action.type !== 'TURN_ORDER_DECIDED') return game;
+    if (!game) return game;
+    return {...game, phase: action.iGoFirst ? 'my-turn' : 'their-turn'};
+  },
+  P2P_FIRE_RESULT: (game, action) => {
+    if (action.type !== 'P2P_FIRE_RESULT') return game;
+    if (!game) return game;
+    const announcement = action.shot.result === 'sunk' && action.shot.ship ? `${action.shot.ship.name} sunk!` : '';
+    return {...game, myShots: [...game.myShots, action.shot], phase: 'their-turn', announcement};
+  },
+  OPPONENT_FIRED: (game, action) => {
+    if (action.type !== 'OPPONENT_FIRED') return game;
+    if (!game) return game;
+    return {...game, opponentShots: [...game.opponentShots, action.shot], phase: 'my-turn', announcement: ''};
+  },
+  P2P_GAME_OVER: (game, action) => {
+    if (action.type !== 'P2P_GAME_OVER') return game;
+    if (!game) return game;
+    return {...game, phase: 'game-over', winner: action.winner, announcement: ''};
+  },
+  FORFEIT_GAME: (game) => game ? {...game, phase: 'game-over', winner: 'opponent', announcement: ''} : game,
+  OPPONENT_FORFEITED: (game) => game ? {...game, phase: 'game-over', winner: 'me', forfeited: true, announcement: ''} : game,
+  P2P_GAME_LOADED: (game, action) => {
+    if (action.type !== 'P2P_GAME_LOADED') return game;
+    const resumable = action.gameState.phase === 'my-turn' || action.gameState.phase === 'their-turn';
+    if (!resumable) return game;
+    // winner is always null for resumable phases — the decoder strips it to avoid null/string mismatch
+    const base = {...action.gameState, winner: null as P2pGame['winner']};
+    // Use mapped opponentId from action when restoring from disconnected or null (refreshed peer).
+    // Only preserve existing game.opponentId during challenge flow (game exists in non-disconnected phase).
+    return game && game.phase !== 'disconnected' ? {...base, opponentId: game.opponentId} : base;
+  },
+  P2P_STATE_MISMATCH: (game) => game ? {...game, phase: 'state-mismatch'} : game,
+  OPPONENT_BOARD_REVEALED: (game, action) => {
+    if (action.type !== 'OPPONENT_BOARD_REVEALED') return game;
+    if (!game || game.phase !== 'game-over' || game.winner !== 'me') return game;
+    return {...game, opponentBoard: action.board, boardVerified: action.verified};
+  },
+  CLEAR_P2P_GAME: () => null,
+  PEER_DISCONNECTED: (game, action) => {
+    if (action.type !== 'PEER_DISCONNECTED') return game;
+    if (!game || game.opponentId !== action.peerId) return game;
+    if (game.phase === 'game-over' || game.phase === 'disconnected' || game.phase === 'state-mismatch') return game;
+    return {...game, phase: 'disconnected'};
+  },
 };
+
+const p2pGameReducer = (game: P2pGame | null, action: ConnectionsAction): P2pGame | null =>
+  maybe(p2pGameHandlers[action.type]).map(fn => fn(game, action)).orElse(game);
 
 export const connectionsReducer = (state: ConnectionsState, action: ConnectionsAction): ConnectionsState => ({
   ...coreConnectionsReducer(state, action),

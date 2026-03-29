@@ -3,6 +3,7 @@ import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction} from './connections';
 import type {P2pGame} from '../game/game';
 import {tryCatch} from '../lib/result';
+import {maybe} from '../lib/maybe';
 import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling, selectSignalingToPeer, selectP2pGame as selectP2pGameFromConnections} from './connectionSelectors';
 import {selectP2pGame as selectGameStoreP2pGame} from '../game/gameSelectors';
 import type {GameState, GameAction} from '../game/game';
@@ -89,40 +90,85 @@ type HandlerListenerConfig = {
 
 const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState, portEmit?: (event: ConnectionEvent) => void) =>
   (event: PeerEvent) => {
-    if (event.type === 'PEER_CONNECTED') {
-      dispatch(peerConnected(event.peerId));
-      if (selectOffererPeerIds(getState()).includes(event.peerId)) {
+    const peerEventHandlers: Partial<Record<PeerEvent['type'], () => void>> = {
+      PEER_CONNECTED: () => {
+        if (event.type !== 'PEER_CONNECTED') return;
+        dispatch(peerConnected(event.peerId));
+        if (selectOffererPeerIds(getState()).includes(event.peerId)) {
+          const signalingPeerId = selectPeerToSignaling(getState())[event.peerId];
+          if (signalingPeerId) dispatch(previousPeerConnected(signalingPeerId));
+        }
+        // Reconnect: load any saved game for this peer from the server
         const signalingPeerId = selectPeerToSignaling(getState())[event.peerId];
-        if (signalingPeerId) dispatch(previousPeerConnected(signalingPeerId));
-      }
-      // Reconnect: load any saved game for this peer from the server
-      const signalingPeerId = selectPeerToSignaling(getState())[event.peerId];
-      if (signalingPeerId) dispatch(loadP2pGame(signalingPeerId));
-      portEmit?.({type: 'PEER_CONNECTED', peerId: event.peerId, isOfferer: selectOffererPeerIds(getState()).includes(event.peerId)});
-    }
-    else if (event.type === 'PEER_NAMED') {
-      dispatch(peerNamed(event.peerId, event.name));
-      portEmit?.({type: 'PEER_NAMED', peerId: event.peerId, name: event.name});
-    }
-    else if (event.type === 'PEER_DISCONNECTED') {
-      dispatch(peerDisconnected(event.peerId));
-    }
-    else if (event.type === 'PEER_TRUST_UPDATED') dispatch(peerTrustUpdated(event.peerId, event.trusts));
-    else if (event.type === 'OFFER_CREATED') dispatch(offerSdpReady(event.peerId, event.sdp));
-    else if (event.type === 'ANSWER_CREATED') dispatch(answerSdpReady(event.sdp));
-    else if (event.type === 'INTRODUCTION_RECEIVED') dispatch(introductionReceived(event.introId, event.from, event.peer));
-    else if (event.type === 'INTRODUCTION_DECLINED') dispatch(introductionResolved(event.introId));
-    else if (event.type === 'INTRODUCTION_EXPIRED') dispatch(introductionResolved(event.introId));
-    else if (event.type === 'SERVER_OFFER_CREATED') dispatch(relayOffer(event.signalingPeerId, event.sdp));
-    else if (event.type === 'SERVER_ANSWER_CREATED') dispatch(relayAnswer(event.signalingPeerId, event.sdp));
-    else if (event.type === 'PEER_CONNECTION_UNSTABLE') dispatch(peerConnectionUnstable(event.peerId));
-    else if (event.type === 'PEER_CONNECTION_RESTORED') dispatch(peerConnectionRestored(event.peerId));
-    else if (event.type === 'ICE_RESTART_OFFER_CREATED') dispatch(relayIceRestart(event.signalingPeerId, event.sdp));
-    else if (event.type === 'ICE_RESTART_ANSWER_CREATED') dispatch(relayIceRestartAnswer(event.signalingPeerId, event.sdp));
-    else if (event.type === 'MESSAGE_RECEIVED') dispatch(messageReceived(event.peerId, event.text));
-    else if (event.type === 'ERROR') {
-      if (selectIsCreatingOffer(getState())) dispatch(offerFailed());
-    }
+        if (signalingPeerId) dispatch(loadP2pGame(signalingPeerId));
+        portEmit?.({type: 'PEER_CONNECTED', peerId: event.peerId, isOfferer: selectOffererPeerIds(getState()).includes(event.peerId)});
+      },
+      PEER_NAMED: () => {
+        if (event.type !== 'PEER_NAMED') return;
+        dispatch(peerNamed(event.peerId, event.name));
+        portEmit?.({type: 'PEER_NAMED', peerId: event.peerId, name: event.name});
+      },
+      PEER_DISCONNECTED: () => {
+        if (event.type !== 'PEER_DISCONNECTED') return;
+        dispatch(peerDisconnected(event.peerId));
+      },
+      PEER_TRUST_UPDATED: () => {
+        if (event.type !== 'PEER_TRUST_UPDATED') return;
+        dispatch(peerTrustUpdated(event.peerId, event.trusts));
+      },
+      OFFER_CREATED: () => {
+        if (event.type !== 'OFFER_CREATED') return;
+        dispatch(offerSdpReady(event.peerId, event.sdp));
+      },
+      ANSWER_CREATED: () => {
+        if (event.type !== 'ANSWER_CREATED') return;
+        dispatch(answerSdpReady(event.sdp));
+      },
+      INTRODUCTION_RECEIVED: () => {
+        if (event.type !== 'INTRODUCTION_RECEIVED') return;
+        dispatch(introductionReceived(event.introId, event.from, event.peer));
+      },
+      INTRODUCTION_DECLINED: () => {
+        if (event.type !== 'INTRODUCTION_DECLINED') return;
+        dispatch(introductionResolved(event.introId));
+      },
+      INTRODUCTION_EXPIRED: () => {
+        if (event.type !== 'INTRODUCTION_EXPIRED') return;
+        dispatch(introductionResolved(event.introId));
+      },
+      SERVER_OFFER_CREATED: () => {
+        if (event.type !== 'SERVER_OFFER_CREATED') return;
+        dispatch(relayOffer(event.signalingPeerId, event.sdp));
+      },
+      SERVER_ANSWER_CREATED: () => {
+        if (event.type !== 'SERVER_ANSWER_CREATED') return;
+        dispatch(relayAnswer(event.signalingPeerId, event.sdp));
+      },
+      PEER_CONNECTION_UNSTABLE: () => {
+        if (event.type !== 'PEER_CONNECTION_UNSTABLE') return;
+        dispatch(peerConnectionUnstable(event.peerId));
+      },
+      PEER_CONNECTION_RESTORED: () => {
+        if (event.type !== 'PEER_CONNECTION_RESTORED') return;
+        dispatch(peerConnectionRestored(event.peerId));
+      },
+      ICE_RESTART_OFFER_CREATED: () => {
+        if (event.type !== 'ICE_RESTART_OFFER_CREATED') return;
+        dispatch(relayIceRestart(event.signalingPeerId, event.sdp));
+      },
+      ICE_RESTART_ANSWER_CREATED: () => {
+        if (event.type !== 'ICE_RESTART_ANSWER_CREATED') return;
+        dispatch(relayIceRestartAnswer(event.signalingPeerId, event.sdp));
+      },
+      MESSAGE_RECEIVED: () => {
+        if (event.type !== 'MESSAGE_RECEIVED') return;
+        dispatch(messageReceived(event.peerId, event.text));
+      },
+      ERROR: () => {
+        if (selectIsCreatingOffer(getState())) dispatch(offerFailed());
+      },
+    };
+    maybe(peerEventHandlers[event.type]).map(fn => fn());
   };
 
 export const createHandlerListener = ({name, createPeerConnection, portEmit, getGameState, dispatchToGame}: HandlerListenerConfig): ListenerFactory =>
@@ -135,44 +181,55 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit, get
 
     return (action, {prevState, state}) => {
       // Bridge game state actions to game store
-      if (action.type === 'SAVE_BOARD' && dispatchToGame) dispatchToGame(gameSaveBoard(action.board));
-      else if (action.type === 'START_GAME' && dispatchToGame) dispatchToGame(gameStartGame());
-      else if (action.type === 'CLEAR_P2P_GAME' && dispatchToGame) dispatchToGame(gameClearP2pGame());
+      const gameBridgeHandlers: Partial<Record<ConnectionsAction['type'], () => void>> = {
+        SAVE_BOARD: () => { if (action.type === 'SAVE_BOARD' && dispatchToGame) dispatchToGame(gameSaveBoard(action.board)); },
+        START_GAME: () => { if (dispatchToGame) dispatchToGame(gameStartGame()); },
+        CLEAR_P2P_GAME: () => { if (dispatchToGame) dispatchToGame(gameClearP2pGame()); },
+      };
+      maybe(gameBridgeHandlers[action.type]).map(fn => fn());
 
-      if (action.type === 'CREATE_OFFER') handler.handleCommand({type: 'CREATE_OFFER'});
-      else if (action.type === 'ACCEPT_OFFER') handler.handleCommand({type: 'ACCEPT_OFFER', sdp: action.sdp});
-      else if (action.type === 'ACCEPT_ANSWER') handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: action.peerId, sdp: action.sdp});
-      else if (action.type === 'DISCONNECT') handler.handleCommand({type: 'DISCONNECT', peerId: action.peerId});
-      else if (action.type === 'GRANT_TRUST') handler.handleCommand({type: 'GRANT_TRUST', peerId: action.peerId});
-      else if (action.type === 'REVOKE_TRUST') handler.handleCommand({type: 'REVOKE_TRUST', peerId: action.peerId});
-      else if (action.type === 'INTRODUCE_PEERS') handler.handleCommand({type: 'INTRODUCE_PEERS', peerId1: action.peerId1, peerId2: action.peerId2});
-      else if (action.type === 'ACCEPT_INTRODUCTION') handler.handleCommand({type: 'ACCEPT_INTRODUCTION', introId: action.introId, relayPeerId: selectIntroChannels(prevState)[action.introId]});
-      else if (action.type === 'DECLINE_INTRODUCTION') handler.handleCommand({type: 'DECLINE_INTRODUCTION', introId: action.introId, relayPeerId: selectIntroChannels(prevState)[action.introId]});
-      else if (action.type === 'CONNECT_VIA_SERVER') handler.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: action.signalingPeerId, name: action.name});
-      else if (action.type === 'RECONNECT_VIA_SERVER') handler.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: action.signalingPeerId, name: action.name});
-      else if (action.type === 'SERVER_OFFER_RECEIVED') handler.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: action.signalingPeerId, name: action.name, sdp: action.sdp});
-      else if (action.type === 'SERVER_ANSWER_RECEIVED') handler.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
-      else if (action.type === 'ICE_RESTART_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
-      else if (action.type === 'ICE_RESTART_ANSWER_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp});
-      else if (action.type === 'SEND_MESSAGE') handler.handleCommand({type: 'SEND_MESSAGE', peerId: action.peerId, text: action.text});
-      else if (action.type === 'SEND_TO_PEER') handler.handleCommand({type: 'SEND_TO_PEER', peerId: action.peerId, message: action.message});
-      else if (action.type === 'PEER_DISCONNECTED') {
-        handler.cleanup(action.peerId);
-        dispatchToGame?.(gamePeerDisconnected(action.peerId));
-      }
-      else {
-        const game = getGame();
-        const opponentId = game?.opponentId ?? (action.type === 'CHALLENGE_PEER' ? action.opponentId : null);
-        if (!opponentId) return;
-        const send = (message: Record<string, unknown>) =>
-          handler.handleCommand({type: 'SEND_TO_PEER', peerId: opponentId, message});
-        if (action.type === 'CHALLENGE_PEER') {
+      const handlerCommandHandlers: Partial<Record<ConnectionsAction['type'], () => void>> = {
+        CREATE_OFFER: () => handler.handleCommand({type: 'CREATE_OFFER'}),
+        ACCEPT_OFFER: () => { if (action.type === 'ACCEPT_OFFER') handler.handleCommand({type: 'ACCEPT_OFFER', sdp: action.sdp}); },
+        ACCEPT_ANSWER: () => { if (action.type === 'ACCEPT_ANSWER') handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: action.peerId, sdp: action.sdp}); },
+        DISCONNECT: () => { if (action.type === 'DISCONNECT') handler.handleCommand({type: 'DISCONNECT', peerId: action.peerId}); },
+        GRANT_TRUST: () => { if (action.type === 'GRANT_TRUST') handler.handleCommand({type: 'GRANT_TRUST', peerId: action.peerId}); },
+        REVOKE_TRUST: () => { if (action.type === 'REVOKE_TRUST') handler.handleCommand({type: 'REVOKE_TRUST', peerId: action.peerId}); },
+        INTRODUCE_PEERS: () => { if (action.type === 'INTRODUCE_PEERS') handler.handleCommand({type: 'INTRODUCE_PEERS', peerId1: action.peerId1, peerId2: action.peerId2}); },
+        ACCEPT_INTRODUCTION: () => { if (action.type === 'ACCEPT_INTRODUCTION') handler.handleCommand({type: 'ACCEPT_INTRODUCTION', introId: action.introId, relayPeerId: selectIntroChannels(prevState)[action.introId]}); },
+        DECLINE_INTRODUCTION: () => { if (action.type === 'DECLINE_INTRODUCTION') handler.handleCommand({type: 'DECLINE_INTRODUCTION', introId: action.introId, relayPeerId: selectIntroChannels(prevState)[action.introId]}); },
+        CONNECT_VIA_SERVER: () => { if (action.type === 'CONNECT_VIA_SERVER') handler.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: action.signalingPeerId, name: action.name}); },
+        RECONNECT_VIA_SERVER: () => { if (action.type === 'RECONNECT_VIA_SERVER') handler.handleCommand({type: 'CONNECT_VIA_SERVER', signalingPeerId: action.signalingPeerId, name: action.name}); },
+        SERVER_OFFER_RECEIVED: () => { if (action.type === 'SERVER_OFFER_RECEIVED') handler.handleCommand({type: 'SERVER_OFFER_RECEIVED', signalingPeerId: action.signalingPeerId, name: action.name, sdp: action.sdp}); },
+        SERVER_ANSWER_RECEIVED: () => { if (action.type === 'SERVER_ANSWER_RECEIVED') handler.handleCommand({type: 'SERVER_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp}); },
+        ICE_RESTART_RECEIVED: () => { if (action.type === 'ICE_RESTART_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp}); },
+        ICE_RESTART_ANSWER_RECEIVED: () => { if (action.type === 'ICE_RESTART_ANSWER_RECEIVED') handler.handleCommand({type: 'ICE_RESTART_ANSWER_RECEIVED', signalingPeerId: action.signalingPeerId, sdp: action.sdp}); },
+        SEND_MESSAGE: () => { if (action.type === 'SEND_MESSAGE') handler.handleCommand({type: 'SEND_MESSAGE', peerId: action.peerId, text: action.text}); },
+        SEND_TO_PEER: () => { if (action.type === 'SEND_TO_PEER') handler.handleCommand({type: 'SEND_TO_PEER', peerId: action.peerId, message: action.message}); },
+        PEER_DISCONNECTED: () => {
+          if (action.type !== 'PEER_DISCONNECTED') return;
+          handler.cleanup(action.peerId);
+          dispatchToGame?.(gamePeerDisconnected(action.peerId));
+        },
+      };
+
+      if (maybe(handlerCommandHandlers[action.type]).map(fn => { fn(); return true; }).orElse(false)) return;
+
+      const game = getGame();
+      const opponentId = game?.opponentId ?? (action.type === 'CHALLENGE_PEER' ? action.opponentId : null);
+      if (!opponentId) return;
+      const send = (message: Record<string, unknown>) =>
+        handler.handleCommand({type: 'SEND_TO_PEER', peerId: opponentId, message});
+
+      const gameActionHandlers: Partial<Record<ConnectionsAction['type'], () => void>> = {
+        CHALLENGE_PEER: () => {
+          if (action.type !== 'CHALLENGE_PEER') return;
           send({type: 'GAME_CHALLENGE'});
           dispatchToGame?.(gameChallengePeer(opponentId));
           const signalingId = selectPeerToSignaling(state)[action.opponentId];
           if (signalingId) dispatch(loadP2pGame(signalingId));
-        }
-        else if (action.type === 'ACCEPT_CHALLENGE') {
+        },
+        ACCEPT_CHALLENGE: () => {
           // Only the challengee (phase was 'challenge-received') sends GAME_ACCEPT.
           // The challenger receiving GAME_ACCEPT also dispatches acceptChallenge — skip to avoid echo loop.
           if (getGame()?.phase === 'challenge-received') {
@@ -181,51 +238,48 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit, get
             const signalingId = selectPeerToSignaling(state)[opponentId];
             if (signalingId) dispatch(loadP2pGame(signalingId));
           }
-        }
-        else if (action.type === 'DECLINE_CHALLENGE') {
+        },
+        DECLINE_CHALLENGE: () => {
           send({type: 'GAME_DECLINE'});
           dispatchToGame?.(gameDeclineChallenge());
-        }
-        else if (action.type === 'CANCEL_CHALLENGE') {
+        },
+        CANCEL_CHALLENGE: () => {
           send({type: 'GAME_CANCEL'});
           dispatchToGame?.(gameCancelChallenge());
-        }
-        else if (action.type === 'P2P_BOARD_READY') {
+        },
+        P2P_BOARD_READY: () => {
+          if (action.type !== 'P2P_BOARD_READY') return;
           send({type: 'BOARD_READY', boardHash: action.boardHash});
           dispatchToGame?.(gameP2pBoardReady(action.boardHash));
-        }
-        else if (action.type === 'TAKE_FIRST_TURN') {
+        },
+        TAKE_FIRST_TURN: () => {
           send({type: 'GAME_FIRST_TURN'});
           dispatch(turnOrderDecided(true));
-        }
-        else if (action.type === 'CLAIM_FIRST_TURN') {
-          handler.handleCommand({type: 'START_COIN_FLIP', peerId: opponentId});
-        }
-        else if (action.type === 'COIN_FLIP_COMMIT') send({type: 'COIN_FLIP_COMMIT', hash: action.hash});
-        else if (action.type === 'COIN_FLIP_REVEAL') send({type: 'COIN_FLIP_REVEAL', value: action.value});
-        else if (action.type === 'P2P_FIRE') {
+        },
+        CLAIM_FIRST_TURN: () => handler.handleCommand({type: 'START_COIN_FLIP', peerId: opponentId}),
+        COIN_FLIP_COMMIT: () => { if (action.type === 'COIN_FLIP_COMMIT') send({type: 'COIN_FLIP_COMMIT', hash: action.hash}); },
+        COIN_FLIP_REVEAL: () => { if (action.type === 'COIN_FLIP_REVEAL') send({type: 'COIN_FLIP_REVEAL', value: action.value}); },
+        P2P_FIRE: () => {
+          if (action.type !== 'P2P_FIRE') return;
           const prevGame = getGameState ? selectGameStoreP2pGame(getGameState()) : null;
           if (prevGame?.phase !== 'my-turn') return;
           if (!prevGame.myShots.some(s => s.cell.row === action.row && s.cell.col === action.col)) {
             send({type: 'FIRE', row: action.row, col: action.col});
           }
-        }
-        else if (action.type === 'FORFEIT_GAME') {
+        },
+        FORFEIT_GAME: () => {
           send({type: 'GAME_FORFEIT'});
           dispatchToGame?.(gameForfeitGame());
-        }
-        else if (action.type === 'TURN_ORDER_DECIDED') {
+        },
+        TURN_ORDER_DECIDED: () => {
+          if (action.type !== 'TURN_ORDER_DECIDED') return;
           dispatchToGame?.(gameTurnOrderDecided(action.iGoFirst));
           if (getGame()) dispatch(saveP2pGame());
-        }
-        else if (
-          action.type === 'P2P_FIRE_RESULT' ||
-          action.type === 'OPPONENT_FIRED' ||
-          action.type === 'P2P_GAME_OVER'
-        ) {
-          if (getGame()) dispatch(saveP2pGame());
-        }
-        else if (action.type === 'P2P_GAME_LOADED') {
+        },
+        P2P_FIRE_RESULT: () => { if (getGame()) dispatch(saveP2pGame()); },
+        OPPONENT_FIRED: () => { if (getGame()) dispatch(saveP2pGame()); },
+        P2P_GAME_OVER: () => { if (getGame()) dispatch(saveP2pGame()); },
+        P2P_GAME_LOADED: () => {
           const prevGame = selectP2pGameFromConnections(prevState);
           const loadedGame = selectP2pGameFromConnections(state);
           // Send sync only on reconnect: game restored from null (refreshed) or disconnected
@@ -234,8 +288,9 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit, get
               send({type: 'GAME_STATE_SYNC', myShots: loadedGame.myShots, opponentShots: loadedGame.opponentShots, phase: loadedGame.phase});
             }
           }
-        }
-      }
+        },
+      };
+      maybe(gameActionHandlers[action.type]).map(fn => fn());
     };
   };
 
@@ -312,116 +367,145 @@ export const createSignalingListener = ({config, portEmit}: SignalingListenerCon
     let handle: SignalingHandle | null = null;
 
     return (action) => {
-      if (action.type === 'START_SIGNALING') {
-        handle = startSignaling(config, (event: SignalingEvent) => {
-          if (event.type === 'REGISTERED') {
-            dispatch(loadBoard());
-            dispatch(loadGame());
-            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'REGISTERED'}});
+      const signalingActionHandlers: Partial<Record<ConnectionsAction['type'], () => void>> = {
+        START_SIGNALING: () => {
+          handle = startSignaling(config, (event: SignalingEvent) => {
+            const signalingEventHandlers: Partial<Record<SignalingEvent['type'], () => void>> = {
+              REGISTERED: () => {
+                dispatch(loadBoard());
+                dispatch(loadGame());
+                portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'REGISTERED'}});
+              },
+              PEERS: () => {
+                if (event.type !== 'PEERS') return;
+                dispatch(onlinePeersUpdated(event.peers));
+              },
+              PEER_JOINED: () => {
+                if (event.type !== 'PEER_JOINED') return;
+                dispatch(onlinePeerJoined(event.peerId, event.name));
+              },
+              PEER_LEFT: () => {
+                if (event.type !== 'PEER_LEFT') return;
+                dispatch(onlinePeerLeft(event.peerId));
+              },
+              OFFER_RECEIVED: () => {
+                if (event.type !== 'OFFER_RECEIVED') return;
+                dispatch(serverOfferReceived(event.fromPeerId, event.name, event.sdp));
+              },
+              ANSWER_RECEIVED: () => {
+                if (event.type !== 'ANSWER_RECEIVED') return;
+                dispatch(serverAnswerReceived(event.fromPeerId, event.sdp));
+              },
+              PREVIOUS_PEERS: () => {
+                if (event.type !== 'PREVIOUS_PEERS') return;
+                dispatch(previousPeersReceived(event.peers));
+              },
+              ICE_RESTART_RECEIVED: () => {
+                if (event.type !== 'ICE_RESTART_RECEIVED') return;
+                dispatch(iceRestartReceived(event.fromPeerId, event.sdp));
+              },
+              ICE_RESTART_ANSWER_RECEIVED: () => {
+                if (event.type !== 'ICE_RESTART_ANSWER_RECEIVED') return;
+                dispatch(iceRestartAnswerReceived(event.fromPeerId, event.sdp));
+              },
+              EMAIL_SHARED: () => {
+                if (event.type !== 'EMAIL_SHARED') return;
+                dispatch(emailSharedReceived(event.fromPeerId, event.email));
+              },
+              EMAIL_REVOKED: () => {
+                if (event.type !== 'EMAIL_REVOKED') return;
+                dispatch(emailRevokedReceived(event.fromPeerId));
+              },
+              BOARD_SAVED: () => {
+                dispatch(boardSaved());
+                portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'BOARD_SAVED'}});
+              },
+              BOARD_LOADED: () => {
+                if (event.type !== 'BOARD_LOADED') return;
+                dispatch(boardLoaded(event.board));
+                portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'BOARD_LOADED', board: event.board}});
+              },
+              BOARD_NOT_FOUND: () => {
+                dispatch(boardNotFound());
+                portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'BOARD_NOT_FOUND'}});
+              },
+              GAME_STARTED: () => {
+                if (event.type !== 'GAME_STARTED') return;
+                dispatch(gameStarted(event.gameState));
+                portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'GAME_STARTED', gameState: event.gameState}});
+              },
+              FIRE_RESULT: () => {
+                if (event.type !== 'FIRE_RESULT') return;
+                dispatch(fireResult(event.playerShot, event.aiShot, event.phase));
+                portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'FIRE_RESULT', playerShot: event.playerShot, aiShot: event.aiShot, phase: event.phase}});
+              },
+              GAME_STATE: () => {
+                if (event.type !== 'GAME_STATE') return;
+                dispatch(gameStateReceived(event.gameState));
+                portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'GAME_STATE', gameState: event.gameState}});
+              },
+              GAME_NOT_FOUND: () => {
+                dispatch(gameNotFound());
+                portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'GAME_NOT_FOUND'}});
+              },
+              P2P_GAME_LOADED: () => {
+                if (event.type !== 'P2P_GAME_LOADED') return;
+                portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'P2P_GAME_LOADED', gameState: event.gameState}});
+                tryCatch(() => JSON.parse(event.gameState), () => null)
+                  .onSuccess(gs => {
+                    const decoded = p2pGameStateDecoder.decode(gs);
+                    if (decoded) {
+                      const localOpponentId = selectSignalingToPeer(getState())[decoded.opponentId];
+                      const game: P2pGame = {
+                        opponentId: localOpponentId ?? decoded.opponentId,
+                        phase: decoded.phase,
+                        myBoardHash: decoded.myBoardHash,
+                        opponentBoardHash: decoded.opponentBoardHash ?? null,
+                        myShots: decoded.myShots,
+                        opponentShots: decoded.opponentShots,
+                        myBoardReady: decoded.myBoardReady,
+                        opponentBoardReady: decoded.opponentBoardReady,
+                        winner: null,
+                        opponentBoard: null,
+                        boardVerified: null,
+                        announcement: '',
+                      };
+                      dispatch(p2pGameLoaded(game));
+                    }
+                  });
+              },
+            };
+            maybe(signalingEventHandlers[event.type]).map(fn => fn());
+          });
+        },
+        STOP_SIGNALING: () => {
+          handle?.stop();
+          handle = null;
+        },
+        RELAY_OFFER: () => { if (action.type === 'RELAY_OFFER') handle?.send({type: 'RELAY_OFFER', targetPeerId: action.targetPeerId, sdp: action.sdp}); },
+        RELAY_ANSWER: () => { if (action.type === 'RELAY_ANSWER') handle?.send({type: 'RELAY_ANSWER', targetPeerId: action.targetPeerId, sdp: action.sdp}); },
+        FORGET_PEER: () => { if (action.type === 'FORGET_PEER') handle?.send({type: 'FORGET_PEER', targetPeerId: action.peerId}); },
+        RELAY_ICE_RESTART: () => { if (action.type === 'RELAY_ICE_RESTART') handle?.send({type: 'RELAY_ICE_RESTART', targetPeerId: action.targetPeerId, sdp: action.sdp}); },
+        RELAY_ICE_RESTART_ANSWER: () => { if (action.type === 'RELAY_ICE_RESTART_ANSWER') handle?.send({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: action.targetPeerId, sdp: action.sdp}); },
+        SHARE_EMAIL: () => { if (action.type === 'SHARE_EMAIL') handle?.send({type: 'SHARE_EMAIL', targetPeerId: action.targetPeerId}); },
+        STOP_SHARING_EMAIL: () => { if (action.type === 'STOP_SHARING_EMAIL') handle?.send({type: 'STOP_SHARING_EMAIL', targetPeerId: action.targetPeerId}); },
+        UPDATE_EMAIL: () => { if (action.type === 'UPDATE_EMAIL') handle?.send({type: 'UPDATE_EMAIL', email: action.email}); },
+        SAVE_PEER_EMAIL: () => { if (action.type === 'SAVE_PEER_EMAIL') handle?.send({type: 'SAVE_PEER_EMAIL', targetPeerId: action.peerId, email: action.email}); },
+        SAVE_BOARD: () => { if (action.type === 'SAVE_BOARD') handle?.send({type: 'SAVE_BOARD', board: JSON.stringify(action.board)}); },
+        LOAD_BOARD: () => handle?.send({type: 'LOAD_BOARD'}),
+        START_GAME: () => handle?.send({type: 'START_GAME'}),
+        FIRE_SHOT: () => { if (action.type === 'FIRE_SHOT') handle?.send({type: 'FIRE', row: action.row, col: action.col}); },
+        LOAD_GAME: () => handle?.send({type: 'LOAD_GAME'}),
+        SAVE_P2P_GAME: () => {
+          if (action.type !== 'SAVE_P2P_GAME') return;
+          const game = action.gameState ?? selectP2pGameFromConnections(getState());
+          if (game) {
+            const signalingOpponentId = selectPeerToSignaling(getState())[game.opponentId] ?? game.opponentId;
+            handle?.send({type: 'SAVE_P2P_GAME', opponentId: signalingOpponentId, gameState: JSON.stringify({...game, opponentId: signalingOpponentId})});
           }
-          else if (event.type === 'PEERS') dispatch(onlinePeersUpdated(event.peers));
-          else if (event.type === 'PEER_JOINED') dispatch(onlinePeerJoined(event.peerId, event.name));
-          else if (event.type === 'PEER_LEFT') dispatch(onlinePeerLeft(event.peerId));
-          else if (event.type === 'OFFER_RECEIVED') dispatch(serverOfferReceived(event.fromPeerId, event.name, event.sdp));
-          else if (event.type === 'ANSWER_RECEIVED') dispatch(serverAnswerReceived(event.fromPeerId, event.sdp));
-          else if (event.type === 'PREVIOUS_PEERS') dispatch(previousPeersReceived(event.peers));
-          else if (event.type === 'ICE_RESTART_RECEIVED') dispatch(iceRestartReceived(event.fromPeerId, event.sdp));
-          else if (event.type === 'ICE_RESTART_ANSWER_RECEIVED') dispatch(iceRestartAnswerReceived(event.fromPeerId, event.sdp));
-          else if (event.type === 'EMAIL_SHARED') dispatch(emailSharedReceived(event.fromPeerId, event.email));
-          else if (event.type === 'EMAIL_REVOKED') dispatch(emailRevokedReceived(event.fromPeerId));
-          else if (event.type === 'BOARD_SAVED') {
-            dispatch(boardSaved());
-            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'BOARD_SAVED'}});
-          }
-          else if (event.type === 'BOARD_LOADED') {
-            dispatch(boardLoaded(event.board));
-            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'BOARD_LOADED', board: event.board}});
-          }
-          else if (event.type === 'BOARD_NOT_FOUND') {
-            dispatch(boardNotFound());
-            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'BOARD_NOT_FOUND'}});
-          }
-          else if (event.type === 'GAME_STARTED') {
-            dispatch(gameStarted(event.gameState));
-            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'GAME_STARTED', gameState: event.gameState}});
-          }
-          else if (event.type === 'FIRE_RESULT') {
-            dispatch(fireResult(event.playerShot, event.aiShot, event.phase));
-            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'FIRE_RESULT', playerShot: event.playerShot, aiShot: event.aiShot, phase: event.phase}});
-          }
-          else if (event.type === 'GAME_STATE') {
-            dispatch(gameStateReceived(event.gameState));
-            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'GAME_STATE', gameState: event.gameState}});
-          }
-          else if (event.type === 'GAME_NOT_FOUND') {
-            dispatch(gameNotFound());
-            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'GAME_NOT_FOUND'}});
-          }
-          else if (event.type === 'P2P_GAME_LOADED') {
-            portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'P2P_GAME_LOADED', gameState: event.gameState}});
-            tryCatch(() => JSON.parse(event.gameState), () => null)
-              .onSuccess(gs => {
-                const decoded = p2pGameStateDecoder.decode(gs);
-                if (decoded) {
-                  const localOpponentId = selectSignalingToPeer(getState())[decoded.opponentId];
-                  const game: P2pGame = {
-                    opponentId: localOpponentId ?? decoded.opponentId,
-                    phase: decoded.phase,
-                    myBoardHash: decoded.myBoardHash,
-                    opponentBoardHash: decoded.opponentBoardHash ?? null,
-                    myShots: decoded.myShots,
-                    opponentShots: decoded.opponentShots,
-                    myBoardReady: decoded.myBoardReady,
-                    opponentBoardReady: decoded.opponentBoardReady,
-                    winner: null,
-                    opponentBoard: null,
-                    boardVerified: null,
-                    announcement: '',
-                  };
-                  dispatch(p2pGameLoaded(game));
-                }
-              });
-          }
-        });
-      } else if (action.type === 'STOP_SIGNALING') {
-        handle?.stop();
-        handle = null;
-      } else if (action.type === 'RELAY_OFFER') {
-        handle?.send({type: 'RELAY_OFFER', targetPeerId: action.targetPeerId, sdp: action.sdp});
-      } else if (action.type === 'RELAY_ANSWER') {
-        handle?.send({type: 'RELAY_ANSWER', targetPeerId: action.targetPeerId, sdp: action.sdp});
-      } else if (action.type === 'FORGET_PEER') {
-        handle?.send({type: 'FORGET_PEER', targetPeerId: action.peerId});
-      } else if (action.type === 'RELAY_ICE_RESTART') {
-        handle?.send({type: 'RELAY_ICE_RESTART', targetPeerId: action.targetPeerId, sdp: action.sdp});
-      } else if (action.type === 'RELAY_ICE_RESTART_ANSWER') {
-        handle?.send({type: 'RELAY_ICE_RESTART_ANSWER', targetPeerId: action.targetPeerId, sdp: action.sdp});
-      } else if (action.type === 'SHARE_EMAIL') {
-        handle?.send({type: 'SHARE_EMAIL', targetPeerId: action.targetPeerId});
-      } else if (action.type === 'STOP_SHARING_EMAIL') {
-        handle?.send({type: 'STOP_SHARING_EMAIL', targetPeerId: action.targetPeerId});
-      } else if (action.type === 'UPDATE_EMAIL') {
-        handle?.send({type: 'UPDATE_EMAIL', email: action.email});
-      } else if (action.type === 'SAVE_PEER_EMAIL') {
-        handle?.send({type: 'SAVE_PEER_EMAIL', targetPeerId: action.peerId, email: action.email});
-      } else if (action.type === 'SAVE_BOARD') {
-        handle?.send({type: 'SAVE_BOARD', board: JSON.stringify(action.board)});
-      } else if (action.type === 'LOAD_BOARD') {
-        handle?.send({type: 'LOAD_BOARD'});
-      } else if (action.type === 'START_GAME') {
-        handle?.send({type: 'START_GAME'});
-      } else if (action.type === 'FIRE_SHOT') {
-        handle?.send({type: 'FIRE', row: action.row, col: action.col});
-      } else if (action.type === 'LOAD_GAME') {
-        handle?.send({type: 'LOAD_GAME'});
-      } else if (action.type === 'SAVE_P2P_GAME') {
-        const game = action.gameState ?? selectP2pGameFromConnections(getState());
-        if (game) {
-          const signalingOpponentId = selectPeerToSignaling(getState())[game.opponentId] ?? game.opponentId;
-          handle?.send({type: 'SAVE_P2P_GAME', opponentId: signalingOpponentId, gameState: JSON.stringify({...game, opponentId: signalingOpponentId})});
-        }
-      } else if (action.type === 'LOAD_P2P_GAME') {
-        handle?.send({type: 'LOAD_P2P_GAME', opponentId: action.opponentId});
-      }
+        },
+        LOAD_P2P_GAME: () => { if (action.type === 'LOAD_P2P_GAME') handle?.send({type: 'LOAD_P2P_GAME', opponentId: action.opponentId}); },
+      };
+      maybe(signalingActionHandlers[action.type]).map(fn => fn());
     };
   };
