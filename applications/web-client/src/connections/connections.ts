@@ -115,8 +115,6 @@ export type ConnectionsAction =
   | {type: 'LOAD_GAME'}
   | {type: 'GAME_STATE'; gameState: AiGameState}
   | {type: 'GAME_NOT_FOUND'}
-  | {type: 'CLAIM_FIRST_TURN'}
-  | {type: 'TURN_ORDER_DECIDED'; iGoFirst: boolean}
   | {type: 'SAVE_P2P_GAME'; gameState: P2pGame}
   | {type: 'LOAD_P2P_GAME'; opponentId: string}
   | {type: 'SEND_TO_PEER'; peerId: string; message: Record<string, unknown>}

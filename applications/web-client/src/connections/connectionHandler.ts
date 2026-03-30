@@ -21,7 +21,6 @@ export type PeerCommand =
   | { type: 'ICE_RESTART_RECEIVED'; signalingPeerId: string; sdp: string }
   | { type: 'ICE_RESTART_ANSWER_RECEIVED'; signalingPeerId: string; sdp: string }
   | { type: 'SEND_TO_PEER'; peerId: string; message: Record<string, unknown> }
-  | { type: 'START_COIN_FLIP'; peerId: string }
 
 export type PeerEvent =
   | { type: 'OFFER_CREATED'; peerId: string; sdp: string }
@@ -42,8 +41,7 @@ export type PeerEvent =
   | { type: 'ICE_RESTART_ANSWER_CREATED'; signalingPeerId: string; sdp: string }
   | { type: 'MESSAGE_RECEIVED'; peerId: string; text: string }
 import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer} from './connectionSelectors';
-import {hashValue} from '../game/hashBoard';
-import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed, turnOrderDecided} from './connectionActions';
+import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed} from './connectionActions';
 import type {ConnectionEvent} from './connectionPort';
 
 const introduceDecoder = Decoder.object({
@@ -93,9 +91,6 @@ const introductionExpiredDecoder = Decoder.object({
 const chatDecoder = Decoder.object({
   required: { type: Decoder.literal('CHAT'), text: Decoder.string },
 });
-
-const coinFlipCommitDecoder = Decoder.object({required: {type: Decoder.literal('COIN_FLIP_COMMIT'), hash: Decoder.string}});
-const coinFlipRevealDecoder = Decoder.object({required: {type: Decoder.literal('COIN_FLIP_REVEAL'), value: Decoder.number}});
 
 type Deps = {
   name: string
@@ -227,9 +222,6 @@ export const createPeerHandler = (deps: Deps): Handler => {
   const connections = new Map<string, RTCPeerConnection>();
   const dataChannels = new Map<string, RTCDataChannel>();
   const localOffererPeerIds = new Set<string>();
-
-  type PendingCoinFlip = {opponentHash: string; myValue: number; myHash: string; iInitiated: boolean; revealSent: boolean}
-  const pendingCoinFlips = new Map<string, PendingCoinFlip>();
 
   type PendingIntro = {
     peerId1: string
@@ -383,55 +375,6 @@ export const createPeerHandler = (deps: Deps): Handler => {
           .map(msg => cleanupIntro(msg.introId, 'INTRODUCTION_EXPIRED')))
         .or(() => maybe(chatDecoder.decode(parsed))
           .map(msg => deps.emit({ type: 'MESSAGE_RECEIVED', peerId, text: msg.text })))
-        .or(() => maybe(coinFlipCommitDecoder.decode(parsed))
-          .map(msg => {
-            const existing = pendingCoinFlips.get(peerId);
-            if (existing?.iInitiated) {
-              // Simultaneous: both sent COMMIT. Offerer yields initiator role to answerer.
-              const iInitiated = !localOffererPeerIds.has(peerId);
-              pendingCoinFlips.set(peerId, {...existing, opponentHash: msg.hash, iInitiated, revealSent: true});
-              dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: existing.myValue}));
-            } else {
-              const myValue = Math.floor(Math.random() * 0xFFFFFFFF);
-              pendingCoinFlips.set(peerId, {opponentHash: msg.hash, myValue, myHash: '', iInitiated: false, revealSent: true});
-              dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: myValue}));
-            }
-          }))
-        .or(() => maybe(coinFlipRevealDecoder.decode(parsed))
-          .map(msg => {
-            const flip = pendingCoinFlips.get(peerId);
-            if (!flip) return;
-            pendingCoinFlips.delete(peerId);
-            if (flip.iInitiated && !flip.revealSent) {
-              dataChannels.get(peerId)?.send(JSON.stringify({type: 'COIN_FLIP_REVEAL', value: flip.myValue}));
-            }
-            const resolveTurn = (opponentValue: number) => {
-              const merged = flip.myValue ^ opponentValue;
-              // Use offerer/answerer role (fixed, not subject to async race) for direction
-              const iGoFirst = localOffererPeerIds.has(peerId) ? (merged % 2) === 0 : (merged % 2) !== 0;
-              deps.dispatch(turnOrderDecided(iGoFirst));
-            };
-            if (flip.opponentHash) {
-              // Verify opponent's revealed value matches their committed hash
-              hashValue(msg.value.toString())
-                .onSuccess(hash => {
-                  if (hash !== flip.opponentHash) {
-                    // Hash mismatch — opponent goes first as penalty
-                    deps.dispatch(turnOrderDecided(false));
-                    return;
-                  }
-                  resolveTurn(msg.value);
-                })
-                .onFailure(() => {
-                  // Hash computation failed — fall back to opponent goes first
-                  deps.dispatch(turnOrderDecided(false));
-                });
-            } else {
-              // Initiator received non-initiator's reveal — no hash to verify
-              // since the non-initiator didn't commit (they revealed immediately)
-              resolveTurn(msg.value);
-            }
-          }))
         .or(() => {
           deps.emitToPort({type: 'PEER_MESSAGE', peerId, data: parsed});
           return nothing();
@@ -555,20 +498,6 @@ export const createPeerHandler = (deps: Deps): Handler => {
       }
       case 'SEND_TO_PEER': {
         dataChannels.get(command.peerId)?.send(JSON.stringify(command.message));
-        break;
-      }
-      case 'START_COIN_FLIP': {
-        const myValue = Math.floor(Math.random() * 0xFFFFFFFF);
-        // Store entry synchronously so simultaneous COMMITs from the peer are detected
-        pendingCoinFlips.set(command.peerId, {opponentHash: '', myValue, myHash: '', iInitiated: true, revealSent: false});
-        hashValue(myValue.toString())
-          .onSuccess(hash => {
-            const existing = pendingCoinFlips.get(command.peerId);
-            if (!existing || existing.revealSent) return; // simultaneous already handled
-            pendingCoinFlips.set(command.peerId, {...existing, myHash: hash});
-            dataChannels.get(command.peerId)?.send(JSON.stringify({type: 'COIN_FLIP_COMMIT', hash}));
-          })
-          .onFailure(() => { pendingCoinFlips.delete(command.peerId); });
         break;
       }
     }

@@ -5,8 +5,7 @@ import type {P2pGame} from '../game/game';
 import {tryCatch} from '../lib/result';
 import {createDispatch} from '../lib/maybe';
 import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling, selectSignalingToPeer} from './connectionSelectors';
-import {selectP2pGame as selectGameStoreP2pGame} from '../game/gameSelectors';
-import type {GameState, GameAction} from '../game/game';
+import type {GameAction} from '../game/game';
 import {peerDisconnected as gamePeerDisconnected, p2pGameLoaded as gameP2pGameLoaded} from '../game/gameActions';
 import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, loadP2pGame} from './connectionActions';
 import type {PeerEvent} from './connectionHandler';
@@ -84,7 +83,6 @@ type HandlerListenerConfig = {
   name: string
   createPeerConnection: () => RTCPeerConnection
   portEmit?: (event: ConnectionEvent) => void
-  getGameState?: () => GameState
   dispatchToGame?: (action: GameAction) => void
 }
 
@@ -124,13 +122,10 @@ const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState, p
   return (event: PeerEvent) => dispatchPeerEvent(event);
 };
 
-export const createHandlerListener = ({name, createPeerConnection, portEmit, getGameState, dispatchToGame}: HandlerListenerConfig): ListenerFactory =>
+export const createHandlerListener = ({name, createPeerConnection, portEmit, dispatchToGame}: HandlerListenerConfig): ListenerFactory =>
   ({dispatch, getState}) => {
     const emit = makeHandlerEmit(dispatch, getState, portEmit);
     const handler = createPeerHandler({name, createPeerConnection, emit, emitToPort: portEmit ?? (() => {}), dispatch, getState});
-
-    // Read game state from game store when available, fall back to connection store for backwards compatibility
-    const getGame = () => getGameState ? selectGameStoreP2pGame(getGameState()) : null;
 
     return (action, {prevState}) => {
       const dispatchHandlerCommand = createDispatch<ConnectionsAction>({
@@ -157,19 +152,7 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit, get
         },
       });
 
-      if (dispatchHandlerCommand(action)) return;
-
-      const game = getGame();
-      const opponentId = game?.opponentId ?? null;
-
-      const dispatchGameAction = createDispatch<ConnectionsAction>({
-        CLAIM_FIRST_TURN: () => {
-          if (!opponentId) return;
-          handler.handleCommand({type: 'START_COIN_FLIP', peerId: opponentId});
-        },
-        TURN_ORDER_DECIDED: (a) => { dispatchToGame?.(a); },
-      });
-      dispatchGameAction(action);
+      dispatchHandlerCommand(action);
     };
   };
 

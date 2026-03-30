@@ -86,8 +86,6 @@ export const loadGame = () => ({type: 'LOAD_GAME' as const});
 export const gameStateReceived = (gameState: AiGameState) => ({type: 'GAME_STATE' as const, gameState});
 export const gameNotFound = () => ({type: 'GAME_NOT_FOUND' as const});
 
-export const claimFirstTurn = () => ({type: 'CLAIM_FIRST_TURN' as const});
-export const turnOrderDecided = (iGoFirst: boolean) => ({type: 'TURN_ORDER_DECIDED' as const, iGoFirst});
 export const saveP2pGame = (gameState: P2pGame) => ({type: 'SAVE_P2P_GAME' as const, gameState});
 export const loadP2pGame = (opponentId: string) => ({type: 'LOAD_P2P_GAME' as const, opponentId});
 export const sendToPeer = (peerId: string, message: Record<string, unknown>) => ({type: 'SEND_TO_PEER' as const, peerId, message});

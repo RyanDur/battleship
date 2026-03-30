@@ -20,7 +20,6 @@ import {clearP2pGame, saveBoard, startGame} from './game/gameActions';
 import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './game/gameSelectors';
 import {useGameState, useGameStore} from './game/useGame';
 import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createSignalingBridgeListenerFactory} from './game/gameStore';
-import {initialGameState} from './game/game';
 import {GameProvider} from './game/GameProvider';
 import {createConnectionPort} from './connections/connectionPort';
 
@@ -70,7 +69,6 @@ const App = ({config}: Props) => {
           name: 'Player',
           createPeerConnection: () => new RTCPeerConnection({iceServers: [{urls: 'stun:stun.l.google.com:19302'}]}),
           portEmit,
-          getGameState: () => gs?.getState() ?? initialGameState,
           dispatchToGame: (action) => gs?.dispatch(action),
         }),
         createSignalingListener({config: {createWebSocket: (url) => new WebSocket(url), sessionUrl: `${config.serviceUrl}/session`, url: signalingUrl, name: 'Player'}, portEmit}),
