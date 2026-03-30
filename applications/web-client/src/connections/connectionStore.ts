@@ -7,7 +7,7 @@ import {createDispatch} from '../lib/maybe';
 import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling, selectSignalingToPeer} from './connectionSelectors';
 import {selectP2pGame as selectGameStoreP2pGame} from '../game/gameSelectors';
 import type {GameState, GameAction} from '../game/game';
-import {peerDisconnected as gamePeerDisconnected, saveBoard as gameSaveBoard, startGame as gameStartGame, clearP2pGame as gameClearP2pGame, p2pGameLoaded as gameP2pGameLoaded} from '../game/gameActions';
+import {peerDisconnected as gamePeerDisconnected, p2pGameLoaded as gameP2pGameLoaded} from '../game/gameActions';
 import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, loadP2pGame} from './connectionActions';
 import type {PeerEvent} from './connectionHandler';
 import {encodeConnectionCode, decodeConnectionCode} from './connectionCode';
@@ -132,15 +132,7 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit, get
     // Read game state from game store when available, fall back to connection store for backwards compatibility
     const getGame = () => getGameState ? selectGameStoreP2pGame(getGameState()) : null;
 
-    const dispatchGameBridge = createDispatch<ConnectionsAction>({
-      SAVE_BOARD: (action) => { if (dispatchToGame) dispatchToGame(gameSaveBoard(action.board)); },
-      START_GAME: () => { if (dispatchToGame) dispatchToGame(gameStartGame()); },
-      CLEAR_P2P_GAME: () => { if (dispatchToGame) dispatchToGame(gameClearP2pGame()); },
-    });
-
     return (action, {prevState}) => {
-      dispatchGameBridge(action);
-
       const dispatchHandlerCommand = createDispatch<ConnectionsAction>({
         CREATE_OFFER: () => handler.handleCommand({type: 'CREATE_OFFER'}),
         ACCEPT_OFFER: (action) => handler.handleCommand({type: 'ACCEPT_OFFER', sdp: action.sdp}),
@@ -171,14 +163,10 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit, get
       const opponentId = game?.opponentId ?? null;
 
       const dispatchGameAction = createDispatch<ConnectionsAction>({
-        TAKE_FIRST_TURN: (a) => { dispatchToGame?.(a); },
         CLAIM_FIRST_TURN: () => {
           if (!opponentId) return;
           handler.handleCommand({type: 'START_COIN_FLIP', peerId: opponentId});
         },
-        COIN_FLIP_COMMIT: (a) => { dispatchToGame?.(a); },
-        COIN_FLIP_REVEAL: (a) => { dispatchToGame?.(a); },
-        P2P_FIRE: (a) => { dispatchToGame?.(a); },
         TURN_ORDER_DECIDED: (a) => { dispatchToGame?.(a); },
       });
       dispatchGameAction(action);

@@ -13,14 +13,13 @@ import type {HeartbeatState} from './connections/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
 import {detectPlatform} from './connections/platform';
 import {createConnectionStore, createHandlerListener, createSignalingListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connections/connectionStore';
-import {startSignaling, stopSignaling, sendToPeer, saveBoard, startGame} from './connections/connectionActions';
+import {startSignaling, stopSignaling, sendToPeer} from './connections/connectionActions';
 import {ConnectionProvider} from './connections/ConnectionProvider';
 import {selectSignalingToPeer, selectPeerToSignaling} from './connections/connectionSelectors';
-import {clearP2pGame} from './game/gameActions';
+import {clearP2pGame, saveBoard, startGame} from './game/gameActions';
 import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './game/gameSelectors';
-import {useConnectionStore} from './connections/useConnection';
 import {useGameState, useGameStore} from './game/useGame';
-import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory} from './game/gameStore';
+import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createSignalingBridgeListenerFactory} from './game/gameStore';
 import {initialGameState} from './game/game';
 import {GameProvider} from './game/GameProvider';
 import {createConnectionPort} from './connections/connectionPort';
@@ -42,16 +41,15 @@ const AppMain = () => {
   const boardLoading = useGameState(selectBoardLoading);
   const p2pGame = useGameState(selectP2pGame);
   const gameView = useGameState(selectGameView);
-  const store = useConnectionStore();
   const gameStore = useGameStore();
   const [settingUpBoard, setSettingUpBoard] = useState(false);
 
   if (boardLoading) return null;
-  if (!p2pGame && !board) return <BoardSetup onConfirm={b => store.dispatch(saveBoard(b))}/>;
-  if (settingUpBoard) return <BoardSetup onConfirm={b => { store.dispatch(saveBoard(b)); setSettingUpBoard(false); }}/>;
+  if (!p2pGame && !board) return <BoardSetup onConfirm={b => gameStore.dispatch(saveBoard(b))}/>;
+  if (settingUpBoard) return <BoardSetup onConfirm={b => { gameStore.dispatch(saveBoard(b)); setSettingUpBoard(false); }}/>;
   if (p2pGame && (p2pGame.phase === 'placing' || p2pGame.phase === 'selecting-turn')) return <GameLobby onSetupBoard={() => setSettingUpBoard(true)}/>;
-  if (gameView) return <Game onNewGame={() => p2pGame ? gameStore.dispatch(clearP2pGame()) : store.dispatch(startGame())}/>;
-  return <button className="control" onClick={() => store.dispatch(startGame())}>Play vs AI</button>;
+  if (gameView) return <Game onNewGame={() => p2pGame ? gameStore.dispatch(clearP2pGame()) : gameStore.dispatch(startGame())}/>;
+  return <button className="control" onClick={() => gameStore.dispatch(startGame())}>Play vs AI</button>;
 };
 
 const App = ({config}: Props) => {
@@ -80,7 +78,7 @@ const App = ({config}: Props) => {
     );
     gs = createGameStore({
       port,
-      listenerFactories: [createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory],
+      listenerFactories: [createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createSignalingBridgeListenerFactory],
       translatePeerId: (signalingId) => selectSignalingToPeer(connectionStore.getState())[signalingId],
       dispatchToConnection: (action) => connectionStore.dispatch(action),
       getPeerToSignaling: () => selectPeerToSignaling(connectionStore.getState()),

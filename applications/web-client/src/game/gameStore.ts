@@ -5,7 +5,7 @@ import type {ConnectionsAction} from '../connections/connections';
 import {createGameMessageHandler} from './gameMessageHandler';
 import {selectBoard, selectAiGameState, selectP2pGame, selectOffererPeerIds} from './gameSelectors';
 import {gameStarted, fireResult, boardNotFound, turnOrderDecided} from './gameActions';
-import {saveP2pGame, loadP2pGame} from '../connections/connectionActions';
+import {saveP2pGame, loadP2pGame, saveBoard as connectionSaveBoard, startGame as connectionStartGame} from '../connections/connectionActions';
 import {randomBoard, resolveFireShot} from './aiGame';
 import {maybe} from '../lib/maybe';
 
@@ -67,6 +67,12 @@ export const createAiGameListenerFactory: GameListenerFactory = ({dispatch, getS
     }
   };
 };
+
+export const createSignalingBridgeListenerFactory: GameListenerFactory = ({dispatchToConnection}) =>
+  (action) => {
+    if (action.type === 'SAVE_BOARD' && dispatchToConnection) dispatchToConnection(connectionSaveBoard(action.board));
+    if (action.type === 'START_GAME' && dispatchToConnection) dispatchToConnection(connectionStartGame());
+  };
 
 export const createSaveOnShotListenerFactory: GameListenerFactory = ({getState, dispatchToConnection}) =>
   (action) => {
