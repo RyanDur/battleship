@@ -4,7 +4,7 @@ import type {ConnectionsState, ConnectionsAction} from './connections';
 import type {P2pGame} from '../game/game';
 import {tryCatch} from '../lib/result';
 import {createDispatch} from '../lib/maybe';
-import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling, selectSignalingToPeer} from './connectionSelectors';
+import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectPeerToSignaling, selectSignalingToPeer} from './connectionSelectors';
 import type {GameAction} from '../game/game';
 import {peerDisconnected as gamePeerDisconnected, p2pGameLoaded as gameP2pGameLoaded} from '../game/gameActions';
 import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, loadP2pGame} from './connectionActions';
@@ -90,14 +90,14 @@ const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState, p
   const dispatchPeerEvent = createDispatch<PeerEvent>({
     PEER_CONNECTED: (event) => {
       dispatch(peerConnected(event.peerId));
-      if (selectOffererPeerIds(getState()).includes(event.peerId)) {
+      if (event.isOfferer) {
         const signalingPeerId = selectPeerToSignaling(getState())[event.peerId];
         if (signalingPeerId) dispatch(previousPeerConnected(signalingPeerId));
       }
       // Reconnect: load any saved game for this peer from the server
       const signalingPeerId = selectPeerToSignaling(getState())[event.peerId];
       if (signalingPeerId) dispatch(loadP2pGame(signalingPeerId));
-      portEmit?.({type: 'PEER_CONNECTED', peerId: event.peerId, isOfferer: selectOffererPeerIds(getState()).includes(event.peerId)});
+      portEmit?.({type: 'PEER_CONNECTED', peerId: event.peerId, isOfferer: event.isOfferer});
     },
     PEER_NAMED: (event) => {
       dispatch(peerNamed(event.peerId, event.name));
