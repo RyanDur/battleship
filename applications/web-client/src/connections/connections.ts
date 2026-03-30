@@ -116,14 +116,9 @@ export type ConnectionsAction =
   | {type: 'GAME_STATE'; gameState: AiGameState}
   | {type: 'GAME_NOT_FOUND'}
   | {type: 'CLAIM_FIRST_TURN'}
-  | {type: 'TAKE_FIRST_TURN'}
-  | {type: 'COIN_FLIP_COMMIT'; hash: string}
-  | {type: 'COIN_FLIP_REVEAL'; value: number}
   | {type: 'TURN_ORDER_DECIDED'; iGoFirst: boolean}
-  | {type: 'P2P_FIRE'; row: number; col: number}
   | {type: 'SAVE_P2P_GAME'; gameState: P2pGame}
   | {type: 'LOAD_P2P_GAME'; opponentId: string}
-  | {type: 'CLEAR_P2P_GAME'}
   | {type: 'SEND_TO_PEER'; peerId: string; message: Record<string, unknown>}
 
 const handlerInitialState: HandlerState = {
