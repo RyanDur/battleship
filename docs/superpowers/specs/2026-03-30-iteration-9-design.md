@@ -45,7 +45,7 @@ Complete the game store extraction so each store has one clear responsibility, t
 - When an opponent leaves mid-game, the player sees the game is disconnected
 - When a disconnected opponent reconnects via the server, the game resumes where it left off
 
-**Notes:** The product behavior already works — the gap is e2e test coverage. The skipped test hangs in Playwright due to WebRTC timing. The reconnect test needs to be written from scratch (server-mediated connections haven't completed in Playwright e2e before). Unit tests cover both scenarios today.
+**Notes:** The product behavior already works — the gap is e2e test coverage. The skipped test (disconnection status) hangs in Playwright due to WebRTC timing. The reconnect test exists with a full body but does not pass — the server-mediated WebRTC flow fails to complete in Playwright. Unit tests cover both scenarios today.
 
 ### #4 — Surface transport failures to the user
 
