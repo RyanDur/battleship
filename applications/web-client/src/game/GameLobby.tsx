@@ -1,7 +1,6 @@
 import {useConnectionStore} from '../connections/useConnection';
 import {claimFirstTurn} from '../connections/connectionActions';
-import {takeFirstTurn} from './gameActions';
-import {p2pBoardReady} from './gameActions';
+import {takeFirstTurn, p2pBoardReady} from './gameActions';
 import {useGameStore, useGameState} from './useGame';
 import {selectP2pGame, selectOpponentNames, selectBoard} from './gameSelectors';
 import {hashBoard} from './hashBoard';

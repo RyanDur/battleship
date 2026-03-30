@@ -140,14 +140,6 @@ export const createGameCommandListenerFactory: GameListenerFactory = ({dispatch,
       sendToPeer(prevGame.opponentId, {type: 'GAME_FIRST_TURN'});
       dispatch(turnOrderDecided(true));
     },
-    COIN_FLIP_COMMIT: (action, prevGame) => {
-      if (!prevGame) return;
-      sendToPeer(prevGame.opponentId, {type: 'COIN_FLIP_COMMIT', hash: action.hash});
-    },
-    COIN_FLIP_REVEAL: (action, prevGame) => {
-      if (!prevGame) return;
-      sendToPeer(prevGame.opponentId, {type: 'COIN_FLIP_REVEAL', value: action.value});
-    },
     P2P_FIRE: (action, prevGame) => {
       if (prevGame?.phase !== 'my-turn') return;
       if (prevGame.myShots.some(s => s.cell.row === action.row && s.cell.col === action.col)) return;

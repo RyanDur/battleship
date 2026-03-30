@@ -25,8 +25,6 @@ export const p2pBoardReady = (boardHash: string) => ({type: 'P2P_BOARD_READY' as
 export const opponentBoardReady = (boardHash: string) => ({type: 'OPPONENT_BOARD_READY' as const, boardHash});
 export const claimFirstTurn = () => ({type: 'CLAIM_FIRST_TURN' as const});
 export const takeFirstTurn = () => ({type: 'TAKE_FIRST_TURN' as const});
-export const coinFlipCommit = (hash: string) => ({type: 'COIN_FLIP_COMMIT' as const, hash});
-export const coinFlipReveal = (value: number) => ({type: 'COIN_FLIP_REVEAL' as const, value});
 export const turnOrderDecided = (iGoFirst: boolean) => ({type: 'TURN_ORDER_DECIDED' as const, iGoFirst});
 export const p2pFire = (row: number, col: number) => ({type: 'P2P_FIRE' as const, row, col});
 export const p2pFireResult = (shot: Shot) => ({type: 'P2P_FIRE_RESULT' as const, shot});

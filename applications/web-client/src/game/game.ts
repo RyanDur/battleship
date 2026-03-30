@@ -71,8 +71,6 @@ export type GameAction =
   | {type: 'OPPONENT_BOARD_READY'; boardHash: string}
   | {type: 'CLAIM_FIRST_TURN'}
   | {type: 'TAKE_FIRST_TURN'}
-  | {type: 'COIN_FLIP_COMMIT'; hash: string}
-  | {type: 'COIN_FLIP_REVEAL'; value: number}
   | {type: 'TURN_ORDER_DECIDED'; iGoFirst: boolean}
   | {type: 'P2P_FIRE'; row: number; col: number}
   | {type: 'P2P_FIRE_RESULT'; shot: Shot}
