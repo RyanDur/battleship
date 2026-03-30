@@ -2,7 +2,7 @@
 
 ## Goal
 
-Complete the game store extraction so each store has one clear responsibility, then harden reliability by fixing e2e coverage gaps and surfacing silent failures.
+Achieve the 3-store architecture (Connections, Transport, Game) where each store has one clear responsibility, then harden reliability by fixing e2e coverage gaps and surfacing silent failures.
 
 ## Stories
 
@@ -32,7 +32,7 @@ Complete the game store extraction so each store has one clear responsibility, t
 - Adding a new store does not require modifying existing stores
 - All existing game and connection behavior works identically (no user-facing change)
 
-**Notes:** Currently the connection store dispatches to the game store (`dispatchToGame`) and vice versa (`dispatchToConnection`), with App.tsx hand-wiring cross-references. The port already emits PEER_MESSAGE, PEER_CONNECTED, PEER_DISCONNECTED events — the game store can subscribe to these directly. The port-subscription pattern established here should be compatible with the transport store extraction planned for Iteration 10.
+**Notes:** Currently the connection store dispatches to the game store (`dispatchToGame`) and vice versa (`dispatchToConnection`), with App.tsx hand-wiring cross-references. The port already emits PEER_MESSAGE, PEER_CONNECTED, PEER_DISCONNECTED events — the game store can subscribe to these directly. The port-subscription pattern established here is the foundation for the transport store extraction in Story 6.
 
 ### #3 — Fix skipped e2e tests for disconnection and reconnection
 
@@ -74,17 +74,34 @@ Complete the game store extraction so each store has one clear responsibility, t
 - When game state from the server can't be loaded, the player sees that the game couldn't be restored
 - When board verification fails at game over, the result clearly shows it couldn't be verified
 
+### #6 — Extract transport into its own module
+
+**Who** — a developer adding a new connection method or debugging a connectivity issue
+
+**Problem** — The connection store owns both peer identity (who is connected, trust, introductions) and transport plumbing (WebRTC lifecycle, signaling WebSocket, ICE restart, SDP exchange, data channels). A developer debugging an ICE failure has to wade through trust logic; a developer adding introduction rules has to understand RTCPeerConnection lifecycle. These are independent concerns tangled in one module.
+
+**Behaviors:**
+
+- A developer can work on transport (connectivity, ICE, data channels) without touching connection domain logic
+- A developer can work on connection domain logic (trust, introductions, messages) without touching WebRTC code
+- Transport can be tested with fake RTCPeerConnections and no peer registry
+- Connections can be tested with a fake transport layer and no real WebRTC
+- All existing connectivity behavior works identically (no user-facing change)
+
+**Notes:** The connection handler (`connectionHandler.ts`) is already transport-shaped — it manages RTCPeerConnection lifecycle, data channels, and ICE without knowing what messages mean. The signaling WebSocket (`signaling.ts`) is pure transport. The encoding/decoding middleware (`encodingMiddleware`, `codecMiddleware`) handles connection code crypto. After this story, these move to a transport module. The connection store keeps peer registry, trust, introductions, messages, online/previous peers, and flow state. The 11 items that straddle both (server-mediated SDP relay, introduction channel setup) live at the boundary — transport executes the plumbing, connections initiates the request.
+
 ## Ordering
 
 Stories 1 and 2 are tightly coupled — the circular dispatch exists because game state is split across stores. They should be worked in order (1 then 2), and may collapse into a single implementation session.
 
+Story 6 depends on Story 2 (clean port-based architecture) and should come after.
+
 Story 3 is independent of the architecture work and can be worked in parallel or after.
 
-Stories 4 and 5 benefit from the clean architecture (clearer ownership of error handling) but don't strictly depend on it. They should come after 1-2.
+Stories 4 and 5 benefit from the clean architecture (clearer ownership of error handling) and should come after 1-2. Story 4 (transport failures) specifically benefits from Story 6 (transport module owns error surfacing).
 
 ## Out of scope
 
-- Transport store extraction (Iteration 10)
 - UX polish, animations, mobile responsiveness
 - TURN/STUN for NAT traversal
 - macOS installer signing (#67)

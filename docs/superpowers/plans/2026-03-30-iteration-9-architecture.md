@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Complete the game store extraction so each store has one clear responsibility, then harden reliability by fixing e2e coverage gaps and surfacing silent failures.
+**Goal:** Achieve the 3-store architecture (Connections, Transport, Game) where each store has one clear responsibility, then harden reliability by fixing e2e coverage gaps and surfacing silent failures.
 
-**Architecture:** Two-phase refactor. Phase 1 (Story 1) removes game state from the connection store — the game store already handles all these actions via the port's `SERVER_MESSAGE` events, so the connection store's game handling is redundant. Phase 2 (Story 2) eliminates circular dispatch by wiring `port.sendToServer` to the signaling WebSocket and moving server communication from `dispatchToConnection` to the port. Stories 3-5 are independent reliability work.
+**Architecture:** Three-phase refactor. Phase 1 (Story 1) removes game state from the connection store. Phase 2 (Story 2) eliminates circular dispatch by wiring `port.sendToServer` to the signaling WebSocket. Phase 3 (Story 6) extracts transport (WebRTC, signaling, ICE, data channels) into its own module, leaving connections with only peer domain logic (trust, introductions, messages). Stories 3-5 are independent reliability work.
 
 **Tech Stack:** React 19, TypeScript 5.9, Vite 7, Vitest 4, Playwright, custom Redux-like stores
 
@@ -37,6 +37,29 @@
 | Modify | `src/connections/connectionStore.handler.test.ts` | Remove `dispatchToGame` from handler config; ensure port delivers all events |
 | Modify | `src/connections/connectionStore.signaling.server.test.ts` | Move SAVE_P2P_GAME test to game store tests; remove game command tests |
 | Modify | `src/game/gameStore.test.ts` | Add tests for server bridge listener; add test for PEER_CONNECTED triggers game load |
+
+### Story 6: Extract transport into its own module
+
+| Action | File | What changes |
+|--------|------|-------------|
+| Create | `src/transport/transportStore.ts` | New store: WebRTC handler, signaling, ICE, encoding middleware — everything that was transport in connection store |
+| Create | `src/transport/transportActions.ts` | Transport action types: CREATE_OFFER, ACCEPT_OFFER, ACCEPT_ANSWER, DISCONNECT, RELAY_*, ICE_RESTART_*, SIGNALING_*, PEER_CONNECTED, PEER_DISCONNECTED, SEND_TO_PEER |
+| Create | `src/transport/transport.ts` | Transport state (flow, handlerState, peerConnectionHealth) + reducer |
+| Create | `src/transport/transportSelectors.ts` | Selectors for flow, handler state, peer health |
+| Create | `src/transport/TransportProvider.tsx` | React context provider |
+| Create | `src/transport/useTransport.ts` | Hook to consume transport context |
+| Move | `src/connections/connectionHandler.ts` → `src/transport/connectionHandler.ts` | Move file, no logic changes |
+| Move | `src/connections/connectionCode.ts` → `src/transport/connectionCode.ts` | Move file, no logic changes |
+| Move | `src/connections/connectionPort.ts` → `src/transport/connectionPort.ts` | Move file, no logic changes |
+| Move | `src/connections/signaling.ts` → `src/transport/signaling.ts` | Move file, no logic changes |
+| Modify | `src/connections/connections.ts` | Remove transport state (flow, handlerState, peerConnectionHealth) and transport action types |
+| Modify | `src/connections/connectionActions.ts` | Remove transport action creators |
+| Modify | `src/connections/connectionStore.ts` | Remove handler listener, signaling listener, encoding/codec middleware — connection store becomes pure peer registry |
+| Modify | `src/connections/connectionSelectors.ts` | Remove transport selectors (flow, handlerState, peerToSignaling, etc.) |
+| Modify | `src/App.tsx` | Create transport store, pass port; connection store subscribes to port for peer events |
+| Modify | `src/connections/DirectConnect.tsx` | Import from transport module instead of connections |
+| Modify | `src/connections/Fleet.tsx` | Use transport dispatch for CONNECT_VIA_SERVER, DISCONNECT, etc. |
+| Modify | Tests | Split connection store tests into transport store tests and connection store tests |
 
 All file paths below are relative to `applications/web-client/`.
 
@@ -684,6 +707,429 @@ feat: simplify App.tsx — no cross-dispatch between stores
 
 ---
 
+## Story 6: Extract transport into its own module
+
+After Stories 1-2, the connection store has no game state and no cross-dispatch. It still owns two distinct concerns: peer domain (trust, introductions, messages, online/previous peers) and transport plumbing (WebRTC, signaling, ICE, data channels, connection codes). This story splits them.
+
+The key insight: `connectionHandler.ts` is already transport-shaped. It manages RTCPeerConnection lifecycle and data channels without knowing what messages mean. `signaling.ts` is pure transport. `connectionCode.ts` is pure transport. These files move unchanged. The refactor is about drawing the boundary, creating a transport store, and making the connection store a thin peer registry that subscribes to transport events via the port.
+
+### Task 15: Create transport state and reducer
+
+Define the transport store's state shape and action types. Transport owns: connection flow (offer/join/answer), handler state (signaling-to-peer mappings, offerer tracking, ICE restart attempts, intro channels/connections), and peer connection health.
+
+**Files:**
+- Create: `src/transport/transport.ts`
+- Create: `src/transport/transportActions.ts`
+- Create: `src/transport/transportSelectors.ts`
+
+- [ ] **Step 1: Create `transportActions.ts`**
+
+Extract transport action creators from `connectionActions.ts`. These are the actions that deal with WebRTC, signaling, SDP, ICE, and connection codes:
+
+```ts
+// Transport actions — WebRTC lifecycle, signaling, ICE, connection codes
+export const createOffer = (passphrase: string) => ({type: 'CREATE_OFFER' as const, passphrase});
+export const offerSdpReady = (peerId: string, sdp: string) => ({type: 'OFFER_SDP_READY' as const, peerId, sdp});
+export const offerEncoded = (peerId: string, code: string) => ({type: 'OFFER_ENCODED' as const, peerId, code});
+export const joinOffer = (code: string, passphrase: string) => ({type: 'JOIN_OFFER' as const, code, passphrase});
+export const answerSdpReady = (sdp: string) => ({type: 'ANSWER_SDP_READY' as const, sdp});
+export const answerEncoded = (code: string) => ({type: 'ANSWER_ENCODED' as const, code});
+export const decodeFailed = () => ({type: 'DECODE_FAILED' as const});
+export const offerFailed = () => ({type: 'OFFER_FAILED' as const});
+export const cancelOffer = () => ({type: 'CANCEL_OFFER' as const});
+export const peerConnected = (peerId: string) => ({type: 'PEER_CONNECTED' as const, peerId});
+export const peerDisconnected = (peerId: string) => ({type: 'PEER_DISCONNECTED' as const, peerId});
+export const disconnect = (peerId: string) => ({type: 'DISCONNECT' as const, peerId});
+export const acceptOffer = (sdp: string) => ({type: 'ACCEPT_OFFER' as const, sdp});
+export const acceptAnswer = (peerId: string, sdp: string) => ({type: 'ACCEPT_ANSWER' as const, peerId, sdp});
+export const acceptAnswerCode = (responseCode: string) => ({type: 'ACCEPT_ANSWER_CODE' as const, responseCode});
+export const startSignaling = () => ({type: 'START_SIGNALING' as const});
+export const stopSignaling = () => ({type: 'STOP_SIGNALING' as const});
+export const connectViaServer = (signalingPeerId: string, name: string) => ({type: 'CONNECT_VIA_SERVER' as const, signalingPeerId, name});
+export const reconnectViaServer = (signalingPeerId: string, name: string) => ({type: 'RECONNECT_VIA_SERVER' as const, signalingPeerId, name});
+export const serverOfferReceived = (signalingPeerId: string, name: string, sdp: string) => ({type: 'SERVER_OFFER_RECEIVED' as const, signalingPeerId, name, sdp});
+export const serverAnswerReceived = (signalingPeerId: string, sdp: string) => ({type: 'SERVER_ANSWER_RECEIVED' as const, signalingPeerId, sdp});
+export const relayOffer = (targetPeerId: string, sdp: string) => ({type: 'RELAY_OFFER' as const, targetPeerId, sdp});
+export const relayAnswer = (targetPeerId: string, sdp: string) => ({type: 'RELAY_ANSWER' as const, targetPeerId, sdp});
+export const peerConnectionUnstable = (peerId: string) => ({type: 'PEER_CONNECTION_UNSTABLE' as const, peerId});
+export const peerConnectionRestored = (peerId: string) => ({type: 'PEER_CONNECTION_RESTORED' as const, peerId});
+export const relayIceRestart = (targetPeerId: string, sdp: string) => ({type: 'RELAY_ICE_RESTART' as const, targetPeerId, sdp});
+export const relayIceRestartAnswer = (targetPeerId: string, sdp: string) => ({type: 'RELAY_ICE_RESTART_ANSWER' as const, targetPeerId, sdp});
+export const iceRestartReceived = (signalingPeerId: string, sdp: string) => ({type: 'ICE_RESTART_RECEIVED' as const, signalingPeerId, sdp});
+export const iceRestartAnswerReceived = (signalingPeerId: string, sdp: string) => ({type: 'ICE_RESTART_ANSWER_RECEIVED' as const, signalingPeerId, sdp});
+export const iceRestartAttempted = (peerId: string) => ({type: 'ICE_RESTART_ATTEMPTED' as const, peerId});
+export const signalingPeerRegistered = (localPeerId: string, signalingPeerId: string, isOfferer: boolean) => ({type: 'SIGNALING_PEER_REGISTERED' as const, localPeerId, signalingPeerId, isOfferer});
+export const introChannelRegistered = (introId: string, relayPeerId: string) => ({type: 'INTRO_CHANNEL_REGISTERED' as const, introId, relayPeerId});
+export const introConnectionRegistered = (introId: string, newPeerId: string) => ({type: 'INTRO_CONNECTION_REGISTERED' as const, introId, newPeerId});
+export const introConnectionCleared = (introId: string) => ({type: 'INTRO_CONNECTION_CLEARED' as const, introId});
+export const sendToPeer = (peerId: string, message: Record<string, unknown>) => ({type: 'SEND_TO_PEER' as const, peerId, message});
+```
+
+- [ ] **Step 2: Create `transport.ts` with state and reducer**
+
+Extract transport state from `ConnectionsState`. Transport owns: `flow`, `handlerState`, `peerConnectionHealth`.
+
+```ts
+export type TransportState = {
+  flow: ConnectionFlow
+  handlerState: HandlerState
+  peerConnectionHealth: Record<string, 'stable' | 'unstable'>
+}
+```
+
+Copy the `ConnectionFlow`, `HandlerState` types and their initial state from `connections.ts`. Copy the reducer cases for transport actions from the `coreConnectionsReducer` and `handlerReducer`.
+
+- [ ] **Step 3: Create `transportSelectors.ts`**
+
+Extract transport selectors from `connectionSelectors.ts`: `selectFlow`, `selectPeerToSignaling`, `selectSignalingToPeer`, `selectIceRestartAttempts`, `selectIntroChannels`, `selectIntroConnections`, `selectIsCreatingOffer`, `selectOffererPeerIds`, `selectPeerConnectionHealth`.
+
+- [ ] **Step 4: Run tests — expect compilation errors**
+
+Run: `cd applications/web-client && npx tsc --noEmit`
+
+Expected: Errors where the old imports are used. These are fixed in subsequent tasks.
+
+- [ ] **Step 5: Commit**
+
+```
+feat: create transport state, actions, and selectors
+```
+
+---
+
+### Task 16: Create transport store
+
+Build the transport store factory that wraps the handler listener, signaling listener, and encoding/codec middleware — everything that was `createConnectionStore`'s transport responsibilities.
+
+**Files:**
+- Create: `src/transport/transportStore.ts`
+
+- [ ] **Step 1: Create `transportStore.ts`**
+
+Follow the same store pattern as connection and game stores (`createTransportStore`). The transport store:
+
+- Applies `encodingMiddleware` and `codecMiddleware`
+- Creates `createHandlerListener` (moved from connection store)
+- Creates `createSignalingListener` (moved from connection store)
+- Owns the `ConnectionPort` creation
+- Exposes `port` for other stores to subscribe
+
+```ts
+export type TransportStore = {
+  getState: () => TransportState
+  subscribe: (fn: () => void) => () => void
+  dispatch: (action: TransportAction) => void
+  addListener: (fn: TransportListenerFn) => () => void
+  port: ConnectionPort
+}
+```
+
+Config should accept:
+- `name: string` (player name for signaling)
+- `createPeerConnection: () => RTCPeerConnection`
+- `signalingConfig: SignalingConfig`
+
+- [ ] **Step 2: Write a basic test**
+
+In `src/transport/transportStore.test.ts`, verify that creating a transport store produces a store with initial state, and that dispatching `createOffer` changes the flow state.
+
+- [ ] **Step 3: Run test**
+
+Run: `cd applications/web-client && npm run test:watch -- src/transport/transportStore.test.ts`
+
+- [ ] **Step 4: Commit**
+
+```
+feat: create transport store with handler and signaling listeners
+```
+
+---
+
+### Task 17: Move transport files
+
+Move the files that are purely transport into the new module. These require no logic changes — only import path updates.
+
+**Files:**
+- Move: `src/connections/connectionHandler.ts` → `src/transport/connectionHandler.ts`
+- Move: `src/connections/connectionCode.ts` → `src/transport/connectionCode.ts`
+- Move: `src/connections/connectionPort.ts` → `src/transport/connectionPort.ts`
+- Move: `src/connections/signaling.ts` → `src/transport/signaling.ts`
+- Move: `src/connections/heartbeat.ts` → `src/transport/heartbeat.ts`
+
+- [ ] **Step 1: Create the `src/transport/` directory and move files**
+
+Use `git mv` for each file to preserve history.
+
+- [ ] **Step 2: Update import paths**
+
+Every file that imports from the moved files needs its import path updated. Search for imports of:
+- `'../connections/connectionHandler'` or `'./connectionHandler'`
+- `'../connections/connectionCode'` or `'./connectionCode'`
+- `'../connections/connectionPort'` or `'./connectionPort'`
+- `'../connections/signaling'` or `'./signaling'`
+- `'../connections/heartbeat'` or `'./heartbeat'`
+
+Update to point at `../transport/` or `./` depending on the importing file's location.
+
+- [ ] **Step 3: Run tests**
+
+Run: `cd applications/web-client && npm test`
+
+All tests should pass — this is a pure file move with import path updates.
+
+- [ ] **Step 4: Commit**
+
+```
+feat: move transport files to src/transport/
+```
+
+---
+
+### Task 18: Strip transport from connection store
+
+Remove transport responsibilities from the connection store. After this, the connection store is a pure peer registry.
+
+**Files:**
+- Modify: `src/connections/connectionStore.ts` — remove `createHandlerListener`, `createSignalingListener`, `encodingMiddleware`, `codecMiddleware`, `makeHandlerEmit`
+- Modify: `src/connections/connections.ts` — remove `flow`, `handlerState`, `peerConnectionHealth` from state; remove transport action types from union
+- Modify: `src/connections/connectionActions.ts` — remove transport action creators
+- Modify: `src/connections/connectionSelectors.ts` — remove transport selectors
+
+- [ ] **Step 1: Remove transport state from `ConnectionsState`**
+
+In `connections.ts`, remove `flow`, `handlerState`, `peerConnectionHealth` from the type and initial state. Remove `ConnectionFlow` and `HandlerState` types (they now live in `transport.ts`). Remove all transport action types from `ConnectionsAction`.
+
+What remains in `ConnectionsState`:
+```ts
+{
+  peers: Peer[]
+  messages: Message[]
+  pendingIntroductions: PendingIntroduction[]
+  onlinePeers: OnlinePeer[]
+  previousPeers: PreviousPeer[]
+}
+```
+
+What remains in `ConnectionsAction`:
+```ts
+| {type: 'PEER_CONNECTED'; peerId: string}
+| {type: 'PEER_DISCONNECTED'; peerId: string}
+| {type: 'PEER_NAMED'; peerId: string; name: string}
+| {type: 'GRANT_TRUST'; peerId: string}
+| {type: 'REVOKE_TRUST'; peerId: string}
+| {type: 'PEER_TRUST_UPDATED'; peerId: string; trusts: boolean}
+| {type: 'INTRODUCTION_RECEIVED'; introId: string; from: string; peer: string}
+| {type: 'INTRODUCTION_RESOLVED'; introId: string}
+| {type: 'ONLINE_PEERS_UPDATED'; peers: OnlinePeer[]}
+| {type: 'ONLINE_PEER_JOINED'; peerId: string; name: string}
+| {type: 'ONLINE_PEER_LEFT'; peerId: string}
+| {type: 'PREVIOUS_PEERS_RECEIVED'; peers: PreviousPeer[]}
+| {type: 'PREVIOUS_PEER_CONNECTED'; signalingPeerId: string}
+| {type: 'FORGET_PEER'; peerId: string}
+| {type: 'EMAIL_SHARED_RECEIVED'; fromPeerId: string; email: string}
+| {type: 'EMAIL_REVOKED_RECEIVED'; fromPeerId: string}
+| {type: 'MESSAGE_RECEIVED'; peerId: string; text: string}
+| {type: 'SEND_MESSAGE'; peerId: string; text: string}
+```
+
+Note: `PEER_CONNECTED`, `PEER_DISCONNECTED`, `GRANT_TRUST`, `REVOKE_TRUST`, `SEND_MESSAGE` etc. are now **connection domain actions** — the connection store processes them for peer registry updates. The transport store has its own `PEER_CONNECTED`/`PEER_DISCONNECTED` that it emits via the port. The connection store receives these from the port and dispatches its own versions.
+
+- [ ] **Step 2: Simplify `connectionStore.ts`**
+
+Remove: `createHandlerListener`, `makeHandlerEmit`, `createSignalingListener`, `encodingMiddleware`, `codecMiddleware`, and all their types/configs.
+
+The connection store becomes:
+
+```ts
+export const createConnectionStore = (listenerFactories?: ConnectionListenerFactory[]): ConnectionStore => {
+  // Standard store pattern: reducer, dispatch, subscribers, listeners
+};
+```
+
+Add a `createPortListener` that subscribes to the port and dispatches connection domain actions (PEER_CONNECTED, PEER_NAMED, PEER_DISCONNECTED, etc.):
+
+```ts
+export const createPortListener = (port: ConnectionPort): ConnectionListenerFactory =>
+  ({dispatch}) => {
+    port.subscribe((event) => {
+      if (event.type === 'PEER_CONNECTED') dispatch(peerConnected(event.peerId));
+      if (event.type === 'PEER_NAMED') dispatch(peerNamed(event.peerId, event.name));
+      if (event.type === 'PEER_DISCONNECTED') dispatch(peerDisconnected(event.peerId));
+      // SERVER_MESSAGE events for online peers, previous peers, etc.
+    });
+    return () => {};
+  };
+```
+
+Actually, the port listener should be set up during store creation, not as a listener factory (listener factories fire per-action, not per-port-event). Instead, subscribe to the port in `createConnectionStore` or in `App.tsx` and dispatch connection actions.
+
+- [ ] **Step 3: Remove transport selectors from `connectionSelectors.ts`**
+
+Remove: `selectFlow`, `selectPeerToSignaling`, `selectSignalingToPeer`, `selectIceRestartAttempts`, `selectIntroChannels`, `selectIntroConnections`, `selectIsCreatingOffer`, `selectOffererPeerIds`, `selectPeerConnectionHealth`.
+
+- [ ] **Step 4: Remove transport action creators from `connectionActions.ts`**
+
+Remove all transport action creators. Keep only peer domain ones: `peerConnected`, `peerDisconnected`, `peerNamed`, `grantTrust`, `revokeTrust`, `peerTrustUpdated`, `introductionReceived`, `introductionResolved`, `onlinePeersUpdated`, `onlinePeerJoined`, `onlinePeerLeft`, `previousPeersReceived`, `previousPeerConnected`, `forgetPeer`, `emailSharedReceived`, `emailRevokedReceived`, `shareEmail`, `stopSharingEmail`, `updateEmail`, `savePeerEmail`, `messageReceived`, `sendMessage`.
+
+Note: Some of these (GRANT_TRUST, REVOKE_TRUST, SEND_MESSAGE, SHARE_EMAIL, etc.) need to reach the transport layer to send data over channels. These become transport actions dispatched to the transport store by the UI components, not connection actions.
+
+- [ ] **Step 5: Run tests — expect many failures**
+
+Run: `cd applications/web-client && npx tsc --noEmit`
+
+This will have many errors. Fix in Task 19.
+
+- [ ] **Step 6: Commit**
+
+```
+feat: strip transport from connection store — pure peer registry
+```
+
+---
+
+### Task 19: Update App.tsx for 3-store wiring
+
+Wire all three stores together via the port.
+
+**Files:**
+- Modify: `src/App.tsx`
+- Create: `src/transport/TransportProvider.tsx`
+- Create: `src/transport/useTransport.ts`
+
+- [ ] **Step 1: Create `TransportProvider.tsx` and `useTransport.ts`**
+
+Follow the same pattern as `ConnectionProvider.tsx` and `GameProvider.tsx`.
+
+- [ ] **Step 2: Update App.tsx wiring**
+
+The new wiring order:
+1. Create transport store (owns the port, handler, signaling)
+2. Subscribe connection store to transport port for peer/signaling events
+3. Create game store with transport port
+
+```ts
+const transportStore = createTransportStore({
+  name: 'Player',
+  createPeerConnection: () => new RTCPeerConnection({iceServers: [{urls: 'stun:stun.l.google.com:19302'}]}),
+  signalingConfig: {createWebSocket: (url) => new WebSocket(url), sessionUrl: ..., url: signalingUrl, name: 'Player'},
+});
+
+const connectionStore = createConnectionStore();
+
+// Bridge: port events → connection store
+transportStore.port.subscribe((event) => {
+  if (event.type === 'PEER_CONNECTED') connectionStore.dispatch(peerConnected(event.peerId));
+  if (event.type === 'PEER_NAMED') connectionStore.dispatch(peerNamed(event.peerId, event.name));
+  if (event.type === 'PEER_DISCONNECTED') connectionStore.dispatch(peerDisconnected(event.peerId));
+  if (event.type === 'SERVER_MESSAGE') {
+    // Route online peers, previous peers, email events to connection store
+  }
+});
+
+const gameStore = createGameStore({
+  port: transportStore.port,
+  listenerFactories: [...],
+  translatePeerId: ...,
+  getPeerToSignaling: ...,
+});
+```
+
+Wrap the app in all three providers: `<TransportProvider>`, `<ConnectionProvider>`, `<GameProvider>`.
+
+- [ ] **Step 3: Run tests**
+
+Run: `cd applications/web-client && npm test`
+
+- [ ] **Step 4: Commit**
+
+```
+feat: wire 3-store architecture in App.tsx
+```
+
+---
+
+### Task 20: Update UI components for transport store
+
+Components that dispatch transport actions (DirectConnect, Fleet) need to import from the transport store instead of the connection store.
+
+**Files:**
+- Modify: `src/connections/DirectConnect.tsx` — use transport dispatch for CREATE_OFFER, JOIN_OFFER, CANCEL_OFFER, ACCEPT_ANSWER_CODE
+- Modify: `src/connections/Fleet.tsx` — use transport dispatch for CONNECT_VIA_SERVER, RECONNECT_VIA_SERVER, DISCONNECT, INTRODUCE_PEERS
+- Modify: Any component that reads transport state (flow, peer health)
+
+- [ ] **Step 1: Read DirectConnect.tsx and Fleet.tsx**
+
+Identify which actions they dispatch and which selectors they use. Categorize each as transport or connection.
+
+- [ ] **Step 2: Update DirectConnect.tsx**
+
+Import `useTransport` hook. Dispatch transport actions (CREATE_OFFER, JOIN_OFFER, etc.) to transport store. Read flow state from transport store via transport selectors.
+
+- [ ] **Step 3: Update Fleet.tsx**
+
+Import `useTransport` hook for transport actions (CONNECT_VIA_SERVER, DISCONNECT, INTRODUCE_PEERS). Keep connection store for peer data (selectPeers, selectOnlinePeers, etc.).
+
+Components may need both hooks — that's fine. Each hook accesses one store.
+
+- [ ] **Step 4: Update any other components**
+
+Search for imports from `connectionActions` or `connectionSelectors` that reference transport items. Update to use transport equivalents.
+
+- [ ] **Step 5: Run all tests**
+
+Run: `cd applications/web-client && npm test`
+
+- [ ] **Step 6: Commit**
+
+```
+feat: UI components use transport store for connectivity actions
+```
+
+---
+
+### Task 21: Split connection store tests
+
+The existing `connectionStore.test.ts`, `connectionStore.handler.test.ts`, and `connectionStore.signaling.server.test.ts` test both transport and connection behavior. Split them to match the new module boundaries.
+
+**Files:**
+- Create: `src/transport/transportStore.test.ts` (handler integration tests)
+- Create: `src/transport/transportStore.signaling.server.test.ts` (signaling integration tests)
+- Modify: `src/connections/connectionStore.test.ts` (keep only peer domain tests)
+- Modify: `src/connections/connectionStore.handler.test.ts` (keep only peer-level integration, use transport store for plumbing)
+- Modify: `src/connections/connectionStore.signaling.server.test.ts` (keep only peer-level signaling tests)
+
+- [ ] **Step 1: Identify which tests are transport vs connections**
+
+Read through each test file. Tests about offer/answer flow, SDP, ICE restart, encoding → transport. Tests about trust, introductions, online/previous peers, messages → connections (may need transport store as infrastructure).
+
+- [ ] **Step 2: Move transport tests**
+
+Create transport test files. The handler integration tests (`makePair` pattern) are primarily transport — they exercise WebRTC handshake. Move them to `transportStore.test.ts` or `transportStore.handler.test.ts`.
+
+- [ ] **Step 3: Update connection tests**
+
+Connection tests that need transport plumbing (e.g., testing trust propagation over a real peer connection) should create a transport store as infrastructure, then test connection state changes.
+
+- [ ] **Step 4: Run all tests**
+
+Run: `cd applications/web-client && npm test`
+Run: `cd applications/web-client && npm run lint`
+
+- [ ] **Step 5: Run e2e tests**
+
+```bash
+./gradlew :applications:signaling-server:bootJar
+cd applications/web-client && npm run e2e
+```
+
+- [ ] **Step 6: Commit**
+
+```
+feat: split tests to match 3-store architecture
+```
+
+---
+
 ## Story 3: Fix skipped e2e tests
 
 ### Task 15: Fix disconnection mid-game e2e test
@@ -960,8 +1406,9 @@ fix: clarify unverified board status at game over
 
 Create GitHub issues for each story with milestone "Iteration 9". Work order:
 
-1. Stories 1 + 2 (sequential — architecture)
-2. Story 3 (independent — e2e tests)
-3. Stories 4 + 5 (after architecture — reliability)
+1. Stories 1 + 2 (sequential — game store completion, eliminate circular dispatch)
+2. Story 6 (transport extraction — depends on clean port architecture from Story 2)
+3. Story 3 (independent — e2e tests)
+4. Stories 4 + 5 (after architecture — reliability; Story 4 benefits from transport module)
 
 Tag and release as v0.10.0 when all stories are complete.
