@@ -8,6 +8,8 @@ import {gameStarted, fireResult, boardNotFound, turnOrderDecided} from './gameAc
 import {saveP2pGame, loadP2pGame, saveBoard as connectionSaveBoard, startGame as connectionStartGame} from '../connections/connectionActions';
 import {randomBoard, resolveFireShot} from './aiGame';
 import {maybe} from '../lib/maybe';
+import {createCoinFlipProtocol} from './coinFlipProtocol';
+import type {CoinFlipProtocol} from './coinFlipProtocol';
 
 export type GameListenerContext = {
   prevState: GameState
@@ -33,6 +35,7 @@ type ListenerFactoryDeps = {
   port?: ConnectionPort
   dispatchToConnection?: (action: ConnectionsAction) => void
   getPeerToSignaling?: () => Record<string, string>
+  coinFlip?: CoinFlipProtocol
 }
 
 export type GameListenerFactory = (deps: ListenerFactoryDeps) => GameListenerFn
@@ -102,7 +105,7 @@ type GameCommandHandlers = {
 }
 type AnyGameCommandHandler = (action: GameAction, prevGame: P2pGame | null) => void
 
-export const createGameCommandListenerFactory: GameListenerFactory = ({dispatch, port, dispatchToConnection, getPeerToSignaling}) => {
+export const createGameCommandListenerFactory: GameListenerFactory = ({dispatch, port, dispatchToConnection, getPeerToSignaling, coinFlip}) => {
   const sendToPeer = (peerId: string, msg: unknown) => maybe(port?.sendToPeer).map(send => send(peerId, msg));
   const loadSavedGame = (peerId: string) => {
     const signalingId = getPeerToSignaling?.()[peerId];
@@ -139,6 +142,10 @@ export const createGameCommandListenerFactory: GameListenerFactory = ({dispatch,
       if (!prevGame) return;
       sendToPeer(prevGame.opponentId, {type: 'GAME_FIRST_TURN'});
       dispatch(turnOrderDecided(true));
+    },
+    CLAIM_FIRST_TURN: (_, prevGame) => {
+      if (!prevGame) return;
+      coinFlip?.start(prevGame.opponentId);
     },
     P2P_FIRE: (action, prevGame) => {
       if (prevGame?.phase !== 'my-turn') return;
@@ -189,10 +196,18 @@ export const createGameStore = (config?: GameStoreConfig): GameStore => {
 
   store.dispatch = baseDispatch;
 
-  const listenerDeps: ListenerFactoryDeps = {dispatch: (action) => store.dispatch(action), getState: () => state, port: config?.port, dispatchToConnection: config?.dispatchToConnection, getPeerToSignaling: config?.getPeerToSignaling};
-  config?.listenerFactories?.forEach(factory => store.addListener(factory(listenerDeps)));
+  let coinFlip: CoinFlipProtocol | undefined;
 
   if (config?.port) {
+    coinFlip = createCoinFlipProtocol({
+      sendToPeer: config.port.sendToPeer,
+      getOffererPeerIds: () => selectOffererPeerIds(state),
+      dispatch: (action) => store.dispatch(action),
+    });
+    config.port.subscribe((event) => {
+      if (event.type === 'PEER_MESSAGE') coinFlip!.handleMessage(event.peerId, event.data);
+    });
+
     const gameMessageHandler = createGameMessageHandler({
       dispatch: (action) => store.dispatch(action),
       getP2pGame: () => selectP2pGame(state),
@@ -203,6 +218,10 @@ export const createGameStore = (config?: GameStoreConfig): GameStore => {
     });
     config.port.subscribe(gameMessageHandler);
   }
+
+  // Listener factories invoked AFTER coin flip exists so they can capture it
+  const listenerDeps: ListenerFactoryDeps = {dispatch: (action) => store.dispatch(action), getState: () => state, port: config?.port, dispatchToConnection: config?.dispatchToConnection, getPeerToSignaling: config?.getPeerToSignaling, coinFlip};
+  config?.listenerFactories?.forEach(factory => store.addListener(factory(listenerDeps)));
 
   return store;
 };
