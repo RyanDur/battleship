@@ -1,6 +1,4 @@
-import {useConnectionStore} from '../connections/useConnection';
-import {claimFirstTurn} from '../connections/connectionActions';
-import {takeFirstTurn, p2pBoardReady} from './gameActions';
+import {takeFirstTurn, p2pBoardReady, claimFirstTurn} from './gameActions';
 import {useGameStore, useGameState} from './useGame';
 import {selectP2pGame, selectOpponentNames, selectBoard} from './gameSelectors';
 import {hashBoard} from './hashBoard';
@@ -13,7 +11,6 @@ export const GameLobby = ({onSetupBoard}: Props) => {
   const p2pGame = useGameState(selectP2pGame);
   const opponentNames = useGameState(selectOpponentNames);
   const board = useGameState(selectBoard);
-  const store = useConnectionStore();
   const gameStore = useGameStore();
 
   if (!p2pGame) return null;
@@ -45,7 +42,7 @@ export const GameLobby = ({onSetupBoard}: Props) => {
       {p2pGame.phase === 'selecting-turn' && (
         <>
           <button className="control" onClick={() => gameStore.dispatch(takeFirstTurn())}>Go first</button>
-          <button className="control" onClick={() => store.dispatch(claimFirstTurn())}>Flip coin</button>
+          <button className="control" onClick={() => gameStore.dispatch(claimFirstTurn())}>Flip coin</button>
         </>
       )}
     </section>
