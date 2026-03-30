@@ -2,8 +2,8 @@ import {createConnectionStore, createHandlerListener, encodingMiddleware, codecM
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
 import type {ConnectionFlow} from './connections';
-import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage, turnOrderDecided, claimFirstTurn, takeFirstTurn, peerDisconnected, sendToPeer} from './connectionActions';
-import {boardLoaded, p2pGameLoaded, p2pFire, p2pStateMismatch, clearP2pGame, challengePeer, acceptChallenge, p2pBoardReady} from '../game/gameActions';
+import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage, claimFirstTurn, peerDisconnected, sendToPeer} from './connectionActions';
+import {boardLoaded, p2pGameLoaded, p2pFire, p2pStateMismatch, clearP2pGame, challengePeer, acceptChallenge, p2pBoardReady, takeFirstTurn, turnOrderDecided} from '../game/gameActions';
 import {hashBoard, hashValue} from '../game/hashBoard';
 import type {Board} from '../game/board';
 import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections, selectMessages} from './connectionSelectors';
@@ -455,8 +455,8 @@ const setupP2pGame = async (pair: Awaited<ReturnType<typeof makePair>>) => {
   await vi.waitFor(() => expect(selectP2pGame(bobGame.getState())?.opponentBoardReady).toBe(true));
   bobGame.dispatch(p2pBoardReady('bob-hash'));
   await vi.waitFor(() => expect(selectP2pGame(aliceGame.getState())?.phase).toBe('selecting-turn'));
-  alice.dispatch(turnOrderDecided(true));
-  bob.dispatch(turnOrderDecided(false));
+  aliceGame.dispatch(turnOrderDecided(true));
+  bobGame.dispatch(turnOrderDecided(false));
   return {alice, bob, aliceGame, bobGame};
 };
 
@@ -547,7 +547,7 @@ describe('coin flip turn selection', () => {
 
 describe('direct turn claim', () => {
   it('simultaneous Go first does not leave both players in their-turn', async () => {
-    const {alice, bob, aliceGame, bobGame, connect} = makePair();
+    const {bob, aliceGame, bobGame, connect} = makePair();
     await connect();
     const alicePeerIdOnBob = selectPeers(bob.getState())[0].id;
     bobGame.dispatch(challengePeer(alicePeerIdOnBob));
@@ -561,8 +561,8 @@ describe('direct turn claim', () => {
     await vi.waitFor(() => expect(selectP2pGame(bobGame.getState())?.phase).toBe('selecting-turn'));
 
     // Both click Go first simultaneously
-    alice.dispatch(takeFirstTurn());
-    bob.dispatch(takeFirstTurn());
+    aliceGame.dispatch(takeFirstTurn());
+    bobGame.dispatch(takeFirstTurn());
 
     await vi.waitFor(() => {
       const aPhase = selectP2pGame(aliceGame.getState())?.phase;
@@ -576,7 +576,7 @@ describe('direct turn claim', () => {
   });
 
   it('Go first gives the clicker my-turn and the opponent their-turn', async () => {
-    const {alice, bob, aliceGame, bobGame, connect} = makePair();
+    const {bob, aliceGame, bobGame, connect} = makePair();
     await connect();
     const alicePeerIdOnBob = selectPeers(bob.getState())[0].id;
     bobGame.dispatch(challengePeer(alicePeerIdOnBob));
@@ -589,7 +589,7 @@ describe('direct turn claim', () => {
     await vi.waitFor(() => expect(selectP2pGame(aliceGame.getState())?.phase).toBe('selecting-turn'));
     await vi.waitFor(() => expect(selectP2pGame(bobGame.getState())?.phase).toBe('selecting-turn'));
 
-    alice.dispatch(takeFirstTurn());
+    aliceGame.dispatch(takeFirstTurn());
 
     await vi.waitFor(() => {
       expect(selectP2pGame(aliceGame.getState())?.phase).toBe('my-turn');
@@ -601,7 +601,7 @@ describe('direct turn claim', () => {
 describe('P2P fire guards', () => {
   it('duplicate incoming FIRE at the same cell is ignored — opponentShots stays at 1', async () => {
     const pair = makePair();
-    const {bob, aliceGame} = await setupP2pGame(pair);
+    const {aliceGame, bobGame} = await setupP2pGame(pair);
     const emptyBoard: Board = {placed: []};
     aliceGame.dispatch(boardLoaded(emptyBoard));
     // Put alice in their-turn with one prior shot at (3,4) already in opponentShots
@@ -609,18 +609,18 @@ describe('P2P fire guards', () => {
     aliceGame.dispatch(p2pGameLoaded({...currentGame, phase: 'their-turn', opponentShots: [{cell: {row: 3, col: 4}, result: 'miss' as const}]}));
 
     // Bob fires at (3,4) again — duplicate guard blocks it
-    bob.dispatch(p2pFire(3, 4));
+    bobGame.dispatch(p2pFire(3, 4));
     await new Promise(r => setTimeout(r, 50));
     expect(selectP2pGame(aliceGame.getState())?.opponentShots).toHaveLength(1);
   });
 
   it('FIRE received when not their-turn is ignored', async () => {
     const pair = makePair();
-    const {bob, aliceGame} = await setupP2pGame(pair);
+    const {aliceGame, bobGame} = await setupP2pGame(pair);
     // Alice is my-turn after setupP2pGame; give her a board so the phase guard is the only blocker
     aliceGame.dispatch(boardLoaded({placed: []}));
 
-    bob.dispatch(p2pFire(1, 1));
+    bobGame.dispatch(p2pFire(1, 1));
     await new Promise(r => setTimeout(r, 50));
     expect(selectP2pGame(aliceGame.getState())?.opponentShots).toHaveLength(0);
   });
@@ -649,31 +649,31 @@ describe('reconnect — load game on PEER_CONNECTED', () => {
 describe('sender-side P2P_FIRE phase guard', () => {
   it('P2P_FIRE sends a FIRE message when phase is my-turn', async () => {
     const pair = makePair();
-    const {alice, bobGame} = await setupP2pGame(pair);
+    const {aliceGame, bobGame} = await setupP2pGame(pair);
     bobGame.dispatch(boardLoaded({placed: []}));
 
     // Alice is my-turn after setupP2pGame — fire should work
-    alice.dispatch(p2pFire(1, 1));
+    aliceGame.dispatch(p2pFire(1, 1));
     await vi.waitFor(() => expect(selectP2pGame(bobGame.getState())?.opponentShots).toHaveLength(1));
   });
 
   it('P2P_FIRE does not send when phase is their-turn', async () => {
     const pair = makePair();
-    const {alice, aliceGame, bobGame} = await setupP2pGame(pair);
+    const {aliceGame, bobGame} = await setupP2pGame(pair);
     bobGame.dispatch(boardLoaded({placed: []}));
 
     // Put alice in their-turn (for phase guard in P2P_FIRE)
     const currentGame = selectP2pGame(aliceGame.getState())!;
     aliceGame.dispatch(p2pGameLoaded({...currentGame, phase: 'their-turn'}));
 
-    alice.dispatch(p2pFire(1, 1));
+    aliceGame.dispatch(p2pFire(1, 1));
     await new Promise(r => setTimeout(r, 50));
     expect(selectP2pGame(bobGame.getState())?.opponentShots).toHaveLength(0);
   });
 
   it('P2P_FIRE does not send when phase is selecting-turn', async () => {
     const pair = makePair();
-    const {alice, bob, aliceGame, bobGame, connect} = pair;
+    const {bob, aliceGame, bobGame, connect} = pair;
     await connect();
     const alicePeerIdOnBob = selectPeers(bob.getState())[0].id;
     bobGame.dispatch(challengePeer(alicePeerIdOnBob));
@@ -686,7 +686,7 @@ describe('sender-side P2P_FIRE phase guard', () => {
     await vi.waitFor(() => expect(selectP2pGame(aliceGame.getState())?.phase).toBe('selecting-turn'));
 
     // Alice tries to fire during selecting-turn
-    alice.dispatch(p2pFire(1, 1));
+    aliceGame.dispatch(p2pFire(1, 1));
     await new Promise(r => setTimeout(r, 50));
     // Bob should not have received any shots
     expect(selectP2pGame(bobGame.getState())?.opponentShots).toHaveLength(0);
@@ -713,7 +713,7 @@ describe('P2P board reveal at game over', () => {
 
   it("winner receives opponent's board with verified hash after sinking the fleet", async () => {
     const pair = makePair();
-    const {alice, bob, aliceGame, bobGame} = await setupP2pGame(pair);
+    const {aliceGame, bobGame} = await setupP2pGame(pair);
 
     bobGame.dispatch(boardLoaded(fullBoard));
     aliceGame.dispatch(boardLoaded({placed: []}));
@@ -728,13 +728,13 @@ describe('P2P board reveal at game over', () => {
 
     for (let i = 0; i < fleetCells.length; i++) {
       const {row, col} = fleetCells[i];
-      alice.dispatch(p2pFire(row, col));
+      aliceGame.dispatch(p2pFire(row, col));
       await vi.waitFor(() => {
         const phase = selectP2pGame(aliceGame.getState())?.phase;
         expect(phase === 'their-turn' || phase === 'game-over').toBe(true);
       });
       if (selectP2pGame(aliceGame.getState())?.phase === 'game-over') break;
-      bob.dispatch(p2pFire(10, i + 1));
+      bobGame.dispatch(p2pFire(10, i + 1));
       await vi.waitFor(() => {
         const phase = selectP2pGame(aliceGame.getState())?.phase;
         expect(phase === 'my-turn' || phase === 'game-over').toBe(true);
@@ -751,7 +751,7 @@ describe('P2P board reveal at game over', () => {
 
   it("boardVerified is false when board does not match committed hash", async () => {
     const pair = makePair();
-    const {alice, bob, aliceGame, bobGame} = await setupP2pGame(pair);
+    const {aliceGame, bobGame} = await setupP2pGame(pair);
 
     bobGame.dispatch(boardLoaded(fullBoard));
     aliceGame.dispatch(boardLoaded({placed: []}));
@@ -761,13 +761,13 @@ describe('P2P board reveal at game over', () => {
 
     for (let i = 0; i < fleetCells.length; i++) {
       const {row, col} = fleetCells[i];
-      alice.dispatch(p2pFire(row, col));
+      aliceGame.dispatch(p2pFire(row, col));
       await vi.waitFor(() => {
         const phase = selectP2pGame(aliceGame.getState())?.phase;
         expect(phase === 'their-turn' || phase === 'game-over').toBe(true);
       });
       if (selectP2pGame(aliceGame.getState())?.phase === 'game-over') break;
-      bob.dispatch(p2pFire(10, i + 1));
+      bobGame.dispatch(p2pFire(10, i + 1));
       await vi.waitFor(() => {
         const phase = selectP2pGame(aliceGame.getState())?.phase;
         expect(phase === 'my-turn' || phase === 'game-over').toBe(true);
@@ -813,7 +813,7 @@ describe('disconnected and state-mismatch game view', () => {
 describe('reconnect via GAME_STATE_SYNC when no local game exists', () => {
   it('creates game from flipped perspective when Bob has no game and Alice sends GAME_STATE_SYNC', async () => {
     const pair = makePair();
-    const {alice, bob, aliceGame, bobGame} = await setupP2pGame(pair);
+    const {bob, aliceGame, bobGame} = await setupP2pGame(pair);
     // alicePeerId is Alice's local peer ID as seen from Bob's store
     const alicePeerId = selectPeers(bob.getState())[0].id;
 
@@ -821,7 +821,7 @@ describe('reconnect via GAME_STATE_SYNC when no local game exists', () => {
     bobGame.dispatch(boardLoaded({placed: []}));
 
     // Alice fires — Alice → their-turn, Bob → my-turn
-    alice.dispatch(p2pFire(1, 1));
+    aliceGame.dispatch(p2pFire(1, 1));
     await vi.waitFor(() => expect(selectP2pGame(aliceGame.getState())?.phase).toBe('their-turn'));
     await vi.waitFor(() => expect(selectP2pGame(bobGame.getState())?.phase).toBe('my-turn'));
 
@@ -857,7 +857,7 @@ describe('reconnect and resume game', () => {
     bobGame.dispatch(boardLoaded({placed: []}));
 
     // Alice fires — game transitions: Alice → their-turn, Bob → my-turn
-    alice.dispatch(p2pFire(1, 1));
+    aliceGame.dispatch(p2pFire(1, 1));
     await vi.waitFor(() => expect(selectP2pGame(aliceGame.getState())?.phase).toBe('their-turn'));
     await vi.waitFor(() => expect(selectP2pGame(bobGame.getState())?.phase).toBe('my-turn'));
 
@@ -894,13 +894,13 @@ describe('reconnect and resume game', () => {
 
   it('game transitions to state-mismatch when GAME_STATE_SYNC reveals inconsistent shot counts', async () => {
     const pair = makePair();
-    const {alice, aliceGame, bobGame} = await setupP2pGame(pair);
+    const {aliceGame, bobGame} = await setupP2pGame(pair);
 
     // Give Bob a board so the fire resolves
     bobGame.dispatch(boardLoaded({placed: []}));
 
     // Alice fires — creates asymmetric state: Alice has 1 myShot, Bob has 1 opponentShot
-    alice.dispatch(p2pFire(1, 1));
+    aliceGame.dispatch(p2pFire(1, 1));
     await vi.waitFor(() => expect(selectP2pGame(aliceGame.getState())?.phase).toBe('their-turn'));
     await vi.waitFor(() => expect(selectP2pGame(bobGame.getState())?.phase).toBe('my-turn'));
 

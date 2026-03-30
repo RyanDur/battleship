@@ -7,8 +7,8 @@ import {createDispatch} from '../lib/maybe';
 import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectOffererPeerIds, selectPeerToSignaling, selectSignalingToPeer} from './connectionSelectors';
 import {selectP2pGame as selectGameStoreP2pGame} from '../game/gameSelectors';
 import type {GameState, GameAction} from '../game/game';
-import {turnOrderDecided as gameTurnOrderDecided, peerDisconnected as gamePeerDisconnected, saveBoard as gameSaveBoard, startGame as gameStartGame, clearP2pGame as gameClearP2pGame, p2pGameLoaded as gameP2pGameLoaded} from '../game/gameActions';
-import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, loadP2pGame, turnOrderDecided} from './connectionActions';
+import {peerDisconnected as gamePeerDisconnected, saveBoard as gameSaveBoard, startGame as gameStartGame, clearP2pGame as gameClearP2pGame, p2pGameLoaded as gameP2pGameLoaded} from '../game/gameActions';
+import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, loadP2pGame} from './connectionActions';
 import type {PeerEvent} from './connectionHandler';
 import {encodeConnectionCode, decodeConnectionCode} from './connectionCode';
 import {createPeerHandler} from './connectionHandler';
@@ -169,28 +169,17 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit, get
 
       const game = getGame();
       const opponentId = game?.opponentId ?? null;
-      if (!opponentId) return;
-      const send = (message: Record<string, unknown>) =>
-        handler.handleCommand({type: 'SEND_TO_PEER', peerId: opponentId, message});
 
       const dispatchGameAction = createDispatch<ConnectionsAction>({
-        TAKE_FIRST_TURN: () => {
-          send({type: 'GAME_FIRST_TURN'});
-          dispatch(turnOrderDecided(true));
+        TAKE_FIRST_TURN: (a) => { dispatchToGame?.(a); },
+        CLAIM_FIRST_TURN: () => {
+          if (!opponentId) return;
+          handler.handleCommand({type: 'START_COIN_FLIP', peerId: opponentId});
         },
-        CLAIM_FIRST_TURN: () => handler.handleCommand({type: 'START_COIN_FLIP', peerId: opponentId}),
-        COIN_FLIP_COMMIT: (action) => send({type: 'COIN_FLIP_COMMIT', hash: action.hash}),
-        COIN_FLIP_REVEAL: (action) => send({type: 'COIN_FLIP_REVEAL', value: action.value}),
-        P2P_FIRE: (action) => {
-          const prevGame = getGameState ? selectGameStoreP2pGame(getGameState()) : null;
-          if (prevGame?.phase !== 'my-turn') return;
-          if (!prevGame.myShots.some(s => s.cell.row === action.row && s.cell.col === action.col)) {
-            send({type: 'FIRE', row: action.row, col: action.col});
-          }
-        },
-        TURN_ORDER_DECIDED: (action) => {
-          dispatchToGame?.(gameTurnOrderDecided(action.iGoFirst));
-        },
+        COIN_FLIP_COMMIT: (a) => { dispatchToGame?.(a); },
+        COIN_FLIP_REVEAL: (a) => { dispatchToGame?.(a); },
+        P2P_FIRE: (a) => { dispatchToGame?.(a); },
+        TURN_ORDER_DECIDED: (a) => { dispatchToGame?.(a); },
       });
       dispatchGameAction(action);
     };

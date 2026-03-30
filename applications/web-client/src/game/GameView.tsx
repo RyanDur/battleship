@@ -1,7 +1,5 @@
 import {useState} from 'react';
-import {useConnectionStore} from '../connections/useConnection';
-import {p2pFire} from '../connections/connectionActions';
-import {forfeitGame} from './gameActions';
+import {p2pFire, forfeitGame} from './gameActions';
 import {useGameState, useGameStore} from './useGame';
 import {selectGameView, selectP2pGame, selectAnnouncement} from './gameSelectors';
 import {fireShot} from './gameActions';
@@ -19,13 +17,12 @@ export const Game = ({onNewGame}: Props) => {
   const p2pGame = useGameState(selectP2pGame);
   const announcement = useGameState(selectAnnouncement);
   const gameStore = useGameStore();
-  const connectionStore = useConnectionStore();
   const [confirmForfeit, setConfirmForfeit] = useState(false);
 
   const handleFire = ({row, col}: {row: number; col: number}) => {
     if (gameView?.phase !== 'my-turn') return;
     if (p2pGame) {
-      connectionStore.dispatch(p2pFire(row, col));
+      gameStore.dispatch(p2pFire(row, col));
     } else {
       gameStore.dispatch(fireShot(row, col));
     }

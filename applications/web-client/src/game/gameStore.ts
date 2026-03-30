@@ -4,7 +4,7 @@ import type {ConnectionPort} from '../connections/connectionPort';
 import type {ConnectionsAction} from '../connections/connections';
 import {createGameMessageHandler} from './gameMessageHandler';
 import {selectBoard, selectAiGameState, selectP2pGame, selectOffererPeerIds} from './gameSelectors';
-import {gameStarted, fireResult, boardNotFound} from './gameActions';
+import {gameStarted, fireResult, boardNotFound, turnOrderDecided} from './gameActions';
 import {saveP2pGame, loadP2pGame} from '../connections/connectionActions';
 import {randomBoard, resolveFireShot} from './aiGame';
 import {maybe} from '../lib/maybe';
@@ -96,7 +96,7 @@ type GameCommandHandlers = {
 }
 type AnyGameCommandHandler = (action: GameAction, prevGame: P2pGame | null) => void
 
-export const createGameCommandListenerFactory: GameListenerFactory = ({port, dispatchToConnection, getPeerToSignaling}) => {
+export const createGameCommandListenerFactory: GameListenerFactory = ({dispatch, port, dispatchToConnection, getPeerToSignaling}) => {
   const sendToPeer = (peerId: string, msg: unknown) => maybe(port?.sendToPeer).map(send => send(peerId, msg));
   const loadSavedGame = (peerId: string) => {
     const signalingId = getPeerToSignaling?.()[peerId];
@@ -128,6 +128,24 @@ export const createGameCommandListenerFactory: GameListenerFactory = ({port, dis
     FORFEIT_GAME: (_, prevGame) => {
       if (!prevGame) return;
       sendToPeer(prevGame.opponentId, {type: 'GAME_FORFEIT'});
+    },
+    TAKE_FIRST_TURN: (_, prevGame) => {
+      if (!prevGame) return;
+      sendToPeer(prevGame.opponentId, {type: 'GAME_FIRST_TURN'});
+      dispatch(turnOrderDecided(true));
+    },
+    COIN_FLIP_COMMIT: (action, prevGame) => {
+      if (!prevGame) return;
+      sendToPeer(prevGame.opponentId, {type: 'COIN_FLIP_COMMIT', hash: action.hash});
+    },
+    COIN_FLIP_REVEAL: (action, prevGame) => {
+      if (!prevGame) return;
+      sendToPeer(prevGame.opponentId, {type: 'COIN_FLIP_REVEAL', value: action.value});
+    },
+    P2P_FIRE: (action, prevGame) => {
+      if (prevGame?.phase !== 'my-turn') return;
+      if (prevGame.myShots.some(s => s.cell.row === action.row && s.cell.col === action.col)) return;
+      sendToPeer(prevGame.opponentId, {type: 'FIRE', row: action.row, col: action.col});
     },
   };
 
