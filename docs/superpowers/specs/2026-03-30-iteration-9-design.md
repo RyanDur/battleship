@@ -14,12 +14,11 @@ Complete the game store extraction so each store has one clear responsibility, t
 
 **Behaviors:**
 
-- All board and game state lives in the game store
-- Connection store has no game-related state or actions
-- AI game and P2P game share the same store and dispatch
-- Board persistence (save/load to server) is initiated from the game store
+- A developer can add or modify game features by working in the game module alone
+- Game tests don't require configuring or faking the connection store
+- AI and P2P games behave identically to how they do today (no user-facing change)
 
-**Notes:** The signaling bridge listener currently forwards game actions to the connection store for server persistence. After this story, the game store talks to the server directly (via the port or a signaling interface), removing the bridge.
+**Notes:** AI game state (`board`, `boardLoading`, `gameState`), board persistence actions, and AI game actions currently live in the connection store reducer. After this story, they move to the game store. The signaling bridge listener currently forwards game actions to the connection store for server persistence — after this, the game store talks to the server directly via the port or a signaling interface.
 
 ### #2 — Eliminate circular dispatch between stores
 
@@ -29,25 +28,24 @@ Complete the game store extraction so each store has one clear responsibility, t
 
 **Behaviors:**
 
-- Neither store imports or dispatches to the other
-- Peer lifecycle events (connect, disconnect, named) reach the game store through the port's event stream, not through cross-dispatch
-- App.tsx wiring is simplified — each store subscribes to the port independently
-- Each store can be tested with only a fake port, no fake "other store"
+- Each store can be instantiated and tested with only a fake port, no fake "other store"
+- Adding a new store does not require modifying existing stores
+- All existing game and connection behavior works identically (no user-facing change)
 
-**Notes:** The port (`connectionPort.ts`) already emits PEER_MESSAGE, PEER_CONNECTED, PEER_DISCONNECTED events. The game store can subscribe to these directly instead of receiving forwarded dispatches from the connection store.
+**Notes:** Currently the connection store dispatches to the game store (`dispatchToGame`) and vice versa (`dispatchToConnection`), with App.tsx hand-wiring cross-references. The port already emits PEER_MESSAGE, PEER_CONNECTED, PEER_DISCONNECTED events — the game store can subscribe to these directly. The port-subscription pattern established here should be compatible with the transport store extraction planned for Iteration 10.
 
 ### #3 — Fix skipped e2e tests for disconnection and reconnection
 
 **Who** — a player whose opponent disconnects mid-game
 
-**Problem** — Two e2e tests are skipped because WebRTC connections don't behave predictably in Playwright: one for mid-game disconnection status, one for full reconnect via server. These are real user scenarios with no end-to-end coverage.
+**Problem** — One e2e test is skipped (mid-game disconnection status) and one is unwritten (full reconnect via server). These are real user scenarios with no end-to-end coverage.
 
 **Behaviors:**
 
 - When an opponent leaves mid-game, the player sees the game is disconnected
 - When a disconnected opponent reconnects via the server, the game resumes where it left off
 
-**Notes:** The product behavior already works — this is a test infrastructure problem. The fix likely involves Playwright's WebRTC handling or test timing, not product code changes. Unit tests cover both scenarios today.
+**Notes:** The product behavior already works — the gap is e2e test coverage. The skipped test hangs in Playwright due to WebRTC timing. The reconnect test needs to be written from scratch (server-mediated connections haven't completed in Playwright e2e before). Unit tests cover both scenarios today.
 
 ### #4 — Surface transport failures to the user
 
@@ -59,7 +57,7 @@ Complete the game store extraction so each store has one clear responsibility, t
 
 - When the signaling connection is lost, the player sees that the service is unavailable
 - When a message to a peer can't be delivered (closed channel), the player sees feedback that the action failed
-- The app attempts to recover automatically where possible, but doesn't hide the failure
+- Existing recovery mechanisms (heartbeat reconnection) continue to work; this story surfaces failures, not new auto-recovery
 
 **Notes:** Heartbeat already detects service loss and shows status. The gap is signaling-specific errors outside the heartbeat path, and data channel send failures.
 
@@ -71,7 +69,7 @@ Complete the game store extraction so each store has one clear responsibility, t
 
 **Behaviors:**
 
-- When a coin flip can't be verified, the player sees an error instead of silently losing
+- When a coin flip can't be verified, the player sees a notification that the flip failed and can retry, rather than silently losing
 - When clipboard copy fails, the player sees that it didn't work
 - When game state from the server can't be loaded, the player sees that the game couldn't be restored
 - When board verification fails at game over, the result clearly shows it couldn't be verified
