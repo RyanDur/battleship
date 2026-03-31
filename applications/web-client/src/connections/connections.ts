@@ -1,10 +1,9 @@
 import {createReducer} from '../lib/maybe';
+import type {OnlinePeer, PreviousPeer} from './signaling';
+
+export type {OnlinePeer, PreviousPeer};
 
 export type Peer = {id: string; name?: string; trusted?: boolean; trustsMe?: boolean}
-
-export type OnlinePeer = {peerId: string; name: string}
-
-export type PreviousPeer = {peerId: string; name: string; online: boolean; email?: string}
 
 export type PendingIntroduction = {introId: string; from: string; peer: string}
 
