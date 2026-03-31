@@ -1,5 +1,5 @@
 import type {Board} from '../game/board';
-import type {Shot, P2pGame, AiGamePhase, AiGameState} from '../game/game';
+import type {P2pGame} from '../game/game';
 import {createReducer} from '../lib/maybe';
 
 export type Peer = {id: string; name?: string; trusted?: boolean; trustsMe?: boolean}
@@ -40,9 +40,6 @@ export type ConnectionsState = {
   previousPeers: PreviousPeer[]
   peerConnectionHealth: Record<string, 'stable' | 'unstable'>
   handlerState: HandlerState
-  board: Board | null
-  boardLoading: boolean
-  gameState: AiGameState | null
 }
 
 export type ConnectionsAction =
@@ -104,17 +101,10 @@ export type ConnectionsAction =
   | {type: 'MESSAGE_RECEIVED'; peerId: string; text: string}
   | {type: 'SEND_MESSAGE'; peerId: string; text: string}
   | {type: 'SAVE_BOARD'; board: Board}
-  | {type: 'BOARD_SAVED'}
   | {type: 'LOAD_BOARD'}
-  | {type: 'BOARD_LOADED'; board: Board}
-  | {type: 'BOARD_NOT_FOUND'}
   | {type: 'START_GAME'}
-  | {type: 'GAME_STARTED'; gameState: AiGameState}
   | {type: 'FIRE_SHOT'; row: number; col: number}
-  | {type: 'FIRE_RESULT'; playerShot: Shot; aiShot: Shot | null; phase: AiGamePhase}
   | {type: 'LOAD_GAME'}
-  | {type: 'GAME_STATE'; gameState: AiGameState}
-  | {type: 'GAME_NOT_FOUND'}
   | {type: 'SAVE_P2P_GAME'; gameState: P2pGame}
   | {type: 'LOAD_P2P_GAME'; opponentId: string}
   | {type: 'SEND_TO_PEER'; peerId: string; message: Record<string, unknown>}
@@ -137,9 +127,6 @@ export const initialState: ConnectionsState = {
   previousPeers: [],
   peerConnectionHealth: {},
   handlerState: handlerInitialState,
-  board: null,
-  boardLoading: true,
-  gameState: null,
 };
 
 const handlerReducer = createReducer<HandlerState, ConnectionsAction>({
@@ -266,22 +253,6 @@ const coreConnectionsReducer = createReducer<ConnectionsState, ConnectionsAction
   SEND_MESSAGE: (state, action) => ({...state, messages: [...state.messages, {peerId: action.peerId, text: action.text, fromSelf: true}]}),
   PEER_CONNECTION_UNSTABLE: (state, action) => ({...state, peerConnectionHealth: {...state.peerConnectionHealth, [action.peerId]: 'unstable'}}),
   PEER_CONNECTION_RESTORED: (state, action) => ({...state, peerConnectionHealth: {...state.peerConnectionHealth, [action.peerId]: 'stable'}}),
-  LOAD_BOARD: (state) => ({...state, boardLoading: true}),
-  BOARD_LOADED: (state, action) => ({...state, board: action.board, boardLoading: false}),
-  BOARD_NOT_FOUND: (state) => ({...state, board: null, boardLoading: false}),
-  SAVE_BOARD: (state, action) => ({...state, board: action.board}),
-  GAME_STARTED: (state, action) => ({...state, gameState: action.gameState}),
-  GAME_STATE: (state, action) => ({...state, gameState: action.gameState}),
-  FIRE_RESULT: (state, action) => {
-    const gameState = state.gameState;
-    if (!gameState) return state;
-    const playerShots = [...gameState.playerShots, action.playerShot];
-    const aiShots = action.aiShot ? [...gameState.aiShots, action.aiShot] : gameState.aiShots;
-    const announcement = action.playerShot.result === 'sunk' && action.playerShot.ship
-      ? `${action.playerShot.ship.name} sunk!` : '';
-    return {...state, gameState: {...gameState, playerShots, aiShots, phase: action.phase, announcement}};
-  },
-  GAME_NOT_FOUND: (state) => ({...state, gameState: null}),
 });
 
 export const connectionsReducer = (state: ConnectionsState, action: ConnectionsAction): ConnectionsState => ({
