@@ -2,7 +2,7 @@ import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction} from './connections';
 import {createDispatch} from '../lib/maybe';
 import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectPeerToSignaling} from './connectionSelectors';
-import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, loadBoard, loadGame, loadP2pGame} from './connectionActions';
+import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived} from './connectionActions';
 import type {PeerEvent} from './connectionHandler';
 import {encodeConnectionCode, decodeConnectionCode} from './connectionCode';
 import {createPeerHandler} from './connectionHandler';
@@ -88,9 +88,6 @@ const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState, p
         const signalingPeerId = selectPeerToSignaling(getState())[event.peerId];
         if (signalingPeerId) dispatch(previousPeerConnected(signalingPeerId));
       }
-      // Reconnect: load any saved game for this peer from the server
-      const signalingPeerId = selectPeerToSignaling(getState())[event.peerId];
-      if (signalingPeerId) dispatch(loadP2pGame(signalingPeerId));
       portEmit?.({type: 'PEER_CONNECTED', peerId: event.peerId, isOfferer: event.isOfferer});
     },
     PEER_NAMED: (event) => {
@@ -190,13 +187,11 @@ type SignalingListenerConfig = {
 }
 
 export const createSignalingListener = ({config, portEmit, onReady}: SignalingListenerConfig): ListenerFactory =>
-  ({dispatch, getState}) => {
+  ({dispatch}) => {
     let handle: SignalingHandle | null = null;
 
     const dispatchSignalingEvent = createDispatch<SignalingEvent>({
       REGISTERED: () => {
-        dispatch(loadBoard());
-        dispatch(loadGame());
         portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'REGISTERED'}});
       },
       PEERS: (event) => dispatch(onlinePeersUpdated(event.peers)),
@@ -253,17 +248,6 @@ export const createSignalingListener = ({config, portEmit, onReady}: SignalingLi
       STOP_SHARING_EMAIL: (action) => handle?.send({type: 'STOP_SHARING_EMAIL', targetPeerId: action.targetPeerId}),
       UPDATE_EMAIL: (action) => handle?.send({type: 'UPDATE_EMAIL', email: action.email}),
       SAVE_PEER_EMAIL: (action) => handle?.send({type: 'SAVE_PEER_EMAIL', targetPeerId: action.peerId, email: action.email}),
-      SAVE_BOARD: (action) => handle?.send({type: 'SAVE_BOARD', board: JSON.stringify(action.board)}),
-      LOAD_BOARD: () => handle?.send({type: 'LOAD_BOARD'}),
-      START_GAME: () => handle?.send({type: 'START_GAME'}),
-      FIRE_SHOT: (action) => handle?.send({type: 'FIRE', row: action.row, col: action.col}),
-      LOAD_GAME: () => handle?.send({type: 'LOAD_GAME'}),
-      SAVE_P2P_GAME: (action) => {
-        const game = action.gameState;
-        const signalingOpponentId = selectPeerToSignaling(getState())[game.opponentId] ?? game.opponentId;
-        handle?.send({type: 'SAVE_P2P_GAME', opponentId: signalingOpponentId, gameState: JSON.stringify({...game, opponentId: signalingOpponentId})});
-      },
-      LOAD_P2P_GAME: (action) => handle?.send({type: 'LOAD_P2P_GAME', opponentId: action.opponentId}),
     });
 
     return (action) => dispatchSignalingAction(action);

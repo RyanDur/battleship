@@ -1,6 +1,4 @@
 import type {OnlinePeer, PreviousPeer} from './connections';
-import type {P2pGame} from '../game/game';
-import type {Board} from '../game/board';
 
 export const createOffer = (passphrase: string) => ({type: 'CREATE_OFFER' as const, passphrase});
 export const offerSdpReady = (peerId: string, sdp: string) => ({type: 'OFFER_SDP_READY' as const, peerId, sdp});
@@ -71,13 +69,4 @@ export const savePeerEmail = (peerId: string, email: string) => ({type: 'SAVE_PE
 export const messageReceived = (peerId: string, text: string) => ({type: 'MESSAGE_RECEIVED' as const, peerId, text});
 export const sendMessage = (peerId: string, text: string) => ({type: 'SEND_MESSAGE' as const, peerId, text});
 
-export const saveBoard = (board: Board) => ({type: 'SAVE_BOARD' as const, board});
-export const loadBoard = () => ({type: 'LOAD_BOARD' as const});
-
-export const startGame = () => ({type: 'START_GAME' as const});
-export const fireShot = (row: number, col: number) => ({type: 'FIRE_SHOT' as const, row, col});
-export const loadGame = () => ({type: 'LOAD_GAME' as const});
-
-export const saveP2pGame = (gameState: P2pGame) => ({type: 'SAVE_P2P_GAME' as const, gameState});
-export const loadP2pGame = (opponentId: string) => ({type: 'LOAD_P2P_GAME' as const, opponentId});
 export const sendToPeer = (peerId: string, message: Record<string, unknown>) => ({type: 'SEND_TO_PEER' as const, peerId, message});

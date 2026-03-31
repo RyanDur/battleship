@@ -542,7 +542,7 @@ describe('P2P fire guards', () => {
 });
 
 describe('reconnect — load game on PEER_CONNECTED', () => {
-  it('dispatches loadP2pGame when any peer connects', async () => {
+  it('restores game state when peer reconnects and server provides saved game', async () => {
     const pair = makePair();
     const {alice, aliceGame} = await setupP2pGame(pair);
     const bobPeerId = selectPeers(alice.getState())[0].id;

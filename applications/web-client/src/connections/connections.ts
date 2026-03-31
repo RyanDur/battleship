@@ -1,5 +1,3 @@
-import type {Board} from '../game/board';
-import type {P2pGame} from '../game/game';
 import {createReducer} from '../lib/maybe';
 
 export type Peer = {id: string; name?: string; trusted?: boolean; trustsMe?: boolean}
@@ -100,13 +98,6 @@ export type ConnectionsAction =
   | {type: 'SAVE_PEER_EMAIL'; peerId: string; email: string}
   | {type: 'MESSAGE_RECEIVED'; peerId: string; text: string}
   | {type: 'SEND_MESSAGE'; peerId: string; text: string}
-  | {type: 'SAVE_BOARD'; board: Board}
-  | {type: 'LOAD_BOARD'}
-  | {type: 'START_GAME'}
-  | {type: 'FIRE_SHOT'; row: number; col: number}
-  | {type: 'LOAD_GAME'}
-  | {type: 'SAVE_P2P_GAME'; gameState: P2pGame}
-  | {type: 'LOAD_P2P_GAME'; opponentId: string}
   | {type: 'SEND_TO_PEER'; peerId: string; message: Record<string, unknown>}
 
 const handlerInitialState: HandlerState = {
