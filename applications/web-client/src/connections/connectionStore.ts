@@ -100,7 +100,10 @@ const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState, p
       dispatch(peerNamed(event.peerId, event.name));
       portEmit?.({type: 'PEER_NAMED', peerId: event.peerId, name: event.name});
     },
-    PEER_DISCONNECTED: (event) => dispatch(peerDisconnected(event.peerId)),
+    PEER_DISCONNECTED: (event) => {
+      dispatch(peerDisconnected(event.peerId));
+      portEmit?.({type: 'PEER_DISCONNECTED', peerId: event.peerId});
+    },
     PEER_TRUST_UPDATED: (event) => dispatch(peerTrustUpdated(event.peerId, event.trusts)),
     OFFER_CREATED: (event) => dispatch(offerSdpReady(event.peerId, event.sdp)),
     ANSWER_CREATED: (event) => dispatch(answerSdpReady(event.sdp)),
