@@ -57,7 +57,6 @@ const App = ({config}: Props) => {
 
   const {store, gameStore} = useMemo(() => {
     const signalingUrl = `${config.serviceUrl.replace(/^http/, 'ws')}/ws/signaling`;
-    let gs: ReturnType<typeof createGameStore> | null = null;
     const serverHandle: {send: ((message: unknown) => void) | null} = {send: null};
     const {port, emit: portEmit} = createConnectionPort({
       sendToPeer: (peerId, message) => connectionStore.dispatch(sendToPeer(peerId, message as Record<string, unknown>)),
@@ -74,13 +73,13 @@ const App = ({config}: Props) => {
         createSignalingListener({config: {createWebSocket: (url) => new WebSocket(url), sessionUrl: `${config.serviceUrl}/session`, url: signalingUrl, name: 'Player'}, portEmit, onReady: (handle) => { serverHandle.send = handle.send; }}),
       ],
     );
-    gs = createGameStore({
+    const gameStore = createGameStore({
       port,
       listenerFactories: [createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createServerBridgeListenerFactory],
       translatePeerId: (signalingId) => selectSignalingToPeer(connectionStore.getState())[signalingId],
       getPeerToSignaling: () => selectPeerToSignaling(connectionStore.getState()),
     });
-    return {store: connectionStore, gameStore: gs};
+    return {store: connectionStore, gameStore};
   }, [config]);
 
   useEffect(() => {
