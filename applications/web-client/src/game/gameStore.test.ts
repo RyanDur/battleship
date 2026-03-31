@@ -1,5 +1,5 @@
 import {vi} from 'vitest';
-import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory} from './gameStore';
+import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createServerBridgeListenerFactory} from './gameStore';
 import {
   challengePeer, challengeReceived, acceptChallenge, declineChallenge, cancelChallenge,
   p2pBoardReady, opponentBoardReady, turnOrderDecided,
@@ -792,3 +792,44 @@ describe('AI game listener', () => {
     vi.useRealTimers();
   });
 });
+
+describe('server bridge listener', () => {
+  const makeStoreWithPort = () => {
+    const sent: unknown[] = [];
+    const {port, emit} = createConnectionPort({sendToPeer: () => {}, sendToServer: (msg) => sent.push(msg)});
+    const store = createGameStore({port, listenerFactories: [createServerBridgeListenerFactory]});
+    return {store, sent, emit};
+  };
+
+  it('SAVE_BOARD sends board JSON to server', () => {
+    const {store, sent} = makeStoreWithPort();
+    const board: Board = {placed: []};
+    store.dispatch(saveBoard(board));
+    expect(sent).toContainEqual({type: 'SAVE_BOARD', board: JSON.stringify(board)});
+  });
+
+  it('START_GAME sends START_GAME to server', () => {
+    const {store, sent} = makeStoreWithPort();
+    store.dispatch({type: 'START_GAME'});
+    expect(sent).toContainEqual({type: 'START_GAME'});
+  });
+
+  it('FIRE_SHOT sends FIRE with row and col to server', () => {
+    const {store, sent} = makeStoreWithPort();
+    store.dispatch({type: 'FIRE_SHOT', row: 3, col: 5});
+    expect(sent).toContainEqual({type: 'FIRE', row: 3, col: 5});
+  });
+
+  it('LOAD_BOARD sends LOAD_BOARD to server', () => {
+    const {store, sent} = makeStoreWithPort();
+    store.dispatch({type: 'LOAD_BOARD'});
+    expect(sent).toContainEqual({type: 'LOAD_BOARD'});
+  });
+
+  it('LOAD_GAME sends LOAD_GAME to server', () => {
+    const {store, sent} = makeStoreWithPort();
+    store.dispatch({type: 'LOAD_GAME'});
+    expect(sent).toContainEqual({type: 'LOAD_GAME'});
+  });
+});
+

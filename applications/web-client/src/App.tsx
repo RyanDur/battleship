@@ -19,7 +19,7 @@ import {selectSignalingToPeer, selectPeerToSignaling} from './connections/connec
 import {clearP2pGame, saveBoard, startGame} from './game/gameActions';
 import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './game/gameSelectors';
 import {useGameState, useGameStore} from './game/useGame';
-import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createSignalingBridgeListenerFactory} from './game/gameStore';
+import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createServerBridgeListenerFactory} from './game/gameStore';
 import {GameProvider} from './game/GameProvider';
 import {createConnectionPort} from './connections/connectionPort';
 
@@ -77,7 +77,7 @@ const App = ({config}: Props) => {
     );
     gs = createGameStore({
       port,
-      listenerFactories: [createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createSignalingBridgeListenerFactory],
+      listenerFactories: [createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createServerBridgeListenerFactory],
       translatePeerId: (signalingId) => selectSignalingToPeer(connectionStore.getState())[signalingId],
       dispatchToConnection: (action) => connectionStore.dispatch(action),
       getPeerToSignaling: () => selectPeerToSignaling(connectionStore.getState()),
