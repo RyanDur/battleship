@@ -903,7 +903,7 @@ describe('game command listener PEER_CONNECTED via port', () => {
     });
     void store;
     emit({type: 'PEER_CONNECTED', peerId: 'peer-bob', isOfferer: false});
-    expect(sent.filter(m => typeof m === 'object' && m !== null && (m as {type?: unknown}).type === 'LOAD_P2P_GAME')).toHaveLength(0);
+    expect(sent).not.toContainEqual(expect.objectContaining({type: 'LOAD_P2P_GAME'}));
   });
 });
 
