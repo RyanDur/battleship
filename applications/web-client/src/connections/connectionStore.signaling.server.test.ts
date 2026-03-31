@@ -8,6 +8,7 @@ import {selectOnlinePeers, selectPreviousPeers} from './connectionSelectors';
 import {selectP2pGame} from '../game/gameSelectors';
 import {createGameStore} from '../game/gameStore';
 import {challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided} from '../game/gameActions';
+import {createConnectionPort} from './connectionPort';
 import type {P2pGame} from '../game/game';
 
 const connectStore = async (serverSetup: (conn: WsConnection) => void = () => undefined) => {
@@ -17,7 +18,7 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
     ws: {'/ws/signaling': conn => { wsConn = conn; serverSetup(conn); }},
   });
 
-  let gameStoreRef: ReturnType<typeof createGameStore> | null = null;
+  const {port, emit: portEmit} = createConnectionPort({sendToPeer: () => {}, sendToServer: () => {}});
 
   const store = createConnectionStore(undefined, [
     createSignalingListener({
@@ -27,11 +28,12 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
         url: `${server.url.replace('http://', 'ws://')}/ws/signaling`,
         name: 'Player',
       },
-      dispatchToGame: (action) => gameStoreRef?.dispatch(action),
+      portEmit,
     }),
   ]);
 
-  gameStoreRef = createGameStore({
+  const gameStore = createGameStore({
+    port,
     dispatchToConnection: (action) => store.dispatch(action),
   });
 
@@ -43,7 +45,7 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
     await server.close();
   };
 
-  return {store, gameStore: gameStoreRef, getConn: () => wsConn!, cleanup};
+  return {store, gameStore, getConn: () => wsConn!, cleanup};
 };
 
 describe('createSignalingMiddleware (server)', () => {
