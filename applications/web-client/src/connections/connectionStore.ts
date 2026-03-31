@@ -189,9 +189,10 @@ export const codecMiddleware: MiddlewareFactory =
 type SignalingListenerConfig = {
   config: SignalingConfig
   portEmit?: (event: ConnectionEvent) => void
+  onReady?: (handle: {send: (message: unknown) => void}) => void
 }
 
-export const createSignalingListener = ({config, portEmit}: SignalingListenerConfig): ListenerFactory =>
+export const createSignalingListener = ({config, portEmit, onReady}: SignalingListenerConfig): ListenerFactory =>
   ({dispatch, getState}) => {
     let handle: SignalingHandle | null = null;
 
@@ -238,7 +239,10 @@ export const createSignalingListener = ({config, portEmit}: SignalingListenerCon
     });
 
     const dispatchSignalingAction = createDispatch<ConnectionsAction>({
-      START_SIGNALING: () => { handle = startSignaling(config, dispatchSignalingEvent); },
+      START_SIGNALING: () => {
+        handle = startSignaling(config, dispatchSignalingEvent);
+        onReady?.({send: (msg) => handle?.send(msg as Record<string, unknown>)});
+      },
       STOP_SIGNALING: () => {
         handle?.stop();
         handle = null;

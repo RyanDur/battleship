@@ -58,9 +58,10 @@ const App = ({config}: Props) => {
   const {store, gameStore} = useMemo(() => {
     const signalingUrl = `${config.serviceUrl.replace(/^http/, 'ws')}/ws/signaling`;
     let gs: ReturnType<typeof createGameStore> | null = null;
+    const serverHandle: {send: ((message: unknown) => void) | null} = {send: null};
     const {port, emit: portEmit} = createConnectionPort({
       sendToPeer: (peerId, message) => connectionStore.dispatch(sendToPeer(peerId, message as Record<string, unknown>)),
-      sendToServer: () => {},
+      sendToServer: (message) => serverHandle.send?.(message),
     });
     const connectionStore = createConnectionStore(
       applyMiddleware([encodingMiddleware, codecMiddleware]),
@@ -71,7 +72,7 @@ const App = ({config}: Props) => {
           portEmit,
           dispatchToGame: (action) => gs?.dispatch(action),
         }),
-        createSignalingListener({config: {createWebSocket: (url) => new WebSocket(url), sessionUrl: `${config.serviceUrl}/session`, url: signalingUrl, name: 'Player'}, portEmit}),
+        createSignalingListener({config: {createWebSocket: (url) => new WebSocket(url), sessionUrl: `${config.serviceUrl}/session`, url: signalingUrl, name: 'Player'}, portEmit, onReady: (handle) => { serverHandle.send = handle.send; }}),
       ],
     );
     gs = createGameStore({
