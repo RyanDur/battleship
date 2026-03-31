@@ -17,7 +17,7 @@ import {
 } from './gameSelectors';
 import type {Shot, AiGameState, P2pGame} from './game';
 import type {Board} from './board';
-import {createConnectionPort} from '../connections/connectionPort';
+import {createConnectionPort} from '../transport/connectionPort';
 
 const makeStore = () => createGameStore();
 

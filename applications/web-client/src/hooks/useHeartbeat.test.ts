@@ -1,6 +1,6 @@
 import {renderHook, act} from '@testing-library/react';
 import {useHeartbeat} from './useHeartbeat';
-import type {HeartbeatConfig, HeartbeatState} from '../connections/heartbeat';
+import type {HeartbeatConfig, HeartbeatState} from '../transport/heartbeat';
 
 type FakeStart = (config: HeartbeatConfig, onStateChange: (s: HeartbeatState) => void) => {retry: () => void; stop: () => void}
 

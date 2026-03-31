@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {startHeartbeat as defaultStartHeartbeat} from '../connections/heartbeat';
-import type {HeartbeatState} from '../connections/heartbeat';
+import {startHeartbeat as defaultStartHeartbeat} from '../transport/heartbeat';
+import type {HeartbeatState} from '../transport/heartbeat';
 import type {Config} from '../connections/config';
 
 type StartHeartbeat = typeof defaultStartHeartbeat

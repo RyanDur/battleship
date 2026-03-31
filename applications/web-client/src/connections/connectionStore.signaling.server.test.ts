@@ -8,7 +8,7 @@ import {selectOnlinePeers, selectPreviousPeers} from './connectionSelectors';
 import {selectP2pGame} from '../game/gameSelectors';
 import {createGameStore} from '../game/gameStore';
 import {challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided} from '../game/gameActions';
-import {createConnectionPort} from './connectionPort';
+import {createConnectionPort} from '../transport/connectionPort';
 
 const connectStore = async (serverSetup: (conn: WsConnection) => void = () => undefined) => {
   let wsConn: WsConnection | undefined;

@@ -9,7 +9,7 @@ import {GameLobby} from './game/GameLobby';
 import {ServiceHealth} from './connections/ServiceHealth';
 import type {Config} from './connections/config';
 import {fetchDownloadUrl} from './connections/download';
-import type {HeartbeatState} from './connections/heartbeat';
+import type {HeartbeatState} from './transport/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
 import {detectPlatform} from './connections/platform';
 import {createConnectionStore, createHandlerListener, createSignalingListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connections/connectionStore';
@@ -21,7 +21,7 @@ import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './
 import {useGameState, useGameStore} from './game/useGame';
 import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createServerBridgeListenerFactory} from './game/gameStore';
 import {GameProvider} from './game/GameProvider';
-import {createConnectionPort} from './connections/connectionPort';
+import {createConnectionPort} from './transport/connectionPort';
 
 const platform = detectPlatform(navigator.userAgent);
 

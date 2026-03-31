@@ -1,9 +1,9 @@
 // @vitest-environment node
-import {startSignaling} from './signaling';
+import {startSignaling} from '../transport/signaling';
 import {createStubServer} from '../test/stubServer';
 import {makeWebSocket} from '../test/makeWebSocket';
 import type {WsConnection} from '../test/stubServer';
-import type {SignalingEvent} from './signaling';
+import type {SignalingEvent} from '../transport/signaling';
 
 const connect = async (serverSetup: (conn: WsConnection) => void = () => undefined) => {
   let wsConn: WsConnection | undefined;

@@ -42,7 +42,7 @@ export type PeerEvent =
   | { type: 'MESSAGE_RECEIVED'; peerId: string; text: string }
 import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer} from './connectionSelectors';
 import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed} from './connectionActions';
-import type {ConnectionEvent} from './connectionPort';
+import type {ConnectionEvent} from '../transport/connectionPort';
 
 const introduceDecoder = Decoder.object({
   required: { type: Decoder.literal('INTRODUCE'), name: Decoder.string },

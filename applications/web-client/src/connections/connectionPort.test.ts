@@ -1,5 +1,5 @@
-import {createConnectionPort} from './connectionPort';
-import type {ConnectionEvent} from './connectionPort';
+import {createConnectionPort} from '../transport/connectionPort';
+import type {ConnectionEvent} from '../transport/connectionPort';
 
 describe('connectionPort', () => {
   const makeDeps = () => ({

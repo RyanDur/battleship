@@ -1,4 +1,4 @@
-import type {HeartbeatState} from './heartbeat';
+import type {HeartbeatState} from '../transport/heartbeat';
 
 interface ServiceHealthProps {
   state: HeartbeatState

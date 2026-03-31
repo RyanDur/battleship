@@ -1,5 +1,5 @@
 import {createReducer} from '../lib/maybe';
-import type {OnlinePeer, PreviousPeer} from './signaling';
+import type {OnlinePeer, PreviousPeer} from '../transport/signaling';
 
 export type {OnlinePeer, PreviousPeer};
 

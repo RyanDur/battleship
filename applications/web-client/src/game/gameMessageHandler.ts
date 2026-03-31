@@ -1,7 +1,7 @@
 import * as Decoder from 'schemawax';
 import {maybe} from '../lib/maybe';
 import {tryCatch} from '../lib/result';
-import type {ConnectionEvent} from '../connections/connectionPort';
+import type {ConnectionEvent} from '../transport/connectionPort';
 import type {GameAction, Shot, P2pGamePhase, P2pGame} from './game';
 import type {Board} from './board';
 import {occupiedCells, isCellOccupied} from './board';

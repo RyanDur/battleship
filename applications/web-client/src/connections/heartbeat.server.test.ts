@@ -1,6 +1,6 @@
 // @vitest-environment node
-import {startHeartbeat} from './heartbeat';
-import type {HeartbeatState} from './heartbeat';
+import {startHeartbeat} from '../transport/heartbeat';
+import type {HeartbeatState} from '../transport/heartbeat';
 import {createStubServer} from '../test/stubServer';
 import {makeWebSocket} from '../test/makeWebSocket';
 import type {WsConnection} from '../test/stubServer';

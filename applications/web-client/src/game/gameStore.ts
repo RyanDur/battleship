@@ -1,6 +1,6 @@
 import {gameReducer, initialGameState} from './game';
 import type {GameState, GameAction, P2pGame} from './game';
-import type {ConnectionPort} from '../connections/connectionPort';
+import type {ConnectionPort} from '../transport/connectionPort';
 import {createGameMessageHandler} from './gameMessageHandler';
 import {selectBoard, selectAiGameState, selectP2pGame, selectOffererPeerIds} from './gameSelectors';
 import {gameStarted, fireResult, boardNotFound, turnOrderDecided, peerDisconnected} from './gameActions';

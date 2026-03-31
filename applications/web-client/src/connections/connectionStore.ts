@@ -4,11 +4,11 @@ import {createDispatch} from '../lib/maybe';
 import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectPeerToSignaling} from './connectionSelectors';
 import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived} from './connectionActions';
 import type {PeerEvent} from './connectionHandler';
-import {encodeConnectionCode, decodeConnectionCode} from './connectionCode';
+import {encodeConnectionCode, decodeConnectionCode} from '../transport/connectionCode';
 import {createPeerHandler} from './connectionHandler';
-import {startSignaling} from './signaling';
-import type {ConnectionEvent} from './connectionPort';
-import type {SignalingConfig, SignalingEvent, SignalingHandle} from './signaling';
+import {startSignaling} from '../transport/signaling';
+import type {ConnectionEvent} from '../transport/connectionPort';
+import type {SignalingConfig, SignalingEvent, SignalingHandle} from '../transport/signaling';
 
 export type ListenerContext = {
   prevState: ConnectionsState
