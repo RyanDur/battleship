@@ -1,5 +1,5 @@
 import {vi} from 'vitest';
-import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createServerBridgeListenerFactory} from './gameStore';
+import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createServerBridgeListenerFactory, createSaveOnShotListenerFactory, createGameCommandListenerFactory} from './gameStore';
 import {
   challengePeer, challengeReceived, acceptChallenge, declineChallenge, cancelChallenge,
   p2pBoardReady, opponentBoardReady, turnOrderDecided,
@@ -830,6 +830,80 @@ describe('server bridge listener', () => {
     const {store, sent} = makeStoreWithPort();
     store.dispatch({type: 'LOAD_GAME'});
     expect(sent).toContainEqual({type: 'LOAD_GAME'});
+  });
+});
+
+describe('save-on-shot listener via port', () => {
+  const makeTurnStore = () => {
+    const sent: unknown[] = [];
+    const {port, emit} = createConnectionPort({sendToPeer: () => {}, sendToServer: (msg) => sent.push(msg)});
+    const store = createGameStore({
+      port,
+      listenerFactories: [createSaveOnShotListenerFactory],
+      getPeerToSignaling: () => ({'peer-bob': 'sig-bob'}),
+    });
+    store.dispatch(challengePeer('peer-bob'));
+    store.dispatch(acceptChallenge());
+    store.dispatch(p2pBoardReady('abc'));
+    store.dispatch(opponentBoardReady('def'));
+    store.dispatch(turnOrderDecided(true));
+    return {store, sent, emit};
+  };
+
+  it('P2P_FIRE_RESULT sends SAVE_P2P_GAME to server', () => {
+    const {store, sent} = makeTurnStore();
+    const shot: Shot = {cell: {row: 1, col: 1}, result: 'miss'};
+    store.dispatch(p2pFireResult(shot));
+    expect(sent).toContainEqual(expect.objectContaining({type: 'SAVE_P2P_GAME'}));
+  });
+
+  it('SAVE_P2P_GAME message includes signalingOpponentId from getPeerToSignaling', () => {
+    const {store, sent} = makeTurnStore();
+    const shot: Shot = {cell: {row: 1, col: 1}, result: 'miss'};
+    store.dispatch(p2pFireResult(shot));
+    expect(sent).toContainEqual(expect.objectContaining({type: 'SAVE_P2P_GAME', opponentId: 'sig-bob'}));
+  });
+
+  it('OPPONENT_FIRED sends SAVE_P2P_GAME to server', () => {
+    const {store, sent} = makeTurnStore();
+    store.dispatch(turnOrderDecided(false));
+    const shot: Shot = {cell: {row: 2, col: 3}, result: 'hit'};
+    store.dispatch(opponentFired(shot));
+    expect(sent).toContainEqual(expect.objectContaining({type: 'SAVE_P2P_GAME'}));
+  });
+
+  it('TURN_ORDER_DECIDED sends SAVE_P2P_GAME to server', () => {
+    const {store, sent} = makeTurnStore();
+    store.dispatch(turnOrderDecided(false));
+    expect(sent).toContainEqual(expect.objectContaining({type: 'SAVE_P2P_GAME'}));
+  });
+});
+
+describe('game command listener PEER_CONNECTED via port', () => {
+  it('PEER_CONNECTED sends LOAD_P2P_GAME to server via port', () => {
+    const sent: unknown[] = [];
+    const {port, emit} = createConnectionPort({sendToPeer: () => {}, sendToServer: (msg) => sent.push(msg)});
+    const store = createGameStore({
+      port,
+      listenerFactories: [createGameCommandListenerFactory],
+      getPeerToSignaling: () => ({'peer-bob': 'sig-bob'}),
+    });
+    void store;
+    emit({type: 'PEER_CONNECTED', peerId: 'peer-bob', isOfferer: false});
+    expect(sent).toContainEqual({type: 'LOAD_P2P_GAME', opponentId: 'sig-bob'});
+  });
+
+  it('PEER_CONNECTED does not send when no signaling mapping exists', () => {
+    const sent: unknown[] = [];
+    const {port, emit} = createConnectionPort({sendToPeer: () => {}, sendToServer: (msg) => sent.push(msg)});
+    const store = createGameStore({
+      port,
+      listenerFactories: [createGameCommandListenerFactory],
+      getPeerToSignaling: () => ({}),
+    });
+    void store;
+    emit({type: 'PEER_CONNECTED', peerId: 'peer-bob', isOfferer: false});
+    expect(sent.filter(m => typeof m === 'object' && m !== null && (m as {type?: unknown}).type === 'LOAD_P2P_GAME')).toHaveLength(0);
   });
 });
 

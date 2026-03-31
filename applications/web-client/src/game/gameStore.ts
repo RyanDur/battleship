@@ -5,7 +5,6 @@ import type {ConnectionsAction} from '../connections/connections';
 import {createGameMessageHandler} from './gameMessageHandler';
 import {selectBoard, selectAiGameState, selectP2pGame, selectOffererPeerIds} from './gameSelectors';
 import {gameStarted, fireResult, boardNotFound, turnOrderDecided} from './gameActions';
-import {saveP2pGame, loadP2pGame} from '../connections/connectionActions';
 import {randomBoard, resolveFireShot} from './aiGame';
 import {maybe, createDispatch} from '../lib/maybe';
 import {createCoinFlipProtocol} from './coinFlipProtocol';
@@ -83,7 +82,7 @@ export const createServerBridgeListenerFactory: GameListenerFactory = ({port}) =
   return (action) => handlers(action);
 };
 
-export const createSaveOnShotListenerFactory: GameListenerFactory = ({getState, dispatchToConnection}) =>
+export const createSaveOnShotListenerFactory: GameListenerFactory = ({getState, port, getPeerToSignaling}) =>
   (action) => {
     if (
       action.type !== 'P2P_FIRE_RESULT' &&
@@ -92,7 +91,9 @@ export const createSaveOnShotListenerFactory: GameListenerFactory = ({getState, 
       action.type !== 'TURN_ORDER_DECIDED'
     ) return;
     const game = selectP2pGame(getState());
-    if (game && dispatchToConnection) dispatchToConnection(saveP2pGame(game));
+    if (!game) return;
+    const signalingOpponentId = getPeerToSignaling?.()[game.opponentId] ?? game.opponentId;
+    port?.sendToServer({type: 'SAVE_P2P_GAME', opponentId: signalingOpponentId, gameState: JSON.stringify({...game, opponentId: signalingOpponentId})});
   };
 
 export const createReconnectListenerFactory: GameListenerFactory = ({port}) =>
@@ -111,11 +112,11 @@ type GameCommandHandlers = {
 }
 type AnyGameCommandHandler = (action: GameAction, prevGame: P2pGame | null) => void
 
-export const createGameCommandListenerFactory: GameListenerFactory = ({dispatch, port, dispatchToConnection, getPeerToSignaling, coinFlip}) => {
+export const createGameCommandListenerFactory: GameListenerFactory = ({dispatch, port, getPeerToSignaling, coinFlip}) => {
   const sendToPeer = (peerId: string, msg: unknown) => maybe(port?.sendToPeer).map(send => send(peerId, msg));
   const loadSavedGame = (peerId: string) => {
     const signalingId = getPeerToSignaling?.()[peerId];
-    if (dispatchToConnection && signalingId) dispatchToConnection(loadP2pGame(signalingId));
+    if (port && signalingId) port.sendToServer({type: 'LOAD_P2P_GAME', opponentId: signalingId});
   };
 
   const handlers: GameCommandHandlers = {
@@ -159,6 +160,10 @@ export const createGameCommandListenerFactory: GameListenerFactory = ({dispatch,
       sendToPeer(prevGame.opponentId, {type: 'FIRE', row: action.row, col: action.col});
     },
   };
+
+  port?.subscribe((event) => {
+    if (event.type === 'PEER_CONNECTED') loadSavedGame(event.peerId);
+  });
 
   return (action, {prevState}) => {
     const prevGame = selectP2pGame(prevState);
