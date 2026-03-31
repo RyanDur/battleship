@@ -4,7 +4,7 @@ import type {ConnectionPort} from '../connections/connectionPort';
 import type {ConnectionsAction} from '../connections/connections';
 import {createGameMessageHandler} from './gameMessageHandler';
 import {selectBoard, selectAiGameState, selectP2pGame, selectOffererPeerIds} from './gameSelectors';
-import {gameStarted, fireResult, boardNotFound, turnOrderDecided} from './gameActions';
+import {gameStarted, fireResult, boardNotFound, turnOrderDecided, peerDisconnected} from './gameActions';
 import {randomBoard, resolveFireShot} from './aiGame';
 import {maybe, createDispatch} from '../lib/maybe';
 import {createCoinFlipProtocol} from './coinFlipProtocol';
@@ -217,6 +217,7 @@ export const createGameStore = (config?: GameStoreConfig): GameStore => {
     });
     config.port.subscribe((event) => {
       if (event.type === 'PEER_MESSAGE') coinFlip!.handleMessage(event.peerId, event.data);
+      if (event.type === 'PEER_DISCONNECTED') store.dispatch(peerDisconnected(event.peerId));
     });
 
     const gameMessageHandler = createGameMessageHandler({

@@ -41,11 +41,11 @@ const makePair = () => {
 
   stores.alice = createConnectionStore(
     applyMiddleware([makeRelayMiddleware('Alice', 'alice-sig', () => stores.bob!)]),
-    [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection, portEmit: alicePortHandle.emit, dispatchToGame: (a) => gameStores.alice!.dispatch(a)})],
+    [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection, portEmit: alicePortHandle.emit})],
   );
   stores.bob = createConnectionStore(
     applyMiddleware([makeRelayMiddleware('Bob', 'bob-sig', () => stores.alice!)]),
-    [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection, portEmit: bobPortHandle.emit, dispatchToGame: (a) => gameStores.bob!.dispatch(a)})],
+    [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection, portEmit: bobPortHandle.emit})],
   );
 
   const connect = async () => {

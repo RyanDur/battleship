@@ -70,7 +70,6 @@ const App = ({config}: Props) => {
           name: 'Player',
           createPeerConnection: () => new RTCPeerConnection({iceServers: [{urls: 'stun:stun.l.google.com:19302'}]}),
           portEmit,
-          dispatchToGame: (action) => gs?.dispatch(action),
         }),
         createSignalingListener({config: {createWebSocket: (url) => new WebSocket(url), sessionUrl: `${config.serviceUrl}/session`, url: signalingUrl, name: 'Player'}, portEmit, onReady: (handle) => { serverHandle.send = handle.send; }}),
       ],

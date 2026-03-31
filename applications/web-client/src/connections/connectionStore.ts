@@ -2,8 +2,6 @@ import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction} from './connections';
 import {createDispatch} from '../lib/maybe';
 import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectPeerToSignaling} from './connectionSelectors';
-import type {GameAction} from '../game/game';
-import {peerDisconnected as gamePeerDisconnected} from '../game/gameActions';
 import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, loadBoard, loadGame, loadP2pGame} from './connectionActions';
 import type {PeerEvent} from './connectionHandler';
 import {encodeConnectionCode, decodeConnectionCode} from './connectionCode';
@@ -80,7 +78,6 @@ type HandlerListenerConfig = {
   name: string
   createPeerConnection: () => RTCPeerConnection
   portEmit?: (event: ConnectionEvent) => void
-  dispatchToGame?: (action: GameAction) => void
 }
 
 const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState, portEmit?: (event: ConnectionEvent) => void) => {
@@ -122,7 +119,7 @@ const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState, p
   return (event: PeerEvent) => dispatchPeerEvent(event);
 };
 
-export const createHandlerListener = ({name, createPeerConnection, portEmit, dispatchToGame}: HandlerListenerConfig): ListenerFactory =>
+export const createHandlerListener = ({name, createPeerConnection, portEmit}: HandlerListenerConfig): ListenerFactory =>
   ({dispatch, getState}) => {
     const emit = makeHandlerEmit(dispatch, getState, portEmit);
     const handler = createPeerHandler({name, createPeerConnection, emit, emitToPort: portEmit ?? (() => {}), dispatch, getState});
@@ -148,7 +145,7 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit, dis
         SEND_TO_PEER: (action) => handler.handleCommand({type: 'SEND_TO_PEER', peerId: action.peerId, message: action.message}),
         PEER_DISCONNECTED: (action) => {
           handler.cleanup(action.peerId);
-          dispatchToGame?.(gamePeerDisconnected(action.peerId));
+          portEmit?.({type: 'PEER_DISCONNECTED', peerId: action.peerId});
         },
       });
 
