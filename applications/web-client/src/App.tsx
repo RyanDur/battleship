@@ -78,7 +78,6 @@ const App = ({config}: Props) => {
       port,
       listenerFactories: [createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createServerBridgeListenerFactory],
       translatePeerId: (signalingId) => selectSignalingToPeer(connectionStore.getState())[signalingId],
-      dispatchToConnection: (action) => connectionStore.dispatch(action),
       getPeerToSignaling: () => selectPeerToSignaling(connectionStore.getState()),
     });
     return {store: connectionStore, gameStore: gs};

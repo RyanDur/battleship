@@ -36,8 +36,8 @@ const makePair = () => {
     sendToServer: () => {},
   });
 
-  gameStores.alice = createGameStore({port: alicePortHandle.port, listenerFactories: [createReconnectListenerFactory, createGameCommandListenerFactory], dispatchToConnection: (a) => stores.alice!.dispatch(a)});
-  gameStores.bob = createGameStore({port: bobPortHandle.port, listenerFactories: [createReconnectListenerFactory, createGameCommandListenerFactory], dispatchToConnection: (a) => stores.bob!.dispatch(a)});
+  gameStores.alice = createGameStore({port: alicePortHandle.port, listenerFactories: [createReconnectListenerFactory, createGameCommandListenerFactory]});
+  gameStores.bob = createGameStore({port: bobPortHandle.port, listenerFactories: [createReconnectListenerFactory, createGameCommandListenerFactory]});
 
   stores.alice = createConnectionStore(
     applyMiddleware([makeRelayMiddleware('Alice', 'alice-sig', () => stores.bob!)]),

@@ -32,10 +32,7 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
     }),
   ]);
 
-  const gameStore = createGameStore({
-    port,
-    dispatchToConnection: (action) => store.dispatch(action),
-  });
+  const gameStore = createGameStore({port});
 
   store.dispatch(startSignaling());
   await vi.waitFor(() => expect(wsConn).toBeDefined());
