@@ -1,13 +1,10 @@
-import * as Decoder from 'schemawax';
 import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction} from './connections';
-import type {P2pGame} from '../game/game';
-import {tryCatch} from '../lib/result';
 import {createDispatch} from '../lib/maybe';
-import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectPeerToSignaling, selectSignalingToPeer} from './connectionSelectors';
+import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectPeerToSignaling} from './connectionSelectors';
 import type {GameAction} from '../game/game';
-import {peerDisconnected as gamePeerDisconnected, p2pGameLoaded as gameP2pGameLoaded} from '../game/gameActions';
-import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, boardSaved, boardLoaded, boardNotFound, gameStarted, fireResult, gameStateReceived, gameNotFound, loadBoard, loadGame, loadP2pGame} from './connectionActions';
+import {peerDisconnected as gamePeerDisconnected} from '../game/gameActions';
+import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived, loadBoard, loadGame, loadP2pGame} from './connectionActions';
 import type {PeerEvent} from './connectionHandler';
 import {encodeConnectionCode, decodeConnectionCode} from './connectionCode';
 import {createPeerHandler} from './connectionHandler';
@@ -186,46 +183,12 @@ export const codecMiddleware: MiddlewareFactory =
       next(action);
     };
 
-const p2pCellDecoder = Decoder.object({required: {row: Decoder.number, col: Decoder.number}});
-const p2pShipDecoder = Decoder.object({required: {name: Decoder.string, size: Decoder.number}});
-const shotResultDecoder = Decoder.oneOf(Decoder.literal('hit'), Decoder.literal('miss'), Decoder.literal('sunk'));
-const p2pShotDecoder = Decoder.object({
-  required: {cell: p2pCellDecoder, result: shotResultDecoder},
-  optional: {ship: p2pShipDecoder},
-});
-const p2pPhaseDecoder = Decoder.oneOf(
-  Decoder.literal('challenged'),
-  Decoder.literal('challenge-received'),
-  Decoder.literal('placing'),
-  Decoder.literal('selecting-turn'),
-  Decoder.literal('my-turn'),
-  Decoder.literal('their-turn'),
-  Decoder.literal('game-over'),
-  Decoder.literal('disconnected'),
-  Decoder.literal('state-mismatch'),
-);
-const p2pGameStateDecoder = Decoder.object({
-  required: {
-    opponentId: Decoder.string,
-    phase: p2pPhaseDecoder,
-    myBoardHash: Decoder.string,
-    myShots: Decoder.array(p2pShotDecoder),
-    opponentShots: Decoder.array(p2pShotDecoder),
-    myBoardReady: Decoder.boolean,
-    opponentBoardReady: Decoder.boolean,
-  },
-  optional: {
-    opponentBoardHash: Decoder.string,
-  },
-});
-
 type SignalingListenerConfig = {
   config: SignalingConfig
   portEmit?: (event: ConnectionEvent) => void
-  dispatchToGame?: (action: GameAction) => void
 }
 
-export const createSignalingListener = ({config, portEmit, dispatchToGame}: SignalingListenerConfig): ListenerFactory =>
+export const createSignalingListener = ({config, portEmit}: SignalingListenerConfig): ListenerFactory =>
   ({dispatch, getState}) => {
     let handle: SignalingHandle | null = null;
 
@@ -246,57 +209,28 @@ export const createSignalingListener = ({config, portEmit, dispatchToGame}: Sign
       EMAIL_SHARED: (event) => dispatch(emailSharedReceived(event.fromPeerId, event.email)),
       EMAIL_REVOKED: (event) => dispatch(emailRevokedReceived(event.fromPeerId)),
       BOARD_SAVED: () => {
-        dispatch(boardSaved());
         portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'BOARD_SAVED'}});
       },
       BOARD_LOADED: (event) => {
-        dispatch(boardLoaded(event.board));
         portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'BOARD_LOADED', board: event.board}});
       },
       BOARD_NOT_FOUND: () => {
-        dispatch(boardNotFound());
         portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'BOARD_NOT_FOUND'}});
       },
       GAME_STARTED: (event) => {
-        dispatch(gameStarted(event.gameState));
         portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'GAME_STARTED', gameState: event.gameState}});
       },
       FIRE_RESULT: (event) => {
-        dispatch(fireResult(event.playerShot, event.aiShot, event.phase));
         portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'FIRE_RESULT', playerShot: event.playerShot, aiShot: event.aiShot, phase: event.phase}});
       },
       GAME_STATE: (event) => {
-        dispatch(gameStateReceived(event.gameState));
         portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'GAME_STATE', gameState: event.gameState}});
       },
       GAME_NOT_FOUND: () => {
-        dispatch(gameNotFound());
         portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'GAME_NOT_FOUND'}});
       },
       P2P_GAME_LOADED: (event) => {
         portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'P2P_GAME_LOADED', gameState: event.gameState}});
-        tryCatch(() => JSON.parse(event.gameState), () => null)
-          .onSuccess(gs => {
-            const decoded = p2pGameStateDecoder.decode(gs);
-            if (decoded) {
-              const localOpponentId = selectSignalingToPeer(getState())[decoded.opponentId];
-              const game: P2pGame = {
-                opponentId: localOpponentId ?? decoded.opponentId,
-                phase: decoded.phase,
-                myBoardHash: decoded.myBoardHash,
-                opponentBoardHash: decoded.opponentBoardHash ?? null,
-                myShots: decoded.myShots,
-                opponentShots: decoded.opponentShots,
-                myBoardReady: decoded.myBoardReady,
-                opponentBoardReady: decoded.opponentBoardReady,
-                winner: null,
-                opponentBoard: null,
-                boardVerified: null,
-                announcement: '',
-              };
-              dispatchToGame?.(gameP2pGameLoaded(game));
-            }
-          });
       },
     });
 
