@@ -1,37 +1,37 @@
 import {render, screen, act} from '@testing-library/react';
-import {ConnectionProvider} from './ConnectionProvider';
-import {useConnectionState, useConnectionStore} from './useConnection';
-import {createConnectionStore} from './connectionStore';
-import type {CombinedState} from './connectionStore';
+import {StoreProvider} from './StoreProvider';
+import {useSelector, useDispatch} from './useStore';
+import {createAppStore} from './store';
+import type {CombinedState} from './store';
 import {createOffer} from '../transport/transportActions';
 import {peerConnected, peerNamed} from './connectionActions';
 import {selectFlow} from '../transport/transportSelectors';
 import {selectPeers} from './connectionSelectors';
 
 const TestComponent = ({selector}: {selector: (s: CombinedState) => unknown}) => {
-  const value = useConnectionState(selector);
+  const value = useSelector(selector);
   return <div data-testid="value">{JSON.stringify(value)}</div>;
 };
 
-describe('ConnectionContext', () => {
-  describe('useConnectionState', () => {
+describe('StoreContext', () => {
+  describe('useSelector', () => {
     it('returns initial selected state', () => {
-      const store = createConnectionStore();
+      const store = createAppStore();
       render(
-        <ConnectionProvider store={store}>
+        <StoreProvider store={store}>
           <TestComponent selector={s => selectFlow(s).phase}/>
-        </ConnectionProvider>
+        </StoreProvider>
       );
 
       expect(screen.getByTestId('value').textContent).toBe('"idle"');
     });
 
     it('updates when store changes', async () => {
-      const store = createConnectionStore();
+      const store = createAppStore();
       render(
-        <ConnectionProvider store={store}>
+        <StoreProvider store={store}>
           <TestComponent selector={s => selectPeers(s).length}/>
-        </ConnectionProvider>
+        </StoreProvider>
       );
 
       expect(screen.getByTestId('value').textContent).toBe('0');
@@ -45,13 +45,13 @@ describe('ConnectionContext', () => {
     });
 
     it('unsubscribes on unmount', () => {
-      const store = createConnectionStore();
+      const store = createAppStore();
       const subscribeSpy = vi.spyOn(store, 'subscribe');
 
       const {unmount} = render(
-        <ConnectionProvider store={store}>
+        <StoreProvider store={store}>
           <TestComponent selector={s => selectFlow(s).phase}/>
-        </ConnectionProvider>
+        </StoreProvider>
       );
 
       unmount();
@@ -60,19 +60,19 @@ describe('ConnectionContext', () => {
     });
   });
 
-  describe('useConnectionStore', () => {
+  describe('useDispatch', () => {
     it('exposes dispatch method', () => {
-      const store = createConnectionStore();
+      const store = createAppStore();
 
       const Button = () => {
-        const s = useConnectionStore();
-        return <button onClick={() => s.dispatch(createOffer('pass'))}>go</button>;
+        const dispatch = useDispatch();
+        return <button onClick={() => dispatch(createOffer('pass'))}>go</button>;
       };
 
       render(
-        <ConnectionProvider store={store}>
+        <StoreProvider store={store}>
           <Button/>
-        </ConnectionProvider>
+        </StoreProvider>
       );
 
       screen.getByRole('button').click();

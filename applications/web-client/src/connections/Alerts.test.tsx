@@ -1,15 +1,15 @@
 import {render, screen, act, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Alerts} from './Alerts';
-import {ConnectionProvider} from './ConnectionProvider';
-import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
+import {StoreProvider} from './StoreProvider';
+import {createAppStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './store';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import {introductionReceived} from './connectionActions';
 import {selectPendingIntroductions} from './connectionSelectors';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();
-  const store = createConnectionStore(
+  const store = createAppStore(
     applyMiddleware([encodingMiddleware, codecMiddleware]),
     [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
   );
@@ -19,9 +19,9 @@ const makeStore = () => {
 const setup = () => {
   const {store} = makeStore();
   render(
-    <ConnectionProvider store={store}>
+    <StoreProvider store={store}>
       <Alerts/>
-    </ConnectionProvider>
+    </StoreProvider>
   );
   return {store};
 };

@@ -5,22 +5,22 @@ import {GameProvider} from './GameProvider';
 import {createGameStore} from './gameStore';
 import type {GameAction} from './game';
 import {challengeReceived, peerNamed} from './gameActions';
-import {ConnectionProvider} from '../connections/ConnectionProvider';
-import {createConnectionStore} from '../connections/connectionStore';
+import {StoreProvider} from '../connections/StoreProvider';
+import {createAppStore} from '../connections/store';
 
 const setup = () => {
   const gameStore = createGameStore();
-  const connectionStore = createConnectionStore();
+  const appStore = createAppStore();
   const dispatched: GameAction[] = [];
   gameStore.addListener((action) => { dispatched.push(action); });
   render(
-    <ConnectionProvider store={connectionStore}>
+    <StoreProvider store={appStore}>
       <GameProvider store={gameStore}>
         <ChallengeAlert/>
       </GameProvider>
-    </ConnectionProvider>,
+    </StoreProvider>,
   );
-  return {gameStore, connectionStore, dispatched};
+  return {gameStore, appStore, dispatched};
 };
 
 describe('ChallengeAlert', () => {

@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {useConnectionState, useConnectionStore} from './useConnection';
+import {useSelector, useDispatch} from './useStore';
 import type {TransportFlow} from '../transport/transport';
 import {selectFlow} from '../transport/transportSelectors';
 import {acceptAnswerCode, cancelOffer, createOffer, joinOffer} from '../transport/transportActions';
@@ -26,8 +26,8 @@ type Props = {
 }
 
 export const DirectConnect = ({serviceOnline}: Props) => {
-  const store = useConnectionStore();
-  const flow = toFlowPhase(useConnectionState(selectFlow));
+  const dispatch = useDispatch();
+  const flow = toFlowPhase(useSelector(selectFlow));
 
   const [formMode, setFormMode] = useState<'none' | 'create' | 'join'>('none');
   const [prevPhase, setPrevPhase] = useState(flow.phase);
@@ -55,7 +55,7 @@ export const DirectConnect = ({serviceOnline}: Props) => {
         <button className="control" type="button" onClick={() => copyToClipboard(flow.code)}>
           {copied ? 'Copied!' : 'Copy'}
         </button>
-        <form onSubmit={e => { e.preventDefault(); store.dispatch(acceptAnswerCode(responseCode)); }}>
+        <form onSubmit={e => { e.preventDefault(); dispatch(acceptAnswerCode(responseCode)); }}>
           <label htmlFor="response-code">Response code</label>
           <input
             className="field"
@@ -85,7 +85,7 @@ export const DirectConnect = ({serviceOnline}: Props) => {
     return (
       <section className="direct-connect">
         <p className="direct-connect-label">Failed to generate a code. Please try again.</p>
-        <button className="control" onClick={() => store.dispatch(cancelOffer())}>Cancel</button>
+        <button className="control" onClick={() => dispatch(cancelOffer())}>Cancel</button>
       </section>
     );
   }
@@ -101,7 +101,7 @@ export const DirectConnect = ({serviceOnline}: Props) => {
   if (formMode === 'create') {
     return (
       <section className="direct-connect">
-        <form onSubmit={e => { e.preventDefault(); store.dispatch(createOffer(passphrase)); }}>
+        <form onSubmit={e => { e.preventDefault(); dispatch(createOffer(passphrase)); }}>
           <label htmlFor="create-passphrase">Passphrase</label>
           <input
             className="field"
@@ -118,7 +118,7 @@ export const DirectConnect = ({serviceOnline}: Props) => {
   if (formMode === 'join') {
     return (
       <section className="direct-connect">
-        <form onSubmit={e => { e.preventDefault(); store.dispatch(joinOffer(offerCode, passphrase)); }}>
+        <form onSubmit={e => { e.preventDefault(); dispatch(joinOffer(offerCode, passphrase)); }}>
           <label htmlFor="join-passphrase">Passphrase</label>
           <input
             className="field"

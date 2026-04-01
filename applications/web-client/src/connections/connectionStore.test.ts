@@ -1,7 +1,7 @@
-import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
+import {createAppStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './store';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import type {CombinedState, CombinedAction, MiddlewareFactory, ListenerFactory} from './connectionStore';
-import {combinedInitialState} from './connectionStore';
+import type {CombinedState, CombinedAction, MiddlewareFactory, ListenerFactory} from './store';
+import {combinedInitialState} from './store';
 import {createOffer, joinOffer, acceptAnswerCode, peerDisconnected, connectViaServer} from '../transport/transportActions';
 import {peerConnected, peerNamed, grantTrust, revokeTrust, peerTrustUpdated, introductionReceived, acceptIntroduction, declineIntroduction, introductionResolved, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft} from './connectionActions';
 import {selectFlow, selectPeerConnectionHealth} from '../transport/transportSelectors';
@@ -9,14 +9,14 @@ import {selectPeers, selectPendingIntroductions, selectOnlinePeers} from './conn
 
 const makeStore = (extra: MiddlewareFactory[] = []) => {
   const factory = createFakePeerConnectionFactory();
-  const store = createConnectionStore(
+  const store = createAppStore(
     applyMiddleware([encodingMiddleware, codecMiddleware, ...extra]),
     [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
   );
   return {store, factory};
 };
 
-describe('connectionStore', () => {
+describe('store', () => {
   describe('createOffer', () => {
     it('transitions state to creating', () => {
       const {store} = makeStore();
@@ -372,7 +372,7 @@ describe('connectionStore', () => {
       const factory: ListenerFactory = ({dispatch: _dispatch, getState: _getState}) =>
         (action) => received.push(action);
 
-      const store = createConnectionStore(undefined, [factory]);
+      const store = createAppStore(undefined, [factory]);
       store.dispatch(createOffer('secret'));
 
       expect(received).toContainEqual(createOffer('secret'));
@@ -384,7 +384,7 @@ describe('connectionStore', () => {
         (_action, {prevState, state}) =>
           entries.push({prevPhase: selectFlow(prevState).phase, phase: selectFlow(state).phase});
 
-      const store = createConnectionStore(undefined, [factory]);
+      const store = createAppStore(undefined, [factory]);
       store.dispatch(createOffer('secret'));
 
       const entry = entries.find(e => e.phase === 'creating');

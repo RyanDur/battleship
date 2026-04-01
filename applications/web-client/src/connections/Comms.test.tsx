@@ -1,8 +1,8 @@
 import {render, screen, act, within, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Comms} from './Comms';
-import {ConnectionProvider} from './ConnectionProvider';
-import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
+import {StoreProvider} from './StoreProvider';
+import {createAppStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './store';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import {messageReceived, sendMessage} from './connectionActions';
 import {selectMessages} from './connectionSelectors';
@@ -11,7 +11,7 @@ import {createGameStore} from '../game/gameStore';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();
-  const store = createConnectionStore(
+  const store = createAppStore(
     applyMiddleware([encodingMiddleware, codecMiddleware]),
     [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
   );
@@ -23,9 +23,9 @@ const setup = (peerId: string | null = null, peerName: string | null = null) => 
   const gameStore = createGameStore();
   render(
     <GameProvider store={gameStore}>
-      <ConnectionProvider store={store}>
+      <StoreProvider store={store}>
         <Comms peerId={peerId} peerName={peerName}/>
-      </ConnectionProvider>
+      </StoreProvider>
     </GameProvider>
   );
   return {store};
@@ -196,9 +196,9 @@ describe('Comms', () => {
     const gameStore = createGameStore();
     const {rerender} = render(
       <GameProvider store={gameStore}>
-        <ConnectionProvider store={store}>
+        <StoreProvider store={store}>
           <Comms peerId="p1" peerName="Alice"/>
-        </ConnectionProvider>
+        </StoreProvider>
       </GameProvider>
     );
 
@@ -221,9 +221,9 @@ describe('Comms', () => {
     // Switch to Bob — seenCount (3) > Bob messages (1), would wrongly show 0
     rerender(
       <GameProvider store={gameStore}>
-        <ConnectionProvider store={store}>
+        <StoreProvider store={store}>
           <Comms peerId="p2" peerName="Bob"/>
-        </ConnectionProvider>
+        </StoreProvider>
       </GameProvider>
     );
 

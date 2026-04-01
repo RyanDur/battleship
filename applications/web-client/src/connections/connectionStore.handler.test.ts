@@ -1,6 +1,6 @@
-import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
+import {createAppStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './store';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
+import type {AppStore, MiddlewareFactory} from './store';
 import type {TransportFlow} from '../transport/transport';
 import {serverOfferReceived, serverAnswerReceived, connectViaServer, createOffer, joinOffer, acceptAnswerCode, peerDisconnected} from '../transport/transportActions';
 import {disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, sendMessage, sendToPeer} from './connectionActions';
@@ -13,7 +13,7 @@ import {selectP2pGame, selectGameView} from '../game/gameSelectors';
 import {createGameStore, createReconnectListenerFactory, createGameCommandListenerFactory} from '../game/gameStore';
 import type {ConnectionEvent} from '../transport/connectionPort';
 
-const makeRelayMiddleware = (myName: string, mySigId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
+const makeRelayMiddleware = (myName: string, mySigId: string, getOther: () => AppStore): MiddlewareFactory =>
   (_deps) => (next) => (action) => {
     if (action.type === 'RELAY_OFFER') {
       getOther().dispatch(serverOfferReceived(mySigId, myName, action.sdp));
@@ -45,7 +45,7 @@ const makeConnectedGameStore = (sendToPeerFn: (peerId: string, message: unknown)
     onServerMessage: () => {},
   });
 
-  const wireStore = (connectionStore: ConnectionStore) => {
+  const wireStore = (connectionStore: AppStore) => {
     connectionStore.addListener((action) => {
       if (action.type === 'PEER_MESSAGE_RECEIVED') peerMessageHandlers.forEach(h => h(action.peerId, action.data));
     });
@@ -55,7 +55,7 @@ const makeConnectedGameStore = (sendToPeerFn: (peerId: string, message: unknown)
 
 const makePair = () => {
   const factory = createFakePeerConnectionFactory();
-  const stores: {alice?: ConnectionStore; bob?: ConnectionStore} = {};
+  const stores: {alice?: AppStore; bob?: AppStore} = {};
 
   const {gameStore: aliceGame, portEmit: alicePortEmit, wireStore: wireAlice} = makeConnectedGameStore(
     (peerId, message) => stores.alice!.dispatch(sendToPeer(peerId, message as Record<string, unknown>)),
@@ -64,11 +64,11 @@ const makePair = () => {
     (peerId, message) => stores.bob!.dispatch(sendToPeer(peerId, message as Record<string, unknown>)),
   );
 
-  stores.alice = createConnectionStore(
+  stores.alice = createAppStore(
     applyMiddleware([makeRelayMiddleware('Alice', 'alice-sig', () => stores.bob!)]),
     [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection, portEmit: alicePortEmit})],
   );
-  stores.bob = createConnectionStore(
+  stores.bob = createAppStore(
     applyMiddleware([makeRelayMiddleware('Bob', 'bob-sig', () => stores.alice!)]),
     [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection, portEmit: bobPortEmit})],
   );
@@ -87,7 +87,7 @@ const makePair = () => {
   return {alice: stores.alice!, bob: stores.bob!, aliceGame, bobGame, connect};
 };
 
-const makeRelayForAll = (myName: string, myId: string, registry: Record<string, () => ConnectionStore | undefined>): MiddlewareFactory =>
+const makeRelayForAll = (myName: string, myId: string, registry: Record<string, () => AppStore | undefined>): MiddlewareFactory =>
   (_deps) => (next) => (action) => {
     if (action.type === 'RELAY_OFFER') {
       registry[action.targetPeerId]?.()?.dispatch(serverOfferReceived(myId, myName, action.sdp));
@@ -99,18 +99,18 @@ const makeRelayForAll = (myName: string, myId: string, registry: Record<string, 
 
 const makeTriple = () => {
   const factory = createFakePeerConnectionFactory();
-  const stores: {alice?: ConnectionStore; bob?: ConnectionStore; carol?: ConnectionStore} = {};
-  const registry: Record<string, () => ConnectionStore | undefined> = {};
+  const stores: {alice?: AppStore; bob?: AppStore; carol?: AppStore} = {};
+  const registry: Record<string, () => AppStore | undefined> = {};
 
-  stores.alice = createConnectionStore(
+  stores.alice = createAppStore(
     applyMiddleware([makeRelayForAll('Alice', 'alice-sig', registry)]),
     [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection})],
   );
-  stores.bob = createConnectionStore(
+  stores.bob = createAppStore(
     applyMiddleware([makeRelayForAll('Bob', 'bob-sig', registry)]),
     [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection})],
   );
-  stores.carol = createConnectionStore(
+  stores.carol = createAppStore(
     applyMiddleware([makeRelayForAll('Carol', 'carol-sig', registry)]),
     [createHandlerListener({name: 'Carol', createPeerConnection: factory.createPeerConnection})],
   );
@@ -309,7 +309,7 @@ describe('createHandlerMiddleware (store)', () => {
       close: () => {},
     } as unknown as RTCPeerConnection;
 
-    const store = createConnectionStore(
+    const store = createAppStore(
       applyMiddleware([encodingMiddleware, codecMiddleware]),
       [createHandlerListener({name: 'Player', createPeerConnection: () => failingPc})],
     );
@@ -337,7 +337,7 @@ describe('createHandlerMiddleware (store)', () => {
         close: () => {},
       } as unknown as RTCPeerConnection;
 
-      const store = createConnectionStore(
+      const store = createAppStore(
         applyMiddleware([encodingMiddleware, codecMiddleware]),
         [createHandlerListener({name: 'Player', createPeerConnection: () => hangingPc})],
       );
@@ -354,7 +354,7 @@ describe('createHandlerMiddleware (store)', () => {
   it('ACCEPT_OFFER transitions to offer-failed when ICE gathering produces no SDP', async () => {
     // Generate a real offer code from a normal store
     const aliceFactory = createFakePeerConnectionFactory();
-    const alice = createConnectionStore(
+    const alice = createAppStore(
       applyMiddleware([encodingMiddleware, codecMiddleware]),
       [createHandlerListener({name: 'Alice', createPeerConnection: aliceFactory.createPeerConnection})],
     );
@@ -377,7 +377,7 @@ describe('createHandlerMiddleware (store)', () => {
       close: () => {},
     } as unknown as RTCPeerConnection;
 
-    const bob = createConnectionStore(
+    const bob = createAppStore(
       applyMiddleware([encodingMiddleware, codecMiddleware]),
       [createHandlerListener({name: 'Bob', createPeerConnection: () => nullSdpPc})],
     );
@@ -417,12 +417,12 @@ describe('createHandlerMiddleware (store)', () => {
   it('full offer/answer handshake connects both stores', async () => {
     const factory = createFakePeerConnectionFactory();
 
-    const alice = createConnectionStore(
+    const alice = createAppStore(
       applyMiddleware([encodingMiddleware, codecMiddleware]),
       [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection})],
     );
 
-    const bob = createConnectionStore(
+    const bob = createAppStore(
       applyMiddleware([encodingMiddleware, codecMiddleware]),
       [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection})],
     );
@@ -446,12 +446,12 @@ describe('createHandlerMiddleware (store)', () => {
   it('flow resets to idle after a successful offer/answer handshake', async () => {
     const factory = createFakePeerConnectionFactory();
 
-    const alice = createConnectionStore(
+    const alice = createAppStore(
       applyMiddleware([encodingMiddleware, codecMiddleware]),
       [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection})],
     );
 
-    const bob = createConnectionStore(
+    const bob = createAppStore(
       applyMiddleware([encodingMiddleware, codecMiddleware]),
       [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection})],
     );
@@ -894,12 +894,12 @@ describe('data channel send failures', () => {
     const portEmit = (e: import('../transport/connectionPort').ConnectionEvent) => portEvents.push(e);
 
     const fac = createFakePeerConnectionFactory();
-    const stores: {s?: ConnectionStore; r?: ConnectionStore} = {};
-    stores.s = createConnectionStore(
+    const stores: {s?: AppStore; r?: AppStore} = {};
+    stores.s = createAppStore(
       applyMiddleware([makeRelayMiddleware('Sender', 's-sig', () => stores.r!)]),
       [createHandlerListener({name: 'Sender', createPeerConnection: fac.createPeerConnection, portEmit})],
     );
-    stores.r = createConnectionStore(
+    stores.r = createAppStore(
       applyMiddleware([makeRelayMiddleware('Receiver', 'r-sig', () => stores.s!)]),
       [createHandlerListener({name: 'Receiver', createPeerConnection: fac.createPeerConnection})],
     );

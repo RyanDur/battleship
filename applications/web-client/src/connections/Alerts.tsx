@@ -1,5 +1,5 @@
 import type {ReactNode} from 'react';
-import {useConnectionState, useConnectionStore} from './useConnection';
+import {useSelector, useDispatch} from './useStore';
 import {selectPendingIntroductions} from './connectionSelectors';
 import {acceptIntroduction, declineIntroduction} from './connectionActions';
 
@@ -8,8 +8,8 @@ type Props = {
 };
 
 export const Alerts = ({children}: Props) => {
-  const store = useConnectionStore();
-  const pendingIntroductions = useConnectionState(selectPendingIntroductions);
+  const dispatch = useDispatch();
+  const pendingIntroductions = useSelector(selectPendingIntroductions);
 
   const count = pendingIntroductions.length;
 
@@ -28,8 +28,8 @@ export const Alerts = ({children}: Props) => {
             <li key={intro.introId}>
               <article className="alerts-alert">
                 {intro.from} wants to introduce you to {intro.peer}
-                <button className="control" onClick={() => store.dispatch(acceptIntroduction(intro.introId))}>Accept</button>
-                <button className="control" onClick={() => store.dispatch(declineIntroduction(intro.introId))}>Decline</button>
+                <button className="control" onClick={() => dispatch(acceptIntroduction(intro.introId))}>Accept</button>
+                <button className="control" onClick={() => dispatch(declineIntroduction(intro.introId))}>Decline</button>
               </article>
             </li>
           ))}

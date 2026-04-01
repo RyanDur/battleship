@@ -20,7 +20,7 @@ import type {Store, MiddlewareFactory as GenericMiddlewareFactory, ListenerFacto
 export type CombinedState = {connections: ConnectionsState; transport: TransportState}
 export type CombinedAction = ConnectionsAction | TransportAction
 
-export type ConnectionStore = Store<CombinedState, CombinedAction>
+export type AppStore = Store<CombinedState, CombinedAction>
 
 export type MiddlewareFactory = GenericMiddlewareFactory<CombinedState, CombinedAction>
 export type ListenerFactory = GenericListenerFactory<CombinedState, CombinedAction>
@@ -44,7 +44,7 @@ const transportSlice = {
     transportReducer(state.transport, action),
 };
 
-export const createConnectionStore = (middlewareFactory?: MiddlewareFactory, listenerFactories?: ListenerFactory[]): ConnectionStore =>
+export const createAppStore = (middlewareFactory?: MiddlewareFactory, listenerFactories?: ListenerFactory[]): AppStore =>
   createStore(
     [connectionsSlice, transportSlice],
     listenerFactories,

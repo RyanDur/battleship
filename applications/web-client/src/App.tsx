@@ -12,11 +12,11 @@ import {fetchDownloadUrl} from './connections/download';
 import type {HeartbeatState} from './transport/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
 import {detectPlatform} from './connections/platform';
-import {createConnectionStore, createHandlerListener, createSignalingListener, createTransportDeliveryListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connections/connectionStore';
+import {createAppStore, createHandlerListener, createSignalingListener, createTransportDeliveryListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connections/store';
 import {sendToPeer} from './connections/connectionActions';
 import {startSignaling, stopSignaling, deliverToServer} from './transport/transportActions';
 import type {ConnectionEvent} from './transport/connectionPort';
-import {ConnectionProvider} from './connections/ConnectionProvider';
+import {StoreProvider} from './connections/StoreProvider';
 import {selectSignalingToPeer, selectPeerToSignaling} from './transport/transportSelectors';
 import {clearP2pGame, saveBoard, startGame} from './game/gameActions';
 import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView, selectAnnouncement} from './game/gameSelectors';
@@ -79,7 +79,7 @@ const App = ({config}: Props) => {
       if (event.type === 'SERVER_MESSAGE') serverMessageHandlers.forEach(h => h(event.data));
     };
 
-    const connectionStore = createConnectionStore(
+    const connectionStore = createAppStore(
       applyMiddleware([encodingMiddleware, codecMiddleware]),
       [
         createHandlerListener({
@@ -123,7 +123,7 @@ const App = ({config}: Props) => {
         <ServiceHealth state={heartbeat} onRetry={retry}/>
         <DownloadLink platform={platform} action={actionFor(heartbeat)} fetchDownloadUrl={fetchDownloadUrl}/>
       </header>
-      <ConnectionProvider store={store}>
+      <StoreProvider store={store}>
         <GameProvider store={gameStore}>
           <Fleet onSelectPeer={(id, name) => setSelectedPeer({id, name})}/>
           <main className="hud-main">
@@ -135,7 +135,7 @@ const App = ({config}: Props) => {
             <small className="app-version">{config.version}</small>
           </footer>
         </GameProvider>
-      </ConnectionProvider>
+      </StoreProvider>
     </>
   );
 };

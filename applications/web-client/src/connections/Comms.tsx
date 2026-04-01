@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {useConnectionState, useConnectionStore} from './useConnection';
+import {useSelector, useDispatch} from './useStore';
 import {selectMessages} from './connectionSelectors';
 import {sendMessage} from './connectionActions';
 import {Alerts} from './Alerts';
@@ -11,8 +11,8 @@ type Props = {
 }
 
 export const Comms = ({peerId, peerName}: Props) => {
-  const store = useConnectionStore();
-  const allMessages = useConnectionState(selectMessages);
+  const dispatch = useDispatch();
+  const allMessages = useSelector(selectMessages);
   const [messageText, setMessageText] = useState('');
   const [seenCounts, setSeenCounts] = useState<Map<string, number>>(new Map());
   const [isOpen, setIsOpen] = useState(true);
@@ -33,7 +33,7 @@ export const Comms = ({peerId, peerName}: Props) => {
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (peerId && messageText.trim()) {
-      store.dispatch(sendMessage(peerId, messageText.trim()));
+      dispatch(sendMessage(peerId, messageText.trim()));
       setMessageText('');
     }
   };

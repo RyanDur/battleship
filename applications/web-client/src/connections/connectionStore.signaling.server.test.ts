@@ -1,6 +1,6 @@
 // @vitest-environment node
-import {createConnectionStore, createSignalingListener} from './connectionStore';
-import type {CombinedAction} from './connectionStore';
+import {createAppStore, createSignalingListener} from './store';
+import type {CombinedAction} from './store';
 import {createStubServer} from '../test/stubServer';
 import {makeWebSocket} from '../test/makeWebSocket';
 import type {WsConnection} from '../test/stubServer';
@@ -24,7 +24,7 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
     if (event.type === 'SERVER_MESSAGE') serverMessageHandlers.forEach(h => h(event.data));
   };
 
-  const store = createConnectionStore(undefined, [
+  const store = createAppStore(undefined, [
     createSignalingListener({
       config: {
         createWebSocket: makeWebSocket,
@@ -352,7 +352,7 @@ describe('createSignalingMiddleware (server)', () => {
       routes: {'GET /session': (_req, res) => { res.writeHead(200); res.end(); }},
       ws: {'/ws/signaling': conn => { wsConn = conn; }},
     });
-    const store = createConnectionStore(undefined, [
+    const store = createAppStore(undefined, [
       createSignalingListener({
         config: {
           createWebSocket: makeWebSocket,
@@ -382,7 +382,7 @@ describe('createSignalingMiddleware (server)', () => {
       routes: {'GET /session': (_req, res) => { res.writeHead(200); res.end(); }},
       ws: {'/ws/signaling': conn => { wsConn = conn; }},
     });
-    const store = createConnectionStore(undefined, [
+    const store = createAppStore(undefined, [
       createSignalingListener({
         config: {
           createWebSocket: makeWebSocket,

@@ -1,9 +1,9 @@
 import {render, screen, act, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Fleet} from './Fleet';
-import {ConnectionProvider} from './ConnectionProvider';
-import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
-import type {CombinedAction} from './connectionStore';
+import {StoreProvider} from './StoreProvider';
+import {createAppStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './store';
+import type {CombinedAction} from './store';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import {peerConnectionUnstable, peerConnectionRestored, reconnectViaServer} from '../transport/transportActions';
 import {peerConnected, peerNamed, peerDisconnected, grantTrust, peerTrustUpdated, introductionReceived, previousPeersReceived, onlinePeerLeft, onlinePeersUpdated, onlinePeerJoined, forgetPeer, savePeerEmail} from './connectionActions';
@@ -13,7 +13,7 @@ import {createGameStore} from '../game/gameStore';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();
-  const store = createConnectionStore(
+  const store = createAppStore(
     applyMiddleware([encodingMiddleware, codecMiddleware]),
     [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
   );
@@ -24,11 +24,11 @@ const makeStore = () => {
 const setup = (onSelectPeer?: (id: string, name: string | null) => void) => {
   const {store, gameStore} = makeStore();
   render(
-    <ConnectionProvider store={store}>
+    <StoreProvider store={store}>
       <GameProvider store={gameStore}>
         <Fleet onSelectPeer={onSelectPeer}/>
       </GameProvider>
-    </ConnectionProvider>
+    </StoreProvider>
   );
   return {store, gameStore};
 };
@@ -362,11 +362,11 @@ describe('Fleet', () => {
       const user = userEvent.setup();
       const factory = createFakePeerConnectionFactory();
       const dispatched: CombinedAction[] = [];
-      const store = createConnectionStore(
+      const store = createAppStore(
         applyMiddleware([encodingMiddleware, codecMiddleware, () => (next) => (action) => { dispatched.push(action); next(action); }]),
         [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
       );
-      render(<ConnectionProvider store={store}><Fleet/></ConnectionProvider>);
+      render(<StoreProvider store={store}><Fleet/></StoreProvider>);
 
       await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false}])));
 
@@ -379,11 +379,11 @@ describe('Fleet', () => {
       const user = userEvent.setup();
       const factory = createFakePeerConnectionFactory();
       const dispatched: CombinedAction[] = [];
-      const store = createConnectionStore(
+      const store = createAppStore(
         applyMiddleware([encodingMiddleware, codecMiddleware, () => (next) => (action) => { dispatched.push(action); next(action); }]),
         [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
       );
-      render(<ConnectionProvider store={store}><Fleet/></ConnectionProvider>);
+      render(<StoreProvider store={store}><Fleet/></StoreProvider>);
 
       await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: true}])));
 
@@ -436,11 +436,11 @@ describe('Fleet', () => {
       const user = userEvent.setup();
       const factory = createFakePeerConnectionFactory();
       const dispatched: CombinedAction[] = [];
-      const store = createConnectionStore(
+      const store = createAppStore(
         applyMiddleware([encodingMiddleware, codecMiddleware, () => (next) => (action) => { dispatched.push(action); next(action); }]),
         [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
       );
-      render(<ConnectionProvider store={store}><Fleet/></ConnectionProvider>);
+      render(<StoreProvider store={store}><Fleet/></StoreProvider>);
 
       await act(async () => store.dispatch(previousPeersReceived([{peerId: 'p1', name: 'Bob', online: false}])));
       await user.type(screen.getByPlaceholderText(/enter email/i), 'bob@example.com');

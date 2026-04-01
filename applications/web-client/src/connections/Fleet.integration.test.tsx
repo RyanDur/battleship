@@ -2,10 +2,10 @@ import {render, screen, within, waitFor, act} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Fleet} from './Fleet';
 import {Alerts} from './Alerts';
-import {ConnectionProvider} from './ConnectionProvider';
-import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
+import {StoreProvider} from './StoreProvider';
+import {createAppStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './store';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
+import type {AppStore, MiddlewareFactory} from './store';
 import type {TransportFlow} from '../transport/transport';
 import {serverOfferReceived, serverAnswerReceived, reconnectViaServer, createOffer, joinOffer, acceptAnswerCode} from '../transport/transportActions';
 import {previousPeersReceived, onlinePeersUpdated} from './connectionActions';
@@ -18,10 +18,10 @@ describe('Fleet integration', () => {
   it('reconnecting to a previous peer removes them from previous peers list', async () => {
     const factory = createFakePeerConnectionFactory();
 
-    const alice: {store?: ConnectionStore} = {};
-    const bob: {store?: ConnectionStore} = {};
+    const alice: {store?: AppStore} = {};
+    const bob: {store?: AppStore} = {};
 
-    const makeRelayMiddleware = (myName: string, mySignalingPeerId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
+    const makeRelayMiddleware = (myName: string, mySignalingPeerId: string, getOther: () => AppStore): MiddlewareFactory =>
       (_deps) => (next) => (action) => {
         if (action.type === 'RELAY_OFFER') {
           getOther().dispatch(serverOfferReceived(mySignalingPeerId, myName, action.sdp));
@@ -31,12 +31,12 @@ describe('Fleet integration', () => {
         next(action);
       };
 
-    alice.store = createConnectionStore(
+    alice.store = createAppStore(
       applyMiddleware([encodingMiddleware, codecMiddleware, makeRelayMiddleware('Alice', 'alice-sig', () => bob.store!)]),
       [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection})],
     );
 
-    bob.store = createConnectionStore(
+    bob.store = createAppStore(
       applyMiddleware([encodingMiddleware, codecMiddleware, makeRelayMiddleware('Bob', 'bob-sig', () => alice.store!)]),
       [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection})],
     );
@@ -61,10 +61,10 @@ describe('Fleet integration', () => {
     const factory = createFakePeerConnectionFactory();
     const user = userEvent.setup();
 
-    const alice: {store?: ConnectionStore} = {};
-    const bob: {store?: ConnectionStore} = {};
+    const alice: {store?: AppStore} = {};
+    const bob: {store?: AppStore} = {};
 
-    const makeRelayMiddleware = (myName: string, mySignalingPeerId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
+    const makeRelayMiddleware = (myName: string, mySignalingPeerId: string, getOther: () => AppStore): MiddlewareFactory =>
       (_deps) => (next) => (action) => {
         if (action.type === 'RELAY_OFFER') {
           getOther().dispatch(serverOfferReceived(mySignalingPeerId, myName, action.sdp));
@@ -74,12 +74,12 @@ describe('Fleet integration', () => {
         next(action);
       };
 
-    alice.store = createConnectionStore(
+    alice.store = createAppStore(
       applyMiddleware([encodingMiddleware, codecMiddleware, makeRelayMiddleware('Alice', 'alice-sig', () => bob.store!)]),
       [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection})],
     );
 
-    bob.store = createConnectionStore(
+    bob.store = createAppStore(
       applyMiddleware([encodingMiddleware, codecMiddleware, makeRelayMiddleware('Bob', 'bob-sig', () => alice.store!)]),
       [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection})],
     );
@@ -90,10 +90,10 @@ describe('Fleet integration', () => {
     render(
       <div>
         <div data-testid="alice">
-          <ConnectionProvider store={aliceStore}><GameProvider store={createGameStore()}><Fleet /></GameProvider></ConnectionProvider>
+          <StoreProvider store={aliceStore}><GameProvider store={createGameStore()}><Fleet /></GameProvider></StoreProvider>
         </div>
         <div data-testid="bob">
-          <ConnectionProvider store={bobStore}><GameProvider store={createGameStore()}><Fleet /></GameProvider></ConnectionProvider>
+          <StoreProvider store={bobStore}><GameProvider store={createGameStore()}><Fleet /></GameProvider></StoreProvider>
         </div>
       </div>
     );
@@ -115,7 +115,7 @@ describe('Fleet integration', () => {
     const user = userEvent.setup();
 
     const makeStore = (name: string) =>
-      createConnectionStore(
+      createAppStore(
         applyMiddleware([encodingMiddleware, codecMiddleware]),
         [createHandlerListener({name, createPeerConnection: factory.createPeerConnection})],
       );
@@ -127,13 +127,13 @@ describe('Fleet integration', () => {
     render(
       <div>
         <div data-testid="alice">
-          <ConnectionProvider store={aliceStore}><GameProvider store={createGameStore()}><Fleet /><Alerts /></GameProvider></ConnectionProvider>
+          <StoreProvider store={aliceStore}><GameProvider store={createGameStore()}><Fleet /><Alerts /></GameProvider></StoreProvider>
         </div>
         <div data-testid="bob">
-          <ConnectionProvider store={bobStore}><GameProvider store={createGameStore()}><Fleet /><Alerts /></GameProvider></ConnectionProvider>
+          <StoreProvider store={bobStore}><GameProvider store={createGameStore()}><Fleet /><Alerts /></GameProvider></StoreProvider>
         </div>
         <div data-testid="carol">
-          <ConnectionProvider store={carolStore}><GameProvider store={createGameStore()}><Fleet /><Alerts /></GameProvider></ConnectionProvider>
+          <StoreProvider store={carolStore}><GameProvider store={createGameStore()}><Fleet /><Alerts /></GameProvider></StoreProvider>
         </div>
       </div>
     );
@@ -142,7 +142,7 @@ describe('Fleet integration', () => {
     const bobUI = within(screen.getByTestId('bob'));
     const carolUI = within(screen.getByTestId('carol'));
 
-    const connectStores = async (offerer: ConnectionStore, answerer: ConnectionStore) => {
+    const connectStores = async (offerer: AppStore, answerer: AppStore) => {
       const priorOffererPeers = selectPeers(offerer.getState()).length;
       const priorAnswererPeers = selectPeers(answerer.getState()).length;
 

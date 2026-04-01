@@ -5,8 +5,8 @@ import {GameProvider} from './GameProvider';
 import {createGameStore} from './gameStore';
 import {gameStarted, fireResult, challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided, opponentForfeited, peerNamed} from './gameActions';
 import type {AiGameState, Shot, GameAction} from './game';
-import {ConnectionProvider} from '../connections/ConnectionProvider';
-import {createConnectionStore} from '../connections/connectionStore';
+import {StoreProvider} from '../connections/StoreProvider';
+import {createAppStore} from '../connections/store';
 
 const emptyGameState: AiGameState = {playerShots: [], aiShots: [], phase: 'player-turn', announcement: ''};
 
@@ -18,14 +18,14 @@ const aiShot = (row: number, col: number, result: Shot['result']): Shot =>
 
 const renderGame = (initialState = emptyGameState, onNewGame = () => {}) => {
   const gameStore = createGameStore();
-  const connectionStore = createConnectionStore();
+  const connectionStore = createAppStore();
   act(() => { gameStore.dispatch(gameStarted(initialState)); });
   render(
-    <ConnectionProvider store={connectionStore}>
+    <StoreProvider store={connectionStore}>
       <GameProvider store={gameStore}>
         <Game onNewGame={onNewGame}/>
       </GameProvider>
-    </ConnectionProvider>
+    </StoreProvider>
   );
   return gameStore;
 };
@@ -143,7 +143,7 @@ describe('Game', () => {
 describe('P2P game forfeit', () => {
   const renderP2pGame = (iGoFirst: boolean, onNewGame = () => {}) => {
     const gameStore = createGameStore();
-    const connectionStore = createConnectionStore();
+    const connectionStore = createAppStore();
     const dispatched: GameAction[] = [];
     gameStore.addListener((action) => { dispatched.push(action); });
     act(() => {
@@ -155,11 +155,11 @@ describe('P2P game forfeit', () => {
       gameStore.dispatch(turnOrderDecided(iGoFirst));
     });
     render(
-      <ConnectionProvider store={connectionStore}>
+      <StoreProvider store={connectionStore}>
         <GameProvider store={gameStore}>
           <Game onNewGame={onNewGame}/>
         </GameProvider>
-      </ConnectionProvider>
+      </StoreProvider>
     );
     return {gameStore, dispatched};
   };

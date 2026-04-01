@@ -1,8 +1,8 @@
 import {render, screen, act, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {DirectConnect} from './DirectConnect';
-import {ConnectionProvider} from './ConnectionProvider';
-import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
+import {StoreProvider} from './StoreProvider';
+import {createAppStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './store';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import {createOffer} from '../transport/transportActions';
 import {peerConnected} from './connectionActions';
@@ -11,7 +11,7 @@ import type {TransportFlow} from '../transport/transport';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();
-  const store = createConnectionStore(
+  const store = createAppStore(
     applyMiddleware([encodingMiddleware, codecMiddleware]),
     [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
   );
@@ -21,9 +21,9 @@ const makeStore = () => {
 const renderDirectConnect = (serviceOnline = true) => {
   const {store} = makeStore();
   render(
-    <ConnectionProvider store={store}>
+    <StoreProvider store={store}>
       <DirectConnect serviceOnline={serviceOnline}/>
-    </ConnectionProvider>
+    </StoreProvider>
   );
   return {store};
 };
@@ -68,9 +68,9 @@ describe('DirectConnect', () => {
     const user = userEvent.setup();
     const {store} = makeStore();
     render(
-      <ConnectionProvider store={store}>
+      <StoreProvider store={store}>
         <DirectConnect serviceOnline={true}/>
-      </ConnectionProvider>
+      </StoreProvider>
     );
 
     act(() => store.dispatch(createOffer('pass')));
@@ -126,9 +126,9 @@ describe('DirectConnect', () => {
     const user = userEvent.setup();
     const {store} = makeStore();
     render(
-      <ConnectionProvider store={store}>
+      <StoreProvider store={store}>
         <DirectConnect serviceOnline={true}/>
-      </ConnectionProvider>
+      </StoreProvider>
     );
 
     await user.click(screen.getByRole('button', {name: /create/i}));

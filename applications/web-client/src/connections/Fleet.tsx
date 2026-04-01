@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {useConnectionState, useConnectionStore} from './useConnection';
+import {useSelector, useDispatch} from './useStore';
 import type {Peer, PreviousPeer} from './connections';
 import {selectPeers, selectOnlinePeers, selectPreviousPeers} from './connectionSelectors';
 import {selectPeerConnectionHealth} from '../transport/transportSelectors';
@@ -12,7 +12,7 @@ import {selectP2pGame} from '../game/gameSelectors';
 type SelectPeer = (id: string, name: string | null) => void;
 
 const PeerCard = ({peer, otherTrustingPeers, unstable, onSelect}: {peer: Peer; otherTrustingPeers: Peer[]; unstable: boolean; onSelect?: SelectPeer}) => {
-  const store = useConnectionStore();
+  const dispatch = useDispatch();
   const gameStore = useGameStore();
   const p2pGame = useOptionalGameState(selectP2pGame);
   const [introducing, setIntroducing] = useState(false);
@@ -44,28 +44,28 @@ const PeerCard = ({peer, otherTrustingPeers, unstable, onSelect}: {peer: Peer; o
         <button
           className="control"
           key={other.id}
-          onClick={() => { store.dispatch(introducePeers(peer.id, other.id)); setIntroducing(false); }}
+          onClick={() => { dispatch(introducePeers(peer.id, other.id)); setIntroducing(false); }}
         >
           Introduce to {other.name ?? 'Unknown'}
         </button>
       ))}
       {peer.trusted
-        ? <button className="control" onClick={() => store.dispatch(revokeTrust(peer.id))}>Revoke trust</button>
-        : <button className="control" onClick={() => store.dispatch(grantTrust(peer.id))}>Trust</button>
+        ? <button className="control" onClick={() => dispatch(revokeTrust(peer.id))}>Revoke trust</button>
+        : <button className="control" onClick={() => dispatch(grantTrust(peer.id))}>Trust</button>
       }
-      <button className="control" onClick={() => store.dispatch(disconnect(peer.id))}>Disconnect</button>
+      <button className="control" onClick={() => dispatch(disconnect(peer.id))}>Disconnect</button>
     </article>
   );
 };
 
 const PreviousPeerCard = ({peer}: {peer: PreviousPeer}) => {
-  const store = useConnectionStore();
+  const dispatch = useDispatch();
   const [emailInput, setEmailInput] = useState('');
 
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (emailInput.trim()) {
-      store.dispatch(savePeerEmail(peer.peerId, emailInput.trim()));
+      dispatch(savePeerEmail(peer.peerId, emailInput.trim()));
       setEmailInput('');
     }
   };
@@ -75,7 +75,7 @@ const PreviousPeerCard = ({peer}: {peer: PreviousPeer}) => {
       <strong className="fleet-peer-name">{peer.name}</strong>
       <small className="fleet-peer-status">{peer.online ? 'Online' : 'Offline'}</small>
       {peer.online && (
-        <button className="control" onClick={() => store.dispatch(reconnectViaServer(peer.peerId, peer.name))}>Reconnect</button>
+        <button className="control" onClick={() => dispatch(reconnectViaServer(peer.peerId, peer.name))}>Reconnect</button>
       )}
       {!peer.online && peer.email && (
         <a className="nav-link" href={`mailto:${peer.email}`}>Invite</a>
@@ -90,7 +90,7 @@ const PreviousPeerCard = ({peer}: {peer: PreviousPeer}) => {
           />
         </form>
       )}
-      <button className="control" onClick={() => store.dispatch(forgetPeer(peer.peerId))}>Forget</button>
+      <button className="control" onClick={() => dispatch(forgetPeer(peer.peerId))}>Forget</button>
     </article>
   );
 };
@@ -108,11 +108,11 @@ type Props = {
 }
 
 export const Fleet = ({onSelectPeer}: Props = {}) => {
-  const store = useConnectionStore();
-  const peers = useConnectionState(selectPeers);
-  const peerConnectionHealth = useConnectionState(selectPeerConnectionHealth);
-  const onlinePeers = useConnectionState(selectOnlinePeers);
-  const previousPeers = useConnectionState(selectPreviousPeers);
+  const dispatch = useDispatch();
+  const peers = useSelector(selectPeers);
+  const peerConnectionHealth = useSelector(selectPeerConnectionHealth);
+  const onlinePeers = useSelector(selectOnlinePeers);
+  const previousPeers = useSelector(selectPreviousPeers);
 
   const trustingPeers = peers.filter(p => p.trustsMe);
   const summary = countSummary(peers.length, onlinePeers.length, previousPeers.length);
@@ -149,7 +149,7 @@ export const Fleet = ({onSelectPeer}: Props = {}) => {
               {onlinePeers.map(peer => (
                 <li key={peer.peerId}>
                   <strong className="fleet-peer-name">{peer.name}</strong>
-                  <button className="control" onClick={() => store.dispatch(connectViaServer(peer.peerId, peer.name))}>Connect</button>
+                  <button className="control" onClick={() => dispatch(connectViaServer(peer.peerId, peer.name))}>Connect</button>
                 </li>
               ))}
             </ul>
