@@ -347,16 +347,30 @@ test('player can flip a coin for turn order and the result is randomly assigned'
   await bobCtx.close();
 });
 
-// Skipped: hangs during game setup in Playwright CI — same pattern as existing p2p-game tests
-// but fails to complete. Needs investigation into Playwright WebRTC timing.
-// The disconnect UI behavior is covered by unit tests in connectionStore.handler.test.ts.
-test.skip('game shows disconnected status when opponent leaves mid-game', async ({browser}) => {
+test('game shows disconnected status when opponent leaves mid-game', async ({browser}) => {
   test.setTimeout(120_000);
 
   const aliceCtx = await browser.newContext();
   const bobCtx = await browser.newContext();
   const alice = await aliceCtx.newPage();
   const bob = await bobCtx.newPage();
+
+  // Track RTCPeerConnection instances on Bob's page so we can close them explicitly.
+  // On localhost loopback, closing a browser context doesn't trigger ICE state changes —
+  // explicitly closing connections fires the events Alice's handler needs.
+  await bob.addInitScript(() => {
+    const pcs: RTCPeerConnection[] = [];
+    const Original = RTCPeerConnection;
+    (window as unknown as {RTCPeerConnection: typeof RTCPeerConnection}).RTCPeerConnection =
+      class extends Original {
+        constructor(...args: ConstructorParameters<typeof Original>) {
+          super(...args);
+          pcs.push(this);
+        }
+      };
+    (window as unknown as {__rtcPeerConnections: RTCPeerConnection[]})
+      .__rtcPeerConnections = pcs;
+  });
 
   await alice.goto('/battleship/');
   await bob.goto('/battleship/');
@@ -392,7 +406,13 @@ test.skip('game shows disconnected status when opponent leaves mid-game', async 
     .getByRole('button', {name: 'Row 6, Column 6', exact: true}).click();
   await expect(bob.locator('.game-announcement')).toContainText(/your turn/i, {timeout: 10_000});
 
-  // Bob closes his tab — Alice sees "disconnected" status with game saved
+  // Close Bob's peer connections explicitly, then close his browser context.
+  // On localhost loopback, context close alone doesn't trigger ICE state changes.
+  await bob.evaluate(() => {
+    const pcs = (window as unknown as {__rtcPeerConnections: RTCPeerConnection[]})
+      .__rtcPeerConnections;
+    pcs.forEach(pc => pc.close());
+  });
   await bobCtx.close();
   await expect(alice.locator('.game-announcement')).toContainText(/disconnected.*game saved/i, {timeout: 15_000});
 
@@ -406,12 +426,6 @@ test.skip('game shows disconnected status when opponent leaves mid-game', async 
   await aliceCtx.close();
 });
 
-// Full reconnect e2e (server-mediated connection → disconnect → reconnect → game resume)
-// Skipped: the server-mediated WebRTC connection flow (Online peers → Connect) does not
-// complete in Playwright. All existing e2e tests use the direct code-exchange flow, which
-// lacks signaling ID mappings needed for loadP2pGame. The reconnect feature is covered by
-// unit-level integration tests in connectionStore.handler.test.ts. This test should be
-// unskipped once server-mediated connections are debugged in the e2e environment.
 test('game resumes after peer disconnects and reconnects via server', async ({browser}) => {
   test.setTimeout(180_000);
 
