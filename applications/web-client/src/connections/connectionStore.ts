@@ -20,15 +20,6 @@ import type {Store, MiddlewareFactory as GenericMiddlewareFactory, ListenerFacto
 export type CombinedState = {connections: ConnectionsState; transport: TransportState}
 export type CombinedAction = ConnectionsAction | TransportAction
 
-export type ListenerContext = {
-  prevState: CombinedState
-  state: CombinedState
-  dispatch: (action: CombinedAction) => void
-  getState: () => CombinedState
-}
-
-export type ListenerFn = (action: CombinedAction, context: ListenerContext) => void
-
 export type ConnectionStore = Store<CombinedState, CombinedAction>
 
 export type MiddlewareFactory = GenericMiddlewareFactory<CombinedState, CombinedAction>
