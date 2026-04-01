@@ -338,6 +338,16 @@
   border-color: var(--color-accent);
 }
 
+.board-setup-cell.preview {
+  background-color: rgba(0, 180, 216, 0.4);
+  border-color: var(--color-accent);
+}
+
+.board-setup-cell.preview-invalid {
+  background-color: rgba(229, 85, 85, 0.4);
+  border-color: var(--color-error);
+}
+
 .board-setup-cell:hover {
   border-color: var(--color-accent);
 }
