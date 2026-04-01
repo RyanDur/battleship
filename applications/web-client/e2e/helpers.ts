@@ -72,6 +72,6 @@ export const connectPeers = async (alice: Page, bob: Page) => {
   await expect(alice.getByLabel('Response code')).toHaveValue(responseCode!);
   await alice.locator('.direct-connect').getByRole('button', {name: 'Accept'}).click();
 
-  await expect(alice.getByRole('button', {name: 'Disconnect'})).toBeVisible({timeout: 30_000});
-  await expect(bob.getByRole('button', {name: 'Disconnect'})).toBeVisible({timeout: 30_000});
+  await expect(alice.getByRole('button', {name: 'Disconnect'}).first()).toBeVisible({timeout: 30_000});
+  await expect(bob.getByRole('button', {name: 'Disconnect'}).first()).toBeVisible({timeout: 30_000});
 };
