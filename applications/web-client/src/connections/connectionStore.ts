@@ -6,7 +6,7 @@ import {createDispatch} from '../lib/maybe';
 import {selectIntroChannels, selectIsCreatingOffer, selectPeerToSignaling} from '../transport/transportSelectors';
 import {selectFlow} from '../transport/transportSelectors';
 import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, introductionReceived, introductionResolved, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, previousPeersReceived, emailSharedReceived, emailRevokedReceived, messageReceived} from './connectionActions';
-import {offerSdpReady, answerSdpReady, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, serverOfferReceived, serverAnswerReceived, iceRestartReceived, iceRestartAnswerReceived} from '../transport/transportActions';
+import {offerSdpReady, answerSdpReady, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, serverOfferReceived, serverAnswerReceived, iceRestartReceived, iceRestartAnswerReceived, peerMessageReceived} from '../transport/transportActions';
 import type {PeerEvent} from './connectionHandler';
 import {encodeConnectionCode, decodeConnectionCode} from '../transport/connectionCode';
 import {createPeerHandler} from './connectionHandler';
@@ -104,7 +104,11 @@ const makeHandlerEmit = (dispatch: (action: CombinedAction) => void, getState: (
 export const createHandlerListener = ({name, createPeerConnection, portEmit}: HandlerListenerConfig): ListenerFactory =>
   ({dispatch, getState}) => {
     const emit = makeHandlerEmit(dispatch, getState, portEmit);
-    const handler = createPeerHandler({name, createPeerConnection, emit, emitToPort: portEmit ?? (() => {}), dispatch, getState});
+    const emitToPort = (event: ConnectionEvent) => {
+      portEmit?.(event);
+      if (event.type === 'PEER_MESSAGE') dispatch(peerMessageReceived(event.peerId, event.data));
+    };
+    const handler = createPeerHandler({name, createPeerConnection, emit, emitToPort, dispatch, getState});
 
     return (action, {prevState}) => {
       const dispatchHandlerCommand = createDispatch<CombinedAction>({
@@ -164,6 +168,11 @@ export const codecMiddleware: MiddlewareFactory =
       }
       next(action);
     };
+
+export const createTransportDeliveryListener = (sendToServer: (message: unknown) => void): ListenerFactory =>
+  () => (action) => {
+    if (action.type === 'DELIVER_TO_SERVER') sendToServer(action.message);
+  };
 
 type SignalingListenerConfig = {
   config: SignalingConfig

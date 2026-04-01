@@ -10,7 +10,6 @@ import {selectOnlinePeers, selectPreviousPeers} from './connectionSelectors';
 import {selectP2pGame} from '../game/gameSelectors';
 import {createGameStore} from '../game/gameStore';
 import {challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided} from '../game/gameActions';
-import {createConnectionPort} from '../transport/connectionPort';
 import type {ConnectionEvent} from '../transport/connectionPort';
 
 const connectStore = async (serverSetup: (conn: WsConnection) => void = () => undefined) => {
@@ -20,7 +19,10 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
     ws: {'/ws/signaling': conn => { wsConn = conn; serverSetup(conn); }},
   });
 
-  const {port, emit: portEmit} = createConnectionPort({sendToPeer: () => {}, sendToServer: () => {}});
+  const serverMessageHandlers = new Set<(data: unknown) => void>();
+  const portEmit = (event: ConnectionEvent) => {
+    if (event.type === 'SERVER_MESSAGE') serverMessageHandlers.forEach(h => h(event.data));
+  };
 
   const store = createConnectionStore(undefined, [
     createSignalingListener({
@@ -34,7 +36,14 @@ const connectStore = async (serverSetup: (conn: WsConnection) => void = () => un
     }),
   ]);
 
-  const gameStore = createGameStore({port});
+  const gameStore = createGameStore({
+    sendToPeer: () => {},
+    onServerMessage: (h) => serverMessageHandlers.add(h),
+    onPeerConnected: () => {},
+    onPeerNamed: () => {},
+    onPeerDisconnected: () => {},
+    onPeerMessage: () => {},
+  });
 
   store.dispatch(startSignaling());
   await vi.waitFor(() => expect(wsConn).toBeDefined());
@@ -336,8 +345,7 @@ describe('createSignalingMiddleware (server)', () => {
 
   it('server close emits TRANSPORT_ERROR to port', async () => {
     const portEvents: ConnectionEvent[] = [];
-    const {port: capturePort, emit: portEmit} = createConnectionPort({sendToPeer: () => {}, sendToServer: () => {}});
-    capturePort.subscribe(e => portEvents.push(e));
+    const portEmit = (e: ConnectionEvent) => portEvents.push(e);
 
     let wsConn: WsConnection | undefined;
     const server = await createStubServer({
@@ -367,8 +375,7 @@ describe('createSignalingMiddleware (server)', () => {
 
   it('server terminate emits TRANSPORT_ERROR to port', async () => {
     const portEvents: ConnectionEvent[] = [];
-    const {port: capturePort, emit: portEmit} = createConnectionPort({sendToPeer: () => {}, sendToServer: () => {}});
-    capturePort.subscribe(e => portEvents.push(e));
+    const portEmit = (e: ConnectionEvent) => portEvents.push(e);
 
     let wsConn: WsConnection | undefined;
     const server = await createStubServer({

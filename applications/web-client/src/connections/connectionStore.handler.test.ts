@@ -11,8 +11,7 @@ import {selectFlow, selectIntroChannels, selectIntroConnections} from '../transp
 import {selectPeers, selectPendingIntroductions, selectPreviousPeers, selectMessages} from './connectionSelectors';
 import {selectP2pGame, selectGameView} from '../game/gameSelectors';
 import {createGameStore, createReconnectListenerFactory, createGameCommandListenerFactory} from '../game/gameStore';
-import type {GameStore} from '../game/gameStore';
-import {createConnectionPort} from '../transport/connectionPort';
+import type {ConnectionEvent} from '../transport/connectionPort';
 
 const makeRelayMiddleware = (myName: string, mySigId: string, getOther: () => ConnectionStore): MiddlewareFactory =>
   (_deps) => (next) => (action) => {
@@ -24,31 +23,58 @@ const makeRelayMiddleware = (myName: string, mySigId: string, getOther: () => Co
     next(action);
   };
 
+const makeConnectedGameStore = (sendToPeerFn: (peerId: string, message: unknown) => void) => {
+  const peerMessageHandlers = new Set<(peerId: string, data: unknown) => void>();
+  const peerConnectedHandlers = new Set<(peerId: string, isOfferer: boolean) => void>();
+  const peerNamedHandlers = new Set<(peerId: string, name: string) => void>();
+  const peerDisconnectedHandlers = new Set<(peerId: string) => void>();
+
+  const portEmit = (event: ConnectionEvent) => {
+    if (event.type === 'PEER_CONNECTED') peerConnectedHandlers.forEach(h => h(event.peerId, event.isOfferer));
+    if (event.type === 'PEER_NAMED') peerNamedHandlers.forEach(h => h(event.peerId, event.name));
+    if (event.type === 'PEER_DISCONNECTED') peerDisconnectedHandlers.forEach(h => h(event.peerId));
+  };
+
+  const gameStore = createGameStore({
+    sendToPeer: sendToPeerFn,
+    listenerFactories: [createReconnectListenerFactory, createGameCommandListenerFactory],
+    onPeerMessage: (h) => peerMessageHandlers.add(h),
+    onPeerConnected: (h) => peerConnectedHandlers.add(h),
+    onPeerNamed: (h) => peerNamedHandlers.add(h),
+    onPeerDisconnected: (h) => peerDisconnectedHandlers.add(h),
+    onServerMessage: () => {},
+  });
+
+  const wireStore = (connectionStore: ConnectionStore) => {
+    connectionStore.addListener((action) => {
+      if (action.type === 'PEER_MESSAGE_RECEIVED') peerMessageHandlers.forEach(h => h(action.peerId, action.data));
+    });
+  };
+  return {gameStore, portEmit, wireStore};
+};
+
 const makePair = () => {
   const factory = createFakePeerConnectionFactory();
   const stores: {alice?: ConnectionStore; bob?: ConnectionStore} = {};
-  const gameStores: {alice?: GameStore; bob?: GameStore} = {};
 
-  const alicePortHandle = createConnectionPort({
-    sendToPeer: (peerId, message) => stores.alice!.dispatch(sendToPeer(peerId, message as Record<string, unknown>)),
-    sendToServer: () => {},
-  });
-  const bobPortHandle = createConnectionPort({
-    sendToPeer: (peerId, message) => stores.bob!.dispatch(sendToPeer(peerId, message as Record<string, unknown>)),
-    sendToServer: () => {},
-  });
-
-  gameStores.alice = createGameStore({port: alicePortHandle.port, listenerFactories: [createReconnectListenerFactory, createGameCommandListenerFactory]});
-  gameStores.bob = createGameStore({port: bobPortHandle.port, listenerFactories: [createReconnectListenerFactory, createGameCommandListenerFactory]});
+  const {gameStore: aliceGame, portEmit: alicePortEmit, wireStore: wireAlice} = makeConnectedGameStore(
+    (peerId, message) => stores.alice!.dispatch(sendToPeer(peerId, message as Record<string, unknown>)),
+  );
+  const {gameStore: bobGame, portEmit: bobPortEmit, wireStore: wireBob} = makeConnectedGameStore(
+    (peerId, message) => stores.bob!.dispatch(sendToPeer(peerId, message as Record<string, unknown>)),
+  );
 
   stores.alice = createConnectionStore(
     applyMiddleware([makeRelayMiddleware('Alice', 'alice-sig', () => stores.bob!)]),
-    [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection, portEmit: alicePortHandle.emit})],
+    [createHandlerListener({name: 'Alice', createPeerConnection: factory.createPeerConnection, portEmit: alicePortEmit})],
   );
   stores.bob = createConnectionStore(
     applyMiddleware([makeRelayMiddleware('Bob', 'bob-sig', () => stores.alice!)]),
-    [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection, portEmit: bobPortHandle.emit})],
+    [createHandlerListener({name: 'Bob', createPeerConnection: factory.createPeerConnection, portEmit: bobPortEmit})],
   );
+
+  wireAlice(stores.alice);
+  wireBob(stores.bob);
 
   const connect = async () => {
     stores.alice!.dispatch(connectViaServer('bob-sig', 'Bob'));
@@ -58,7 +84,7 @@ const makePair = () => {
     });
   };
 
-  return {alice: stores.alice!, bob: stores.bob!, aliceGame: gameStores.alice!, bobGame: gameStores.bob!, connect};
+  return {alice: stores.alice!, bob: stores.bob!, aliceGame, bobGame, connect};
 };
 
 const makeRelayForAll = (myName: string, myId: string, registry: Record<string, () => ConnectionStore | undefined>): MiddlewareFactory =>

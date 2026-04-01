@@ -12,9 +12,10 @@ import {fetchDownloadUrl} from './connections/download';
 import type {HeartbeatState} from './transport/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
 import {detectPlatform} from './connections/platform';
-import {createConnectionStore, createHandlerListener, createSignalingListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connections/connectionStore';
+import {createConnectionStore, createHandlerListener, createSignalingListener, createTransportDeliveryListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connections/connectionStore';
 import {sendToPeer} from './connections/connectionActions';
-import {startSignaling, stopSignaling} from './transport/transportActions';
+import {startSignaling, stopSignaling, deliverToServer} from './transport/transportActions';
+import type {ConnectionEvent} from './transport/connectionPort';
 import {ConnectionProvider} from './connections/ConnectionProvider';
 import {selectSignalingToPeer, selectPeerToSignaling} from './transport/transportSelectors';
 import {clearP2pGame, saveBoard, startGame} from './game/gameActions';
@@ -22,7 +23,6 @@ import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView, selectAn
 import {useGameState, useGameStore} from './game/useGame';
 import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createServerBridgeListenerFactory} from './game/gameStore';
 import {GameProvider} from './game/GameProvider';
-import {createConnectionPort} from './transport/connectionPort';
 
 const platform = detectPlatform(navigator.userAgent);
 
@@ -65,10 +65,20 @@ const App = ({config}: Props) => {
   const {store, gameStore} = useMemo(() => {
     const signalingUrl = `${config.serviceUrl.replace(/^http/, 'ws')}/ws/signaling`;
     const serverHandle: {send: ((message: unknown) => void) | null} = {send: null};
-    const {port, emit: portEmit} = createConnectionPort({
-      sendToPeer: (peerId, message) => connectionStore.dispatch(sendToPeer(peerId, message as Record<string, unknown>)),
-      sendToServer: (message) => serverHandle.send?.(message),
-    });
+
+    const peerMessageHandlers = new Set<(peerId: string, data: unknown) => void>();
+    const peerConnectedHandlers = new Set<(peerId: string, isOfferer: boolean) => void>();
+    const peerNamedHandlers = new Set<(peerId: string, name: string) => void>();
+    const peerDisconnectedHandlers = new Set<(peerId: string) => void>();
+    const serverMessageHandlers = new Set<(data: unknown) => void>();
+
+    const portEmit = (event: ConnectionEvent) => {
+      if (event.type === 'PEER_CONNECTED') peerConnectedHandlers.forEach(h => h(event.peerId, event.isOfferer));
+      if (event.type === 'PEER_NAMED') peerNamedHandlers.forEach(h => h(event.peerId, event.name));
+      if (event.type === 'PEER_DISCONNECTED') peerDisconnectedHandlers.forEach(h => h(event.peerId));
+      if (event.type === 'SERVER_MESSAGE') serverMessageHandlers.forEach(h => h(event.data));
+    };
+
     const connectionStore = createConnectionStore(
       applyMiddleware([encodingMiddleware, codecMiddleware]),
       [
@@ -78,13 +88,25 @@ const App = ({config}: Props) => {
           portEmit,
         }),
         createSignalingListener({config: {createWebSocket: (url) => new WebSocket(url), sessionUrl: `${config.serviceUrl}/session`, url: signalingUrl, name: 'Player'}, portEmit, onReady: (handle) => { serverHandle.send = handle.send; }}),
+        createTransportDeliveryListener((message) => serverHandle.send?.(message)),
       ],
     );
+
+    connectionStore.addListener((action) => {
+      if (action.type === 'PEER_MESSAGE_RECEIVED') peerMessageHandlers.forEach(h => h(action.peerId, action.data));
+    });
+
     const gameStore = createGameStore({
-      port,
+      sendToPeer: (peerId, message) => connectionStore.dispatch(sendToPeer(peerId, message as Record<string, unknown>)),
+      sendToServer: (message) => connectionStore.dispatch(deliverToServer(message)),
       listenerFactories: [createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createServerBridgeListenerFactory],
       translatePeerId: (signalingId) => selectSignalingToPeer(connectionStore.getState())[signalingId],
       getPeerToSignaling: () => selectPeerToSignaling(connectionStore.getState()),
+      onPeerMessage: (handler) => peerMessageHandlers.add(handler),
+      onPeerConnected: (handler) => peerConnectedHandlers.add(handler),
+      onPeerNamed: (handler) => peerNamedHandlers.add(handler),
+      onPeerDisconnected: (handler) => peerDisconnectedHandlers.add(handler),
+      onServerMessage: (handler) => serverMessageHandlers.add(handler),
     });
     return {store: connectionStore, gameStore};
   }, [config]);

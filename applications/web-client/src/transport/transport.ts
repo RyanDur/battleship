@@ -61,6 +61,8 @@ export type TransportAction =
   | {type: 'INTRO_CONNECTION_CLEARED'; introId: string}
   | {type: 'ACCEPT_INTRODUCTION'; introId: string}
   | {type: 'DECLINE_INTRODUCTION'; introId: string}
+  | {type: 'DELIVER_TO_SERVER'; message: unknown}
+  | {type: 'PEER_MESSAGE_RECEIVED'; peerId: string; data: unknown}
 
 const handlerInitialState: HandlerState = {
   signalingToPeer: {},

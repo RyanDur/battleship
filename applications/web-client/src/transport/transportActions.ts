@@ -38,3 +38,6 @@ export const signalingPeerRegistered = (localPeerId: string, signalingPeerId: st
 export const introChannelRegistered = (introId: string, relayPeerId: string) => ({type: 'INTRO_CHANNEL_REGISTERED' as const, introId, relayPeerId});
 export const introConnectionRegistered = (introId: string, newPeerId: string) => ({type: 'INTRO_CONNECTION_REGISTERED' as const, introId, newPeerId});
 export const introConnectionCleared = (introId: string) => ({type: 'INTRO_CONNECTION_CLEARED' as const, introId});
+
+export const deliverToServer = (message: unknown) => ({type: 'DELIVER_TO_SERVER' as const, message});
+export const peerMessageReceived = (peerId: string, data: unknown) => ({type: 'PEER_MESSAGE_RECEIVED' as const, peerId, data});
