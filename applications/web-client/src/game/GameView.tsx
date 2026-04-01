@@ -7,6 +7,7 @@ import {occupiedCells} from './board';
 
 const ROWS = Array.from({length: 10}, (_, i) => i + 1);
 const COLS = Array.from({length: 10}, (_, i) => i + 1);
+const COL_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
 
 type Props = {
   onNewGame: () => void;
@@ -68,8 +69,13 @@ export const Game = ({onNewGame}: Props) => {
                       : 'Board hash mismatch'}
                   </p>
                   <section aria-label="Opponent's fleet" className="game-board">
-                    {ROWS.flatMap(row =>
-                      COLS.map(col => {
+                    <span className="board-label" aria-hidden="true" />
+                    {COL_LABELS.map(letter => (
+                      <span key={`reveal-col-${letter}`} className="board-label" aria-hidden="true">{letter}</span>
+                    ))}
+                    {ROWS.flatMap(row => [
+                      <span key={`reveal-row-${row}`} className="board-label" aria-hidden="true">{row}</span>,
+                      ...COLS.map(col => {
                         const occupied = revealedBoard.placed.some(ps =>
                           occupiedCells(ps).some(c => c.row === row && c.col === col)
                         );
@@ -81,8 +87,8 @@ export const Game = ({onNewGame}: Props) => {
                             disabled
                           />
                         );
-                      })
-                    )}
+                      }),
+                    ])}
                   </section>
                 </>
               )}
@@ -99,8 +105,13 @@ export const Game = ({onNewGame}: Props) => {
       )}
 
       <section aria-label="Your fleet" className="game-board">
-        {ROWS.flatMap(row =>
-          COLS.map(col => {
+        <span className="board-label" aria-hidden="true" />
+        {COL_LABELS.map(letter => (
+          <span key={`fleet-col-${letter}`} className="board-label" aria-hidden="true">{letter}</span>
+        ))}
+        {ROWS.flatMap(row => [
+          <span key={`fleet-row-${row}`} className="board-label" aria-hidden="true">{row}</span>,
+          ...COLS.map(col => {
             const shot = shotFor(gameView.opponentShots, row, col);
             return (
               <button
@@ -112,13 +123,18 @@ export const Game = ({onNewGame}: Props) => {
                 {shot?.result}
               </button>
             );
-          })
-        )}
+          }),
+        ])}
       </section>
 
       <section aria-label="Tracking board" className="game-board">
-        {ROWS.flatMap(row =>
-          COLS.map(col => {
+        <span className="board-label" aria-hidden="true" />
+        {COL_LABELS.map(letter => (
+          <span key={`track-col-${letter}`} className="board-label" aria-hidden="true">{letter}</span>
+        ))}
+        {ROWS.flatMap(row => [
+          <span key={`track-row-${row}`} className="board-label" aria-hidden="true">{row}</span>,
+          ...COLS.map(col => {
             const shot = shotFor(gameView.myShots, row, col);
             return (
               <button
@@ -131,8 +147,8 @@ export const Game = ({onNewGame}: Props) => {
                 {shot?.result}
               </button>
             );
-          })
-        )}
+          }),
+        ])}
       </section>
     </div>
   );

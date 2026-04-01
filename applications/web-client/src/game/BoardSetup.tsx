@@ -11,6 +11,7 @@ import {
 
 const ROWS = Array.from({length: 10}, (_, i) => i + 1);
 const COLS = Array.from({length: 10}, (_, i) => i + 1);
+const COL_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
 
 type Props = {
   onConfirm: (board: Board) => void;
@@ -37,16 +38,21 @@ export const BoardSetup = ({onConfirm}: Props) => {
   return (
     <div className="board-setup">
       <section aria-label="Place your ships" className="board-setup-grid">
-        {ROWS.flatMap(row =>
-          COLS.map(col => (
+        <span className="board-label" aria-hidden="true" />
+        {COL_LABELS.map(letter => (
+          <span key={`setup-col-${letter}`} className="board-label" aria-hidden="true">{letter}</span>
+        ))}
+        {ROWS.flatMap(row => [
+          <span key={`setup-row-${row}`} className="board-label" aria-hidden="true">{row}</span>,
+          ...COLS.map(col => (
             <button
               key={`${row}-${col}`}
               aria-label={`Row ${row}, Column ${col}`}
               className={`board-setup-cell${isCellOccupied(board, {row, col}) ? ' occupied' : ''}`}
               onClick={() => handleCellClick(row, col)}
             />
-          ))
-        )}
+          )),
+        ])}
       </section>
 
       <div className="board-setup-controls">
