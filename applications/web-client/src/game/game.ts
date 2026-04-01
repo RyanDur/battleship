@@ -1,10 +1,11 @@
 import type {Board} from './board';
+import type {AiDifficulty} from './aiGame';
 import {maybe, createReducer} from '../lib/maybe';
 
 export type ShotResult = 'hit' | 'miss' | 'sunk'
 export type AiGamePhase = 'player-turn' | 'computer-turn' | 'player-won' | 'computer-won'
 export type Shot = {cell: {row: number; col: number}; result: ShotResult; ship?: {name: string; size: number}}
-export type AiGameState = {playerShots: Shot[]; aiShots: Shot[]; phase: AiGamePhase; announcement: string}
+export type AiGameState = {playerShots: Shot[]; aiShots: Shot[]; phase: AiGamePhase; announcement: string; difficulty?: AiDifficulty}
 
 export type P2pGamePhase =
   | 'challenged'
@@ -56,7 +57,7 @@ export type GameAction =
   | {type: 'LOAD_BOARD'}
   | {type: 'BOARD_LOADED'; board: Board}
   | {type: 'BOARD_NOT_FOUND'}
-  | {type: 'START_GAME'}
+  | {type: 'START_GAME'; difficulty?: AiDifficulty}
   | {type: 'GAME_STARTED'; gameState: AiGameState}
   | {type: 'FIRE_SHOT'; row: number; col: number}
   | {type: 'FIRE_RESULT'; playerShot: Shot; aiShot: Shot | null; phase: AiGamePhase}

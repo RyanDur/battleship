@@ -16,6 +16,7 @@ test('player can play a complete game against the computer without a server', as
   await expect(page.getByRole('button', {name: /play vs ai/i})).toBeVisible({timeout: 5_000});
 
   await page.getByRole('button', {name: /play vs ai/i}).click();
+  await page.getByRole('button', {name: /easy/i}).click();
 
   // Game starts — player's turn
   await expect(page.locator('.game-announcement')).toContainText(/your turn/i, {timeout: 5_000});
@@ -56,6 +57,7 @@ test('player can sink the AI fleet and win', async ({page}) => {
 
   await expect(page.getByRole('button', {name: /play vs ai/i})).toBeVisible({timeout: 5_000});
   await page.getByRole('button', {name: /play vs ai/i}).click();
+  await page.getByRole('button', {name: /easy/i}).click();
 
   await expect(page.locator('.game-announcement')).toContainText(/your turn/i, {timeout: 5_000});
 

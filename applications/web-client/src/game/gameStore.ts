@@ -3,7 +3,8 @@ import type {GameState, GameAction, P2pGame} from './game';
 import {createGameMessageHandler} from './gameMessageHandler';
 import {selectBoard, selectAiGameState, selectP2pGame, selectOffererPeerIds} from './gameSelectors';
 import {gameStarted, fireResult, boardNotFound, turnOrderDecided} from './gameActions';
-import {randomBoard, resolveFireShot} from './aiGame';
+import {randomBoard, resolveFireShot, createAiStrategy} from './aiGame';
+import type {AiStrategy} from './aiGame';
 import {maybe, createDispatch} from '../lib/maybe';
 import {createCoinFlipProtocol} from './coinFlipProtocol';
 import type {CoinFlipProtocol} from './coinFlipProtocol';
@@ -52,22 +53,25 @@ type GameStoreConfig = {
 
 export const createAiGameListenerFactory: GameListenerFactory = ({dispatch, getState}) => {
   let aiBoard: ReturnType<typeof randomBoard> | null = null;
+  let aiStrategy: AiStrategy | null = null;
 
   return (action) => {
     if (action.type === 'START_GAME') {
       const board = selectBoard(getState());
       if (!board) return;
       aiBoard = randomBoard();
-      dispatch(gameStarted({playerShots: [], aiShots: [], phase: 'player-turn', announcement: ''}));
+      const difficulty = action.difficulty ?? 'easy';
+      aiStrategy = createAiStrategy(difficulty);
+      dispatch(gameStarted({playerShots: [], aiShots: [], phase: 'player-turn', announcement: '', difficulty}));
       return;
     }
     if (action.type === 'FIRE_SHOT') {
       const aiGameState = selectAiGameState(getState());
       const board = selectBoard(getState());
-      if (!aiGameState || !board || !aiBoard) return;
+      if (!aiGameState || !board || !aiBoard || !aiStrategy) return;
       if (aiGameState.phase !== 'player-turn') return;
       if (aiGameState.playerShots.some(s => s.cell.row === action.row && s.cell.col === action.col)) return;
-      const result = resolveFireShot(aiBoard, board, aiGameState.playerShots, aiGameState.aiShots, {row: action.row, col: action.col});
+      const result = resolveFireShot(aiBoard, board, aiGameState.playerShots, aiGameState.aiShots, {row: action.row, col: action.col}, aiStrategy);
       dispatch(fireResult(result.playerShot, result.aiShot, result.phase));
     }
   };

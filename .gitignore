@@ -56,3 +56,4 @@ test-results/
 !.env.e2e
 .envrc
 !.envrc.example
+.superpowers/

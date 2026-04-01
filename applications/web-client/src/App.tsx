@@ -1,4 +1,5 @@
 import {useEffect, useMemo, useState} from 'react';
+import type {AiDifficulty} from './game/aiGame';
 import {BoardSetup} from './game/BoardSetup';
 import {Comms} from './connections/Comms';
 import {DirectConnect} from './connections/DirectConnect';
@@ -44,16 +45,29 @@ const AppMain = () => {
   const announcement = useGameState(selectAnnouncement);
   const gameStore = useGameStore();
   const [settingUpBoard, setSettingUpBoard] = useState(false);
+  const [showDifficulty, setShowDifficulty] = useState(false);
+
+  const pickDifficulty = (difficulty: AiDifficulty) => {
+    setShowDifficulty(false);
+    gameStore.dispatch(startGame(difficulty));
+  };
 
   if (boardLoading) return null;
   if (!p2pGame && !board) return <BoardSetup onConfirm={b => gameStore.dispatch(saveBoard(b))}/>;
   if (settingUpBoard) return <BoardSetup onConfirm={b => { gameStore.dispatch(saveBoard(b)); setSettingUpBoard(false); }}/>;
   if (p2pGame && (p2pGame.phase === 'placing' || p2pGame.phase === 'selecting-turn')) return <GameLobby onSetupBoard={() => setSettingUpBoard(true)}/>;
-  if (gameView) return <Game onNewGame={() => p2pGame ? gameStore.dispatch(clearP2pGame()) : gameStore.dispatch(startGame())}/>;
+  if (gameView) return <Game onNewGame={() => { if (p2pGame) { gameStore.dispatch(clearP2pGame()); } else { setShowDifficulty(true); } }}/>;
+  if (showDifficulty) return (
+    <>
+      <button className="control" onClick={() => pickDifficulty('easy')}>Easy</button>
+      <button className="control" onClick={() => pickDifficulty('normal')}>Normal</button>
+      <button className="control" onClick={() => pickDifficulty('hard')}>Hard</button>
+    </>
+  );
   return (
     <>
       {announcement && <p role="status" className="app-announcement">{announcement}</p>}
-      <button className="control" onClick={() => gameStore.dispatch(startGame())}>Play vs AI</button>
+      <button className="control" onClick={() => setShowDifficulty(true)}>Play vs AI</button>
     </>
   );
 };

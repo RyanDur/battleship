@@ -1,4 +1,5 @@
 import type {AiGameState, Shot, AiGamePhase, P2pGame, P2pGamePhase} from './game';
+import type {AiDifficulty} from './aiGame';
 import type {Board} from './board';
 
 export const saveBoard = (board: Board) => ({type: 'SAVE_BOARD' as const, board});
@@ -7,7 +8,7 @@ export const loadBoard = () => ({type: 'LOAD_BOARD' as const});
 export const boardLoaded = (board: Board) => ({type: 'BOARD_LOADED' as const, board});
 export const boardNotFound = () => ({type: 'BOARD_NOT_FOUND' as const});
 
-export const startGame = () => ({type: 'START_GAME' as const});
+export const startGame = (difficulty: AiDifficulty = 'easy') => ({type: 'START_GAME' as const, difficulty});
 export const gameStarted = (gameState: AiGameState) => ({type: 'GAME_STARTED' as const, gameState});
 export const fireShot = (row: number, col: number) => ({type: 'FIRE_SHOT' as const, row, col});
 export const fireResult = (playerShot: Shot, aiShot: Shot | null, phase: AiGamePhase) =>
