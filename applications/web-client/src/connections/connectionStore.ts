@@ -4,12 +4,13 @@ import {transportReducer, transportInitialState} from '../transport/transport';
 import type {TransportState, TransportAction} from '../transport/transport';
 import {createDispatch} from '../lib/maybe';
 import {selectIntroChannels, selectIsCreatingOffer, selectPeerToSignaling} from '../transport/transportSelectors';
+import {selectPeers} from './connectionSelectors';
 import {selectFlow} from '../transport/transportSelectors';
 import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, introductionReceived, introductionResolved, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, previousPeersReceived, emailSharedReceived, emailRevokedReceived, messageReceived} from './connectionActions';
 import {offerSdpReady, answerSdpReady, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, serverOfferReceived, serverAnswerReceived, iceRestartReceived, iceRestartAnswerReceived, peerMessageReceived} from '../transport/transportActions';
-import type {PeerEvent} from './connectionHandler';
+import type {PeerEvent} from '../transport/connectionHandler';
 import {encodeConnectionCode, decodeConnectionCode} from '../transport/connectionCode';
-import {createPeerHandler} from './connectionHandler';
+import {createPeerHandler} from '../transport/connectionHandler';
 import {startSignaling} from '../transport/signaling';
 import type {ConnectionEvent} from '../transport/connectionPort';
 import type {SignalingConfig, SignalingEvent, SignalingHandle} from '../transport/signaling';
@@ -108,7 +109,7 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit}: Ha
       portEmit?.(event);
       if (event.type === 'PEER_MESSAGE') dispatch(peerMessageReceived(event.peerId, event.data));
     };
-    const handler = createPeerHandler({name, createPeerConnection, emit, emitToPort, dispatch, getState});
+    const handler = createPeerHandler({name, createPeerConnection, emit, emitToPort, dispatch, getState, getPeerName: (peerId) => selectPeers(getState()).find(p => p.id === peerId)?.name});
 
     return (action, {prevState}) => {
       const dispatchHandlerCommand = createDispatch<CombinedAction>({

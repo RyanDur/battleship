@@ -2,7 +2,8 @@ import * as Decoder from 'schemawax';
 import { maybe, nothing } from '../lib/maybe';
 import { tryCatch } from '../lib/result';
 import { asyncResult, asyncTryCatch } from '../lib/asyncResult';
-import type {CombinedState, CombinedAction} from './connectionStore';
+import type {TransportState} from './transport';
+import type {TransportAction} from './transport';
 
 export type PeerCommand =
   | { type: 'CREATE_OFFER' }
@@ -40,10 +41,9 @@ export type PeerEvent =
   | { type: 'ICE_RESTART_OFFER_CREATED'; signalingPeerId: string; sdp: string }
   | { type: 'ICE_RESTART_ANSWER_CREATED'; signalingPeerId: string; sdp: string }
   | { type: 'MESSAGE_RECEIVED'; peerId: string; text: string }
-import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectSignalingToPeer} from '../transport/transportSelectors';
-import {selectPeers} from './connectionSelectors';
-import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed} from '../transport/transportActions';
-import type {ConnectionEvent} from '../transport/connectionPort';
+import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectSignalingToPeer} from './transportSelectors';
+import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed} from './transportActions';
+import type {ConnectionEvent} from './connectionPort';
 
 const introduceDecoder = Decoder.object({
   required: { type: Decoder.literal('INTRODUCE'), name: Decoder.string },
@@ -93,13 +93,16 @@ const chatDecoder = Decoder.object({
   required: { type: Decoder.literal('CHAT'), text: Decoder.string },
 });
 
+type WithTransport = {transport: TransportState}
+
 type Deps = {
   name: string
   emit: (event: PeerEvent) => void
   emitToPort: (event: ConnectionEvent) => void
   createPeerConnection: () => RTCPeerConnection
-  getState: () => CombinedState
-  dispatch: (action: CombinedAction) => void
+  getState: () => WithTransport
+  dispatch: (action: TransportAction) => void
+  getPeerName: (peerId: string) => string | undefined
 }
 
 type Handler = {
@@ -437,9 +440,8 @@ export const createPeerHandler = (deps: Deps): Handler => {
       case 'INTRODUCE_PEERS': {
         const ch1 = dataChannels.get(command.peerId1);
         const ch2 = dataChannels.get(command.peerId2);
-        const peers = selectPeers(deps.getState());
-        const name1 = peers.find(p => p.id === command.peerId1)?.name;
-        const name2 = peers.find(p => p.id === command.peerId2)?.name;
+        const name1 = deps.getPeerName(command.peerId1);
+        const name2 = deps.getPeerName(command.peerId2);
         if (!ch1 || !ch2 || !name1 || !name2) break;
         const introId = generatePeerId();
         const timer = setTimeout(() => {
