@@ -59,26 +59,23 @@ test('player can sink the AI fleet and win', async ({page}) => {
 
   await expect(page.locator('.game-announcement')).toContainText(/your turn/i, {timeout: 5_000});
 
-  // Fire all 100 cells — guaranteed to sink the AI fleet
+  // Fire cells until the game ends
   const trackingBoard = page.getByRole('region', {name: /tracking board/i});
 
   for (let row = 1; row <= 10; row++) {
     for (let col = 1; col <= 10; col++) {
-      const gameOver = await page.locator('.game-over').isVisible();
-      if (gameOver) break;
+      if (await page.locator('.game-over').isVisible()) break;
 
       const btn = trackingBoard.getByRole('button', {name: `Row ${row}, Column ${col}`, exact: true});
-      const isDisabled = await btn.isDisabled();
-      if (isDisabled) continue;
+      if (await btn.isDisabled()) continue;
 
       await btn.click();
+      // Wait for the shot to process — button becomes disabled after hit/miss
+      await page.waitForTimeout(100);
     }
-
-    const gameOver = await page.locator('.game-over').isVisible();
-    if (gameOver) break;
+    if (await page.locator('.game-over').isVisible()) break;
   }
 
-  // Eventually the game ends
   await expect(page.locator('.game-over')).toBeVisible({timeout: 10_000});
   await expect(page.getByRole('button', {name: /new game/i})).toBeVisible();
 });
