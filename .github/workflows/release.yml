@@ -23,14 +23,72 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
-    with:
-      version: ${{ inputs.tag || '' }}
-      ref: ${{ inputs.tag || '' }}
+  wait-for-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for CI to complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Waiting for CI on commit $COMMIT_SHA..."
+          ATTEMPTS=0
+          MAX_ATTEMPTS=40
+
+          while true; do
+            ATTEMPTS=$((ATTEMPTS + 1))
+            if [ "$ATTEMPTS" -gt "$MAX_ATTEMPTS" ]; then
+              echo "Timed out waiting for CI after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
+            RUN=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$COMMIT_SHA&per_page=1" --jq '.workflow_runs[0]')
+
+            if [ -z "$RUN" ] || [ "$RUN" = "null" ]; then
+              echo "No CI run found yet. Waiting..."
+              sleep 30
+              continue
+            fi
+
+            STATUS=$(echo "$RUN" | jq -r '.status')
+            CONCLUSION=$(echo "$RUN" | jq -r '.conclusion')
+            RUN_ID=$(echo "$RUN" | jq -r '.id')
+
+            if [ "$STATUS" = "completed" ]; then
+              if [ "$CONCLUSION" = "success" ]; then
+                echo "CI passed (run $RUN_ID)"
+                echo "CI_RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+                break
+              else
+                echo "CI failed with conclusion: $CONCLUSION"
+                exit 1
+              fi
+            fi
+
+            echo "CI still running (status: $STATUS). Waiting..."
+            sleep 30
+          done
+
+      - name: Download frontend artifacts from CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh run download "$CI_RUN_ID" -R "$REPO" -n dist -D dist
+          gh run download "$CI_RUN_ID" -R "$REPO" -n app-icons -D app-icons
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: app-icons
+          path: app-icons/
 
   build:
-    needs: ci
+    needs: wait-for-ci
     strategy:
       matrix:
         include:
@@ -47,15 +105,24 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: boot-jar
-          path: boot-jar
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Build boot jar with release version
+        shell: bash
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          VERSION=${TAG#v}
+          ./gradlew :applications:signaling-server:bootJar -Pversion="$VERSION"
 
       - uses: actions/download-artifact@v8
         with:
@@ -64,8 +131,10 @@ jobs:
 
       - name: Smoke test boot jar
         shell: bash
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
         run: |
-          JAR=$(ls boot-jar/*.jar | grep -v "\-plain\.jar")
+          JAR=$(ls applications/signaling-server/build/libs/*.jar | grep -v "\-plain\.jar")
           java -jar "$JAR" &
           JAR_PID=$!
           trap "kill $JAR_PID 2>/dev/null" EXIT
@@ -74,8 +143,6 @@ jobs:
           EXPECTED="${TAG#v}"
           echo "$RESPONSE" | grep -q "\"version\":\"$EXPECTED\"" || \
             { echo "Smoke test failed. Expected version: $EXPECTED, got: $RESPONSE"; exit 1; }
-        env:
-          TAG: ${{ env.RELEASE_TAG }}
 
       - name: Select icon for platform
         shell: bash
@@ -88,8 +155,10 @@ jobs:
 
       - name: Build installer
         shell: bash
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
         run: |
-          JAR=$(ls boot-jar/*.jar | grep -v "\-plain\.jar")
+          JAR=$(ls applications/signaling-server/build/libs/*.jar | grep -v "\-plain\.jar")
           JAR_DIR=$(dirname "$JAR")
           JAR_NAME=$(basename "$JAR")
 
@@ -111,8 +180,6 @@ jobs:
             --icon "$ICON_PATH" \
             --java-options "-Xmx256m" \
             --java-options "-Djava.awt.headless=false"
-        env:
-          TAG: ${{ env.RELEASE_TAG }}
 
       - name: Upload installer
         uses: actions/upload-artifact@v7
@@ -134,11 +201,11 @@ jobs:
           name: dist
 
       - name: Write production config
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
         run: |
           VERSION=${TAG#v}
           echo "{\"version\":\"$VERSION\",\"serviceUrl\":\"http://localhost:8080\"}" > config.json
-        env:
-          TAG: ${{ env.RELEASE_TAG }}
 
       - uses: actions/configure-pages@v5
 
