@@ -4,6 +4,7 @@ export type ConnectionEvent =
   | { type: 'PEER_DISCONNECTED'; peerId: string }
   | { type: 'PEER_MESSAGE'; peerId: string; data: unknown }
   | { type: 'SERVER_MESSAGE'; data: unknown }
+  | { type: 'TRANSPORT_ERROR'; message: string }
 
 export type ConnectionPort = {
   sendToPeer: (peerId: string, message: unknown) => void

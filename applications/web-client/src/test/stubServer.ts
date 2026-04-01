@@ -7,6 +7,7 @@ type RouteHandler = (req: http.IncomingMessage, res: http.ServerResponse) => voi
 export type WsConnection = {
   send: (data: string) => void
   close: () => void
+  terminate: () => void
   onMessage: (handler: (data: string) => void) => void
 }
 
@@ -58,6 +59,7 @@ export const createStubServer = (options: StubServerOptions): Promise<StubServer
       handler({
         send: (data) => wsSocket.send(data),
         close: () => wsSocket.close(),
+        terminate: () => wsSocket.terminate(),
         onMessage: (fn) => wsSocket.on('message', (data) => fn(data.toString())),
       });
     });

@@ -30,6 +30,8 @@ export type SignalingEvent =
   | {type: 'GAME_NOT_FOUND'}
   | {type: 'P2P_GAME_LOADED'; gameState: string}
   | {type: 'P2P_GAME_NOT_FOUND'}
+  | {type: 'SIGNALING_ERROR'}
+  | {type: 'SIGNALING_CLOSED'}
 
 export type SignalingHandle = {
   stop: () => void
@@ -125,7 +127,7 @@ export const startSignaling = (
     const currentWs = config.createWebSocket(config.url);
     ws = currentWs;
 
-    currentWs.onerror = () => undefined;
+    currentWs.onerror = () => { if (gen === generation) onEvent({type: 'SIGNALING_ERROR'}); };
 
     currentWs.onopen = () => {
       if (gen !== generation) return;
@@ -171,7 +173,7 @@ export const startSignaling = (
         });
     };
 
-    currentWs.onclose = () => undefined;
+    currentWs.onclose = () => { if (gen === generation) onEvent({type: 'SIGNALING_CLOSED'}); };
   };
 
   asyncTryCatch(() => fetch(config.sessionUrl, {credentials: 'include'}))

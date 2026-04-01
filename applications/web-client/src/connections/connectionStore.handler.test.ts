@@ -861,3 +861,41 @@ describe('reconnect and resume game', () => {
     });
   });
 });
+
+describe('data channel send failures', () => {
+  it('emits TRANSPORT_ERROR to port when data channel send throws during SEND_MESSAGE', async () => {
+    const portEvents: import('../transport/connectionPort').ConnectionEvent[] = [];
+    const portEmit = (e: import('../transport/connectionPort').ConnectionEvent) => portEvents.push(e);
+
+    const fac = createFakePeerConnectionFactory();
+    const stores: {s?: ConnectionStore; r?: ConnectionStore} = {};
+    stores.s = createConnectionStore(
+      applyMiddleware([makeRelayMiddleware('Sender', 's-sig', () => stores.r!)]),
+      [createHandlerListener({name: 'Sender', createPeerConnection: fac.createPeerConnection, portEmit})],
+    );
+    stores.r = createConnectionStore(
+      applyMiddleware([makeRelayMiddleware('Receiver', 'r-sig', () => stores.s!)]),
+      [createHandlerListener({name: 'Receiver', createPeerConnection: fac.createPeerConnection})],
+    );
+
+    stores.s.dispatch(connectViaServer('r-sig', 'Receiver'));
+    await vi.waitFor(() => {
+      expect(selectPeers(stores.s!.getState())).toHaveLength(1);
+      expect(selectPeers(stores.r!.getState())).toHaveLength(1);
+    });
+
+    const senderPeer = selectPeers(stores.s.getState())[0];
+    const offererChannels = fac.getAllOffererChannels();
+    expect(offererChannels).toHaveLength(1);
+    const offererCh = offererChannels[0];
+
+    // Make the offerer channel's send throw (simulates a closed/closing channel)
+    offererCh.send = () => { throw new Error('Channel is in invalid state'); };
+
+    stores.s.dispatch(sendMessage(senderPeer.id, 'hello'));
+
+    await vi.waitFor(() =>
+      expect(portEvents).toContainEqual({type: 'TRANSPORT_ERROR', message: 'Failed to send message to peer'})
+    );
+  });
+});

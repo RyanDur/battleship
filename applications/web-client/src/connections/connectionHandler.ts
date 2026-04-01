@@ -109,6 +109,11 @@ type Handler = {
 
 const generatePeerId = (): string => crypto.randomUUID();
 
+const safeSend = (channel: RTCDataChannel, message: string, emitToPort: (event: ConnectionEvent) => void) => {
+  tryCatch(() => channel.send(message), (err) => err)
+    .onFailure(() => emitToPort({type: 'TRANSPORT_ERROR', message: 'Failed to send message to peer'}));
+};
+
 const ICE_GATHER_TIMEOUT_MS = 5000;
 
 const gatherIceCandidates = (pc: RTCPeerConnection): Promise<string | undefined> =>
@@ -125,12 +130,13 @@ type ChannelCallbacks = {
   onOpen: (peerId: string, channel: RTCDataChannel) => void
   onClose: (peerId: string) => void
   onMessage: (peerId: string, parsed: unknown) => void
+  emitToPort: (event: ConnectionEvent) => void
 }
 
 const wireChannel = (channel: RTCDataChannel, peerId: string, name: string, cbs: ChannelCallbacks) => {
   channel.onopen = () => {
     cbs.onOpen(peerId, channel);
-    channel.send(JSON.stringify({ type: 'INTRODUCE', name }));
+    safeSend(channel, JSON.stringify({ type: 'INTRODUCE', name }), cbs.emitToPort);
   };
   channel.onclose = () => cbs.onClose(peerId);
   channel.onmessage = ({ data }: MessageEvent<string>) => {
@@ -188,7 +194,7 @@ const negotiateServerAnswer = (pc: RTCPeerConnection, localPeerId: string, signa
 const negotiateIntroOffer = (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void, cbs: ChannelCallbacks, relayChannel: RTCDataChannel, introId: string) =>
   createOfferSdp(pc, peerId, name, cbs)
     .onSuccess(sdp => {
-      if (sdp) relayChannel.send(JSON.stringify({ type: 'RELAY_SDP', introId, peerId, sdp }));
+      if (sdp) safeSend(relayChannel, JSON.stringify({ type: 'RELAY_SDP', introId, peerId, sdp }), cbs.emitToPort);
       else emit({ type: 'ERROR', message: 'ICE gathering timed out' });
     })
     .onFailure(err => emit({ type: 'ERROR', message: err.message }));
@@ -196,7 +202,7 @@ const negotiateIntroOffer = (pc: RTCPeerConnection, peerId: string, name: string
 const negotiateIntroAnswer = (pc: RTCPeerConnection, peerId: string, name: string, emit: (event: PeerEvent) => void, remoteSdp: string, cbs: ChannelCallbacks, relayChannel: RTCDataChannel, introId: string) =>
   acceptOfferSdp(pc, peerId, name, remoteSdp, cbs)
     .onSuccess(sdp => {
-      if (sdp) relayChannel.send(JSON.stringify({ type: 'RELAY_SDP_ANSWER', introId, sdp }));
+      if (sdp) safeSend(relayChannel, JSON.stringify({ type: 'RELAY_SDP_ANSWER', introId, sdp }), cbs.emitToPort);
       else emit({ type: 'ERROR', message: 'ICE gathering timed out' });
     })
     .onFailure(err => emit({ type: 'ERROR', message: err.message }));
@@ -267,7 +273,12 @@ export const createPeerHandler = (deps: Deps): Handler => {
     };
   };
 
+  const sendToChannel = (channel: RTCDataChannel | undefined, message: string) => {
+    if (channel) safeSend(channel, message, deps.emitToPort);
+  };
+
   const cbs: ChannelCallbacks = {
+    emitToPort: deps.emitToPort,
     onOpen: (peerId, channel) => {
       dataChannels.set(peerId, channel);
       deps.emit({ type: 'PEER_CONNECTED', peerId, isOfferer: localOffererPeerIds.has(peerId) });
@@ -287,7 +298,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
           clearTimeout(intro.timer);
           pendingIntros.delete(introId);
           const otherPeerId = peerId === intro.peerId1 ? intro.peerId2 : intro.peerId1;
-          dataChannels.get(otherPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_DECLINED', introId }));
+          sendToChannel(dataChannels.get(otherPeerId), JSON.stringify({ type: 'INTRODUCTION_DECLINED', introId }));
         }
       }
     },
@@ -308,7 +319,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
               clearTimeout(intro.timer);
               pendingIntros.delete(msg.introId);
               const otherPeerId = peerId === intro.peerId1 ? intro.peerId2 : intro.peerId1;
-              dataChannels.get(otherPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_DECLINED', introId: msg.introId }));
+              sendToChannel(dataChannels.get(otherPeerId), JSON.stringify({ type: 'INTRODUCTION_DECLINED', introId: msg.introId }));
               return;
             }
             intro.accepted.add(peerId);
@@ -318,10 +329,10 @@ export const createPeerHandler = (deps: Deps): Handler => {
                 const staleIntro = pendingIntros.get(msg.introId);
                 if (!staleIntro) return;
                 pendingIntros.delete(msg.introId);
-                dataChannels.get(staleIntro.peerId1)?.send(JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId: msg.introId }));
-                dataChannels.get(staleIntro.peerId2)?.send(JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId: msg.introId }));
+                sendToChannel(dataChannels.get(staleIntro.peerId1), JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId: msg.introId }));
+                sendToChannel(dataChannels.get(staleIntro.peerId2), JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId: msg.introId }));
               }, 60000);
-              dataChannels.get(intro.peerId1)?.send(JSON.stringify({ type: 'CREATE_OFFER_FOR', introId: msg.introId }));
+              sendToChannel(dataChannels.get(intro.peerId1), JSON.stringify({ type: 'CREATE_OFFER_FOR', introId: msg.introId }));
             }
           }))
         .or(() => maybe(relaySdpDecoder.decode(parsed))
@@ -330,14 +341,14 @@ export const createPeerHandler = (deps: Deps): Handler => {
             if (!intro) return;
             intro.relaySdpPeerId = msg.peerId;
             const otherPeerId = peerId === intro.peerId1 ? intro.peerId2 : intro.peerId1;
-            dataChannels.get(otherPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_SDP', introId: msg.introId, sdp: msg.sdp }));
+            sendToChannel(dataChannels.get(otherPeerId), JSON.stringify({ type: 'INTRODUCTION_SDP', introId: msg.introId, sdp: msg.sdp }));
           }))
         .or(() => maybe(relaySdpAnswerDecoder.decode(parsed))
           .map(msg => {
             const intro = pendingIntros.get(msg.introId);
             if (!intro) return;
             clearTimeout(intro.timer);
-            dataChannels.get(intro.peerId1)?.send(JSON.stringify({ type: 'INTRODUCTION_SDP_ANSWER', introId: msg.introId, peerId: intro.relaySdpPeerId, sdp: msg.sdp }));
+            sendToChannel(dataChannels.get(intro.peerId1), JSON.stringify({ type: 'INTRODUCTION_SDP_ANSWER', introId: msg.introId, peerId: intro.relaySdpPeerId, sdp: msg.sdp }));
             pendingIntros.delete(msg.introId);
           }))
         .or(() => maybe(introductionDecoder.decode(parsed))
@@ -408,7 +419,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         break;
       }
       case 'SEND_MESSAGE': {
-        dataChannels.get(command.peerId)?.send(JSON.stringify({ type: 'CHAT', text: command.text }));
+        sendToChannel(dataChannels.get(command.peerId), JSON.stringify({ type: 'CHAT', text: command.text }));
         break;
       }
       case 'DISCONNECT': {
@@ -416,11 +427,11 @@ export const createPeerHandler = (deps: Deps): Handler => {
         break;
       }
       case 'GRANT_TRUST': {
-        dataChannels.get(command.peerId)?.send(JSON.stringify({ type: 'TRUST', granted: true }));
+        sendToChannel(dataChannels.get(command.peerId), JSON.stringify({ type: 'TRUST', granted: true }));
         break;
       }
       case 'REVOKE_TRUST': {
-        dataChannels.get(command.peerId)?.send(JSON.stringify({ type: 'TRUST', granted: false }));
+        sendToChannel(dataChannels.get(command.peerId), JSON.stringify({ type: 'TRUST', granted: false }));
         break;
       }
       case 'INTRODUCE_PEERS': {
@@ -435,25 +446,25 @@ export const createPeerHandler = (deps: Deps): Handler => {
           const intro = pendingIntros.get(introId);
           if (!intro) return;
           pendingIntros.delete(introId);
-          dataChannels.get(intro.peerId1)?.send(JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId }));
-          dataChannels.get(intro.peerId2)?.send(JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId }));
+          sendToChannel(dataChannels.get(intro.peerId1), JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId }));
+          sendToChannel(dataChannels.get(intro.peerId2), JSON.stringify({ type: 'INTRODUCTION_EXPIRED', introId }));
         }, 60000);
         pendingIntros.set(introId, { peerId1: command.peerId1, peerId2: command.peerId2, accepted: new Set(), timer });
-        ch1.send(JSON.stringify({ type: 'INTRODUCTION', introId, from: deps.name, peer: name2 }));
-        ch2.send(JSON.stringify({ type: 'INTRODUCTION', introId, from: deps.name, peer: name1 }));
+        safeSend(ch1, JSON.stringify({ type: 'INTRODUCTION', introId, from: deps.name, peer: name2 }), deps.emitToPort);
+        safeSend(ch2, JSON.stringify({ type: 'INTRODUCTION', introId, from: deps.name, peer: name1 }), deps.emitToPort);
         break;
       }
       case 'ACCEPT_INTRODUCTION': {
         const introducerPeerId = command.relayPeerId ?? selectIntroChannels(deps.getState())[command.introId];
         if (introducerPeerId) {
-          dataChannels.get(introducerPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: command.introId, accepted: true }));
+          sendToChannel(dataChannels.get(introducerPeerId), JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: command.introId, accepted: true }));
         }
         break;
       }
       case 'DECLINE_INTRODUCTION': {
         const introducerPeerId = command.relayPeerId ?? selectIntroChannels(deps.getState())[command.introId];
         if (introducerPeerId) {
-          dataChannels.get(introducerPeerId)?.send(JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: command.introId, accepted: false }));
+          sendToChannel(dataChannels.get(introducerPeerId), JSON.stringify({ type: 'INTRODUCTION_RESPONSE', introId: command.introId, accepted: false }));
         }
         break;
       }
@@ -498,7 +509,7 @@ export const createPeerHandler = (deps: Deps): Handler => {
         break;
       }
       case 'SEND_TO_PEER': {
-        dataChannels.get(command.peerId)?.send(JSON.stringify(command.message));
+        sendToChannel(dataChannels.get(command.peerId), JSON.stringify(command.message));
         break;
       }
     }

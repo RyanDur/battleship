@@ -11,6 +11,7 @@ import {selectP2pGame} from '../game/gameSelectors';
 import {createGameStore} from '../game/gameStore';
 import {challengePeer, acceptChallenge, p2pBoardReady, opponentBoardReady, turnOrderDecided} from '../game/gameActions';
 import {createConnectionPort} from '../transport/connectionPort';
+import type {ConnectionEvent} from '../transport/connectionPort';
 
 const connectStore = async (serverSetup: (conn: WsConnection) => void = () => undefined) => {
   let wsConn: WsConnection | undefined;
@@ -331,5 +332,67 @@ describe('createSignalingMiddleware (server)', () => {
     await new Promise(r => setTimeout(r, 50));
     expect(selectOnlinePeers(store.getState())).toEqual([]);
     await cleanup();
+  });
+
+  it('server close emits TRANSPORT_ERROR to port', async () => {
+    const portEvents: ConnectionEvent[] = [];
+    const {port: capturePort, emit: portEmit} = createConnectionPort({sendToPeer: () => {}, sendToServer: () => {}});
+    capturePort.subscribe(e => portEvents.push(e));
+
+    let wsConn: WsConnection | undefined;
+    const server = await createStubServer({
+      routes: {'GET /session': (_req, res) => { res.writeHead(200); res.end(); }},
+      ws: {'/ws/signaling': conn => { wsConn = conn; }},
+    });
+    const store = createConnectionStore(undefined, [
+      createSignalingListener({
+        config: {
+          createWebSocket: makeWebSocket,
+          sessionUrl: `${server.url}/session`,
+          url: `${server.url.replace('http://', 'ws://')}/ws/signaling`,
+          name: 'Player',
+        },
+        portEmit,
+      }),
+    ]);
+    store.dispatch(startSignaling());
+    await vi.waitFor(() => expect(wsConn).toBeDefined());
+
+    wsConn!.close();
+
+    await vi.waitFor(() => expect(portEvents).toContainEqual({type: 'TRANSPORT_ERROR', message: 'Connection to server closed unexpectedly'}));
+    store.dispatch(stopSignaling());
+    await server.close();
+  });
+
+  it('server terminate emits TRANSPORT_ERROR to port', async () => {
+    const portEvents: ConnectionEvent[] = [];
+    const {port: capturePort, emit: portEmit} = createConnectionPort({sendToPeer: () => {}, sendToServer: () => {}});
+    capturePort.subscribe(e => portEvents.push(e));
+
+    let wsConn: WsConnection | undefined;
+    const server = await createStubServer({
+      routes: {'GET /session': (_req, res) => { res.writeHead(200); res.end(); }},
+      ws: {'/ws/signaling': conn => { wsConn = conn; }},
+    });
+    const store = createConnectionStore(undefined, [
+      createSignalingListener({
+        config: {
+          createWebSocket: makeWebSocket,
+          sessionUrl: `${server.url}/session`,
+          url: `${server.url.replace('http://', 'ws://')}/ws/signaling`,
+          name: 'Player',
+        },
+        portEmit,
+      }),
+    ]);
+    store.dispatch(startSignaling());
+    await vi.waitFor(() => expect(wsConn).toBeDefined());
+
+    wsConn!.terminate();
+
+    await vi.waitFor(() => expect(portEvents.some(e => e.type === 'TRANSPORT_ERROR')).toBe(true));
+    store.dispatch(stopSignaling());
+    await server.close();
   });
 });

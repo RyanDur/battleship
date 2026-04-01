@@ -257,6 +257,12 @@ export const createSignalingListener = ({config, portEmit, onReady}: SignalingLi
       P2P_GAME_LOADED: (event) => {
         portEmit?.({type: 'SERVER_MESSAGE', data: {type: 'P2P_GAME_LOADED', gameState: event.gameState}});
       },
+      SIGNALING_ERROR: () => {
+        portEmit?.({type: 'TRANSPORT_ERROR', message: 'Lost connection to server'});
+      },
+      SIGNALING_CLOSED: () => {
+        portEmit?.({type: 'TRANSPORT_ERROR', message: 'Connection to server closed unexpectedly'});
+      },
     });
 
     const dispatchSignalingAction = createDispatch<CombinedAction>({

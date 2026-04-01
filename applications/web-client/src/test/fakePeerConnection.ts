@@ -145,6 +145,14 @@ export const createFakePeerConnectionFactory = () => {
   const getAnswererChannel = (offerSdp: string): FakeDataChannel | undefined =>
     channelPairs.get(offerSdp)?.[0]?.answererChannel;
 
+  // Returns the offerer-side channel for a given offer SDP
+  const getOffererChannel = (offerSdp: string): FakeDataChannel | undefined =>
+    channelPairs.get(offerSdp)?.[0]?.offererChannel;
+
+  // Returns all established offerer channels (one per connection)
+  const getAllOffererChannels = (): FakeDataChannel[] =>
+    [...channelPairs.values()].flatMap(pairs => pairs.map(p => p.offererChannel));
+
   // Simulates an ICE connection state change on the PC with the given localDescription SDP
   const simulateIceStateChange = (localSdp: string, state: string) => {
     const pc = pcRegistry.get(localSdp);
@@ -153,5 +161,5 @@ export const createFakePeerConnectionFactory = () => {
     queueMicrotask(() => pc.oniceconnectionstatechange?.());
   };
 
-  return {createPeerConnection, getAnswererChannel, simulateIceStateChange};
+  return {createPeerConnection, getAnswererChannel, getOffererChannel, getAllOffererChannels, simulateIceStateChange};
 };

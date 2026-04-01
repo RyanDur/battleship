@@ -170,4 +170,33 @@ describe('startSignaling', () => {
     expect(events.filter(e => e.type === 'PEER_JOINED')).toHaveLength(0);
     await cleanup();
   });
+
+  it('emits SIGNALING_CLOSED when server closes connection gracefully', async () => {
+    const {events, getConn, cleanup} = await connect();
+
+    getConn().close();
+
+    await vi.waitFor(() => expect(events).toContainEqual({type: 'SIGNALING_CLOSED'}));
+    await cleanup();
+  });
+
+  it('emits SIGNALING_CLOSED when server terminates connection abruptly', async () => {
+    const {events, getConn, cleanup} = await connect();
+
+    getConn().terminate();
+
+    await vi.waitFor(() => expect(events).toContainEqual({type: 'SIGNALING_CLOSED'}));
+    await cleanup();
+  });
+
+  it('does not emit SIGNALING_CLOSED after stop', async () => {
+    const {events, handle, getConn, cleanup} = await connect();
+    handle.stop();
+
+    getConn().close();
+    await new Promise(r => setTimeout(r, 100));
+
+    expect(events.filter(e => e.type === 'SIGNALING_CLOSED')).toHaveLength(0);
+    await cleanup();
+  });
 });
