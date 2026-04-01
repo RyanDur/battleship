@@ -1,47 +1,25 @@
-import * as Decoder from 'schemawax';
-import {maybe} from '../lib/maybe';
-import {asyncResult, asyncTryCatch, asyncSuccess, asyncFailure, type AsyncResult} from '../lib/asyncResult';
+import {asyncSuccess, asyncFailure, type AsyncResult} from '../lib/asyncResult';
 import type {Platform} from './platform';
-import {HttpError} from './http';
 
 export const RELEASES_PAGE = 'https://github.com/RyanDur/battleship/releases/latest';
 
-const API_URL = 'https://api.github.com/repos/RyanDur/battleship/releases/latest';
+const REPO_URL = 'https://github.com/RyanDur/battleship';
 
-const PLATFORM_EXTENSION: Partial<Record<Platform, string>> = {
-  macos: '.dmg',
-  windows: '.msi',
-  linux: '.deb',
+const coerceVersion = (version: string): string => {
+  const parts = version.split('.');
+  const major = Math.max(1, Number(parts[0] ?? 0));
+  return [major, ...parts.slice(1)].join('.');
 };
 
-const assetDecoder = Decoder.object({
-  required: {
-    name: Decoder.string,
-    browser_download_url: Decoder.string,
-  },
-});
-
-const releaseDecoder = Decoder.object({
-  required: {assets: Decoder.array(assetDecoder)},
-});
-
-type Asset = Decoder.Output<typeof assetDecoder>
-
-const findAssetUrl = (json: unknown, extension: string): AsyncResult<string, Error> => {
-  const url = maybe(releaseDecoder.decode(json))
-    .mBind(release => maybe(release.assets.find((asset: Asset) => asset.name.endsWith(extension))))
-    .map(asset => asset.browser_download_url)
-    .orNull();
-  return url ? asyncSuccess(url) : asyncFailure(new Error(`No ${extension} asset found in release`));
+const PLATFORM_ASSET: Partial<Record<Platform, (version: string) => string>> = {
+  macos: (v) => `Battleship-${v}.dmg`,
+  windows: (v) => `Battleship-${v}.msi`,
+  linux: (v) => `battleship_${v}_amd64.deb`,
 };
 
-export const fetchDownloadUrl = (platform: Platform, apiUrl = API_URL): AsyncResult<string, Error> => {
-  const extension = PLATFORM_EXTENSION[platform];
-  if (!extension) return asyncFailure(new Error(`No installer available for platform: ${platform}`));
-
-  return asyncResult<Response, Error>(fetch(apiUrl))
-    .andThen(response => response.ok
-      ? asyncTryCatch(() => response.json())
-      : asyncFailure(new HttpError(response.status)))
-    .andThen(json => findAssetUrl(json, extension));
+export const downloadUrl = (platform: Platform, version: string): AsyncResult<string, Error> => {
+  const assetName = PLATFORM_ASSET[platform];
+  if (!assetName) return asyncFailure(new Error(`No installer available for platform: ${platform}`));
+  const coerced = coerceVersion(version);
+  return asyncSuccess(`${REPO_URL}/releases/download/v${version}/${assetName(coerced)}`);
 };

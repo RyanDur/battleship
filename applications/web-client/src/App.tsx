@@ -8,7 +8,7 @@ import {Game} from './game/GameView';
 import {GameLobby} from './game/GameLobby';
 import {ServiceHealth} from './connections/ServiceHealth';
 import type {Config} from './connections/config';
-import {fetchDownloadUrl} from './connections/download';
+import {downloadUrl} from './connections/download';
 import type {HeartbeatState} from './transport/heartbeat';
 import {useHeartbeat} from './hooks/useHeartbeat';
 import {detectPlatform} from './connections/platform';
@@ -121,7 +121,7 @@ const App = ({config}: Props) => {
       <header className="hud-header">
         <h1 className="hud-title">Battleship</h1>
         <ServiceHealth state={heartbeat} onRetry={retry}/>
-        <DownloadLink platform={platform} action={actionFor(heartbeat)} fetchDownloadUrl={fetchDownloadUrl}/>
+        <DownloadLink platform={platform} action={actionFor(heartbeat)} fetchDownloadUrl={(p) => downloadUrl(p, config.version)}/>
       </header>
       <StoreProvider store={store}>
         <GameProvider store={gameStore}>
