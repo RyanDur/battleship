@@ -336,6 +336,7 @@
 .board-setup-cell.occupied {
   background-color: var(--color-accent);
   border-color: var(--color-accent);
+  cursor: grab;
 }
 
 .board-setup-cell.preview {
@@ -350,6 +351,18 @@
 
 .board-setup-cell:hover {
   border-color: var(--color-accent);
+}
+
+.board-setup-cell.drag-source {
+  opacity: 0.3;
+}
+
+.board-setup-ships .control {
+  cursor: grab;
+}
+
+.board-setup-ships .control.drag-source {
+  opacity: 0.3;
 }
 
 /* ── Game boards ─────────────────────────────────────────────────────────── */
