@@ -1,30 +1,12 @@
 import {render, screen, act} from '@testing-library/react';
 import {ConnectionProvider} from './ConnectionProvider';
 import {useConnectionState, useConnectionStore} from './useConnection';
-import {combinedInitialState} from './connectionStore';
-import type {ConnectionStore, CombinedState} from './connectionStore';
+import {createConnectionStore} from './connectionStore';
+import type {CombinedState} from './connectionStore';
 import {createOffer} from '../transport/transportActions';
+import {peerConnected, peerNamed} from './connectionActions';
 import {selectFlow} from '../transport/transportSelectors';
 import {selectPeers} from './connectionSelectors';
-
-const makeFakeStore = (initial: CombinedState = combinedInitialState): ConnectionStore & {_emit: () => void} => {
-  let state = initial;
-  const listeners = new Set<() => void>();
-  const notify = () => listeners.forEach(fn => fn());
-  return {
-    getState: () => state,
-    subscribe: (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    dispatch: vi.fn(),
-    addListener: () => () => undefined,
-    _emit: () => {
-      state = {...state, connections: {...state.connections, peers: [{id: 'p1', name: 'Alice'}]}};
-      notify();
-    },
-  };
-};
 
 const TestComponent = ({selector}: {selector: (s: CombinedState) => unknown}) => {
   const value = useConnectionState(selector);
@@ -34,7 +16,7 @@ const TestComponent = ({selector}: {selector: (s: CombinedState) => unknown}) =>
 describe('ConnectionContext', () => {
   describe('useConnectionState', () => {
     it('returns initial selected state', () => {
-      const store = makeFakeStore();
+      const store = createConnectionStore();
       render(
         <ConnectionProvider store={store}>
           <TestComponent selector={s => selectFlow(s).phase}/>
@@ -45,7 +27,7 @@ describe('ConnectionContext', () => {
     });
 
     it('updates when store changes', async () => {
-      const store = makeFakeStore();
+      const store = createConnectionStore();
       render(
         <ConnectionProvider store={store}>
           <TestComponent selector={s => selectPeers(s).length}/>
@@ -54,13 +36,16 @@ describe('ConnectionContext', () => {
 
       expect(screen.getByTestId('value').textContent).toBe('0');
 
-      act(() => store._emit());
+      act(() => {
+        store.dispatch(peerConnected('p1'));
+        store.dispatch(peerNamed('p1', 'Alice'));
+      });
 
       expect(screen.getByTestId('value').textContent).toBe('1');
     });
 
     it('unsubscribes on unmount', () => {
-      const store = makeFakeStore();
+      const store = createConnectionStore();
       const subscribeSpy = vi.spyOn(store, 'subscribe');
 
       const {unmount} = render(
@@ -68,10 +53,6 @@ describe('ConnectionContext', () => {
           <TestComponent selector={s => selectFlow(s).phase}/>
         </ConnectionProvider>
       );
-
-      const unsubscribe = subscribeSpy.mock.results[0].value;
-      const unsubscribeSpy = vi.fn(unsubscribe);
-      subscribeSpy.mock.results[0].value = unsubscribeSpy;
 
       unmount();
 
@@ -81,7 +62,7 @@ describe('ConnectionContext', () => {
 
   describe('useConnectionStore', () => {
     it('exposes dispatch method', () => {
-      const store = makeFakeStore();
+      const store = createConnectionStore();
 
       const Button = () => {
         const s = useConnectionStore();
@@ -96,7 +77,7 @@ describe('ConnectionContext', () => {
 
       screen.getByRole('button').click();
 
-      expect(store.dispatch).toHaveBeenCalledWith(createOffer('pass'));
+      expect(selectFlow(store.getState()).phase).toBe('creating');
     });
   });
 });

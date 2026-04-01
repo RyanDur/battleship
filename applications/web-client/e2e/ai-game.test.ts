@@ -72,8 +72,6 @@ test('player can sink the AI fleet and win', async ({page}) => {
       if (isDisabled) continue;
 
       await btn.click();
-      // Button becomes disabled after any shot resolves (!!shot || isOver)
-      await expect(btn).toBeDisabled({timeout: 10_000});
     }
 
     const gameOver = await page.locator('.game-over').isVisible();

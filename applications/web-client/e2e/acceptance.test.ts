@@ -114,8 +114,8 @@ test('connected peer can introduce two peers and recipient sees an actionable al
   await expect(alice.getByRole('button', {name: 'Disconnect'})).toHaveCount(2);
 
   // Bob and Charlie each trust Alice so she can introduce them
-  await bob.getByRole('list', {name: 'Connected peers'}).getByRole('button', {name: 'Trust'}).click();
-  await charlie.getByRole('list', {name: 'Connected peers'}).getByRole('button', {name: 'Trust'}).click();
+  await bob.getByRole('list', {name: 'Connected peers'}).getByRole('button', {name: 'Trust'}).first().click();
+  await charlie.getByRole('list', {name: 'Connected peers'}).getByRole('button', {name: 'Trust'}).first().click();
 
   // Alice sees both trust indicators appear in her Fleet
   await expect(alice.locator('.fleet-peer-trust')).toHaveCount(2);
