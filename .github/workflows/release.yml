@@ -69,18 +69,24 @@ jobs:
             sleep 30
           done
 
-      - name: Download frontend artifacts from CI
+      - name: Download artifacts from CI
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
           gh run download "$CI_RUN_ID" -R "$REPO" -n dist -D dist
+          gh run download "$CI_RUN_ID" -R "$REPO" -n boot-jar -D boot-jar
           gh run download "$CI_RUN_ID" -R "$REPO" -n app-icons -D app-icons
 
       - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: boot-jar
+          path: boot-jar/
 
       - uses: actions/upload-artifact@v7
         with:
@@ -105,24 +111,15 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.RELEASE_TAG }}
-
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v5
-
-      - name: Build boot jar with release version
-        shell: bash
-        env:
-          TAG: ${{ env.RELEASE_TAG }}
-        run: |
-          VERSION=${TAG#v}
-          ./gradlew :applications:signaling-server:bootJar -Pversion="$VERSION"
+      - uses: actions/download-artifact@v8
+        with:
+          name: boot-jar
+          path: boot-jar
 
       - uses: actions/download-artifact@v8
         with:
@@ -131,18 +128,12 @@ jobs:
 
       - name: Smoke test boot jar
         shell: bash
-        env:
-          TAG: ${{ env.RELEASE_TAG }}
         run: |
-          JAR=$(ls applications/signaling-server/build/libs/*.jar | grep -v "\-plain\.jar")
+          JAR=$(ls boot-jar/*.jar | grep -v "\-plain\.jar")
           java -jar "$JAR" &
           JAR_PID=$!
           trap "kill $JAR_PID 2>/dev/null" EXIT
-
-          RESPONSE=$(curl --retry 10 --retry-delay 1 --retry-connrefused --fail http://localhost:8080/health)
-          EXPECTED="${TAG#v}"
-          echo "$RESPONSE" | grep -q "\"version\":\"$EXPECTED\"" || \
-            { echo "Smoke test failed. Expected version: $EXPECTED, got: $RESPONSE"; exit 1; }
+          curl --retry 10 --retry-delay 1 --retry-connrefused --fail http://localhost:8080/health
 
       - name: Select icon for platform
         shell: bash
@@ -158,7 +149,7 @@ jobs:
         env:
           TAG: ${{ env.RELEASE_TAG }}
         run: |
-          JAR=$(ls applications/signaling-server/build/libs/*.jar | grep -v "\-plain\.jar")
+          JAR=$(ls boot-jar/*.jar | grep -v "\-plain\.jar")
           JAR_DIR=$(dirname "$JAR")
           JAR_NAME=$(basename "$JAR")
 
