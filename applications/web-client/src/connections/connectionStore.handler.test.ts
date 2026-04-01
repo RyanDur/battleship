@@ -1,12 +1,14 @@
 import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
-import type {ConnectionFlow} from './connections';
-import {serverOfferReceived, serverAnswerReceived, connectViaServer, disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, createOffer, joinOffer, acceptAnswerCode, sendMessage, peerDisconnected, sendToPeer} from './connectionActions';
+import type {TransportFlow} from '../transport/transport';
+import {serverOfferReceived, serverAnswerReceived, connectViaServer, createOffer, joinOffer, acceptAnswerCode, peerDisconnected} from '../transport/transportActions';
+import {disconnect, introducePeers, acceptIntroduction, previousPeersReceived, grantTrust, revokeTrust, sendMessage, sendToPeer} from './connectionActions';
 import {boardLoaded, p2pGameLoaded, p2pFire, p2pStateMismatch, clearP2pGame, challengePeer, acceptChallenge, p2pBoardReady, takeFirstTurn, turnOrderDecided} from '../game/gameActions';
 import {hashBoard, hashValue} from '../game/hashBoard';
 import type {Board} from '../game/board';
-import {selectFlow, selectPeers, selectPendingIntroductions, selectPreviousPeers, selectIntroChannels, selectIntroConnections, selectMessages} from './connectionSelectors';
+import {selectFlow, selectIntroChannels, selectIntroConnections} from '../transport/transportSelectors';
+import {selectPeers, selectPendingIntroductions, selectPreviousPeers, selectMessages} from './connectionSelectors';
 import {selectP2pGame, selectGameView} from '../game/gameSelectors';
 import {createGameStore, createReconnectListenerFactory, createGameCommandListenerFactory} from '../game/gameStore';
 import type {GameStore} from '../game/gameStore';
@@ -332,7 +334,7 @@ describe('createHandlerMiddleware (store)', () => {
     );
     alice.dispatch(createOffer('secret'));
     await vi.waitFor(() => expect(selectFlow(alice.getState()).phase).toBe('offer-ready'));
-    const offerCode = (selectFlow(alice.getState()) as Extract<ConnectionFlow, {phase: 'offer-ready'}>).code;
+    const offerCode = (selectFlow(alice.getState()) as Extract<TransportFlow, {phase: 'offer-ready'}>).code;
 
     // PC where iceGatheringState is already 'complete' but localDescription stays null,
     // so gatherIceCandidates short-circuits and resolves with undefined immediately
@@ -401,11 +403,11 @@ describe('createHandlerMiddleware (store)', () => {
 
     alice.dispatch(createOffer('secret'));
     await vi.waitFor(() => expect(selectFlow(alice.getState()).phase).toBe('offer-ready'));
-    const offerFlow = selectFlow(alice.getState()) as Extract<ConnectionFlow, {phase: 'offer-ready'}>;
+    const offerFlow = selectFlow(alice.getState()) as Extract<TransportFlow, {phase: 'offer-ready'}>;
 
     bob.dispatch(joinOffer(offerFlow.code, 'secret'));
     await vi.waitFor(() => expect(selectFlow(bob.getState()).phase).toBe('answer-ready'));
-    const answerFlow = selectFlow(bob.getState()) as Extract<ConnectionFlow, {phase: 'answer-ready'}>;
+    const answerFlow = selectFlow(bob.getState()) as Extract<TransportFlow, {phase: 'answer-ready'}>;
 
     alice.dispatch(acceptAnswerCode(answerFlow.code));
 
@@ -430,11 +432,11 @@ describe('createHandlerMiddleware (store)', () => {
 
     alice.dispatch(createOffer('secret'));
     await vi.waitFor(() => expect(selectFlow(alice.getState()).phase).toBe('offer-ready'));
-    const offerFlow = selectFlow(alice.getState()) as Extract<ConnectionFlow, {phase: 'offer-ready'}>;
+    const offerFlow = selectFlow(alice.getState()) as Extract<TransportFlow, {phase: 'offer-ready'}>;
 
     bob.dispatch(joinOffer(offerFlow.code, 'secret'));
     await vi.waitFor(() => expect(selectFlow(bob.getState()).phase).toBe('answer-ready'));
-    const answerFlow = selectFlow(bob.getState()) as Extract<ConnectionFlow, {phase: 'answer-ready'}>;
+    const answerFlow = selectFlow(bob.getState()) as Extract<TransportFlow, {phase: 'answer-ready'}>;
 
     alice.dispatch(acceptAnswerCode(answerFlow.code));
     await vi.waitFor(() => expect(selectPeers(alice.getState())).toHaveLength(1));

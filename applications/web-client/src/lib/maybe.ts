@@ -39,10 +39,10 @@ export const nothing = <T = never>(): Nothing<T> => Object.freeze({
 export const maybe = <T>(value: T | null | undefined): Maybe<T> =>
   value !== undefined && value !== null ? some(value) : nothing();
 
-export const createReducer = <S, A extends {type: string}>(
+export const createReducer = <S, A extends {type: string}, W extends {type: string} = A>(
   handlers: {[T in A['type']]?: (state: S, action: Extract<A, {type: T}>) => S}
-): ((state: S, action: A) => S) => {
-  const h = handlers as Record<string, ((state: S, action: A) => S) | undefined>;
+): ((state: S, action: W) => S) => {
+  const h = handlers as Record<string, ((state: S, action: W) => S) | undefined>;
   return (state, action) => maybe(h[action.type]).map(fn => fn(state, action)).orElse(state);
 };
 

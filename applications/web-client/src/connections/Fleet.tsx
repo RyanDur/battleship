@@ -1,8 +1,10 @@
 import {useState} from 'react';
 import {useConnectionState, useConnectionStore} from './useConnection';
 import type {Peer, PreviousPeer} from './connections';
-import {selectPeers, selectOnlinePeers, selectPreviousPeers, selectPeerConnectionHealth} from './connectionSelectors';
-import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, reconnectViaServer, forgetPeer, connectViaServer} from './connectionActions';
+import {selectPeers, selectOnlinePeers, selectPreviousPeers} from './connectionSelectors';
+import {selectPeerConnectionHealth} from '../transport/transportSelectors';
+import {reconnectViaServer, connectViaServer} from '../transport/transportActions';
+import {introducePeers, revokeTrust, grantTrust, disconnect, savePeerEmail, forgetPeer} from './connectionActions';
 import {challengePeer, cancelChallenge} from '../game/gameActions';
 import {useOptionalGameState, useGameStore} from '../game/useGame';
 import {selectP2pGame} from '../game/gameSelectors';

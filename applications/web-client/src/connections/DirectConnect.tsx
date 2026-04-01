@@ -1,8 +1,8 @@
 import {useState} from 'react';
 import {useConnectionState, useConnectionStore} from './useConnection';
-import type {ConnectionFlow} from './connections';
-import {selectFlow} from './connectionSelectors';
-import {acceptAnswerCode, cancelOffer, createOffer, joinOffer} from './connectionActions';
+import type {TransportFlow} from '../transport/transport';
+import {selectFlow} from '../transport/transportSelectors';
+import {acceptAnswerCode, cancelOffer, createOffer, joinOffer} from '../transport/transportActions';
 import {asyncTryCatch} from '../lib/asyncResult';
 
 type FlowPhase =
@@ -13,7 +13,7 @@ type FlowPhase =
   | {phase: 'joining'}
   | {phase: 'answer-ready'; code: string}
 
-const toFlowPhase = (flow: ConnectionFlow): FlowPhase => {
+const toFlowPhase = (flow: TransportFlow): FlowPhase => {
   if (flow.phase === 'offer-ready') return {phase: 'offer-ready', code: flow.code};
   if (flow.phase === 'answer-ready') return {phase: 'answer-ready', code: flow.code};
   if (flow.phase === 'encoding-offer') return {phase: 'creating'};

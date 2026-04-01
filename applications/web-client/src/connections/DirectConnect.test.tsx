@@ -4,9 +4,10 @@ import {DirectConnect} from './DirectConnect';
 import {ConnectionProvider} from './ConnectionProvider';
 import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import {createOffer, peerConnected} from './connectionActions';
-import {selectFlow} from './connectionSelectors';
-import type {ConnectionFlow} from './connections';
+import {createOffer} from '../transport/transportActions';
+import {peerConnected} from './connectionActions';
+import {selectFlow} from '../transport/transportSelectors';
+import type {TransportFlow} from '../transport/transport';
 
 const makeStore = () => {
   const factory = createFakePeerConnectionFactory();
@@ -135,7 +136,7 @@ describe('DirectConnect', () => {
     await user.click(screen.getByRole('button', {name: /generate/i}));
     await waitFor(() => expect(selectFlow(store.getState()).phase).toBe('offer-ready'));
 
-    const flow = selectFlow(store.getState()) as Extract<ConnectionFlow, {phase: 'offer-ready'}>;
+    const flow = selectFlow(store.getState()) as Extract<TransportFlow, {phase: 'offer-ready'}>;
     act(() => store.dispatch(peerConnected(flow.peerId)));
 
     await waitFor(() => {

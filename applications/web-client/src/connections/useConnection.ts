@@ -1,7 +1,6 @@
 import {useContext, useEffect, useState} from 'react';
 import {ConnectionContext} from './connectionContext';
-import type {ConnectionStore} from './connectionStore';
-import type {ConnectionsState} from './connections';
+import type {ConnectionStore, CombinedState} from './connectionStore';
 
 export const useConnectionStore = (): ConnectionStore => {
   const store = useContext(ConnectionContext);
@@ -9,7 +8,7 @@ export const useConnectionStore = (): ConnectionStore => {
   return store;
 };
 
-export const useConnectionState = <T,>(selector: (state: ConnectionsState) => T): T => {
+export const useConnectionState = <T,>(selector: (state: CombinedState) => T): T => {
   const store = useConnectionStore();
   const [value, setValue] = useState(() => selector(store.getState()));
   useEffect(() => store.subscribe(() => setValue(selector(store.getState()))), [store, selector]);

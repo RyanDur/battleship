@@ -3,9 +3,10 @@ import userEvent from '@testing-library/user-event';
 import {Fleet} from './Fleet';
 import {ConnectionProvider} from './ConnectionProvider';
 import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
-import type {ConnectionsAction} from './connections';
+import type {CombinedAction} from './connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import {peerConnected, peerNamed, peerDisconnected, grantTrust, peerTrustUpdated, introductionReceived, peerConnectionUnstable, peerConnectionRestored, previousPeersReceived, onlinePeerLeft, onlinePeersUpdated, onlinePeerJoined, reconnectViaServer, forgetPeer, savePeerEmail} from './connectionActions';
+import {peerConnectionUnstable, peerConnectionRestored, reconnectViaServer} from '../transport/transportActions';
+import {peerConnected, peerNamed, peerDisconnected, grantTrust, peerTrustUpdated, introductionReceived, previousPeersReceived, onlinePeerLeft, onlinePeersUpdated, onlinePeerJoined, forgetPeer, savePeerEmail} from './connectionActions';
 import {selectPeers} from './connectionSelectors';
 import {GameProvider} from '../game/GameProvider';
 import {createGameStore} from '../game/gameStore';
@@ -360,7 +361,7 @@ describe('Fleet', () => {
     it('clicking Forget dispatches FORGET_PEER', async () => {
       const user = userEvent.setup();
       const factory = createFakePeerConnectionFactory();
-      const dispatched: ConnectionsAction[] = [];
+      const dispatched: CombinedAction[] = [];
       const store = createConnectionStore(
         applyMiddleware([encodingMiddleware, codecMiddleware, () => (next) => (action) => { dispatched.push(action); next(action); }]),
         [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
@@ -377,7 +378,7 @@ describe('Fleet', () => {
     it('clicking Reconnect dispatches RECONNECT_VIA_SERVER', async () => {
       const user = userEvent.setup();
       const factory = createFakePeerConnectionFactory();
-      const dispatched: ConnectionsAction[] = [];
+      const dispatched: CombinedAction[] = [];
       const store = createConnectionStore(
         applyMiddleware([encodingMiddleware, codecMiddleware, () => (next) => (action) => { dispatched.push(action); next(action); }]),
         [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],
@@ -434,7 +435,7 @@ describe('Fleet', () => {
     it('submitting email dispatches SAVE_PEER_EMAIL', async () => {
       const user = userEvent.setup();
       const factory = createFakePeerConnectionFactory();
-      const dispatched: ConnectionsAction[] = [];
+      const dispatched: CombinedAction[] = [];
       const store = createConnectionStore(
         applyMiddleware([encodingMiddleware, codecMiddleware, () => (next) => (action) => { dispatched.push(action); next(action); }]),
         [createHandlerListener({name: 'Player', createPeerConnection: factory.createPeerConnection})],

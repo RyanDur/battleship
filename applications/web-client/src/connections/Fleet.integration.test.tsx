@@ -6,9 +6,11 @@ import {ConnectionProvider} from './ConnectionProvider';
 import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
 import type {ConnectionStore, MiddlewareFactory} from './connectionStore';
-import type {ConnectionFlow} from './connections';
-import {serverOfferReceived, serverAnswerReceived, previousPeersReceived, reconnectViaServer, onlinePeersUpdated, createOffer, joinOffer, acceptAnswerCode} from './connectionActions';
-import {selectFlow, selectPeers, selectPreviousPeers} from './connectionSelectors';
+import type {TransportFlow} from '../transport/transport';
+import {serverOfferReceived, serverAnswerReceived, reconnectViaServer, createOffer, joinOffer, acceptAnswerCode} from '../transport/transportActions';
+import {previousPeersReceived, onlinePeersUpdated} from './connectionActions';
+import {selectFlow} from '../transport/transportSelectors';
+import {selectPeers, selectPreviousPeers} from './connectionSelectors';
 import {GameProvider} from '../game/GameProvider';
 import {createGameStore} from '../game/gameStore';
 
@@ -146,11 +148,11 @@ describe('Fleet integration', () => {
 
       await act(async () => { offerer.dispatch(createOffer('pass')); });
       await waitFor(() => expect(selectFlow(offerer.getState()).phase).toBe('offer-ready'));
-      const offerFlow = selectFlow(offerer.getState()) as Extract<ConnectionFlow, {phase: 'offer-ready'}>;
+      const offerFlow = selectFlow(offerer.getState()) as Extract<TransportFlow, {phase: 'offer-ready'}>;
 
       await act(async () => { answerer.dispatch(joinOffer(offerFlow.code, 'pass')); });
       await waitFor(() => expect(selectFlow(answerer.getState()).phase).toBe('answer-ready'));
-      const answerFlow = selectFlow(answerer.getState()) as Extract<ConnectionFlow, {phase: 'answer-ready'}>;
+      const answerFlow = selectFlow(answerer.getState()) as Extract<TransportFlow, {phase: 'answer-ready'}>;
 
       await act(async () => { offerer.dispatch(acceptAnswerCode(answerFlow.code)); });
       await waitFor(() => {

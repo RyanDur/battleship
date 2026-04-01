@@ -1,9 +1,11 @@
 // @vitest-environment node
 import {createConnectionStore, createSignalingListener} from './connectionStore';
+import type {CombinedAction} from './connectionStore';
 import {createStubServer} from '../test/stubServer';
 import {makeWebSocket} from '../test/makeWebSocket';
 import type {WsConnection} from '../test/stubServer';
-import {startSignaling, stopSignaling, relayOffer, relayAnswer, forgetPeer, relayIceRestart, relayIceRestartAnswer, shareEmail, stopSharingEmail, updateEmail, savePeerEmail} from './connectionActions';
+import {startSignaling, stopSignaling, relayOffer, relayAnswer, relayIceRestart, relayIceRestartAnswer} from '../transport/transportActions';
+import {forgetPeer, shareEmail, stopSharingEmail, updateEmail, savePeerEmail} from './connectionActions';
 import {selectOnlinePeers, selectPreviousPeers} from './connectionSelectors';
 import {selectP2pGame} from '../game/gameSelectors';
 import {createGameStore} from '../game/gameStore';
@@ -145,7 +147,7 @@ describe('createSignalingMiddleware (server)', () => {
 
   it('ICE_RESTART_RECEIVED message from server dispatches store action', async () => {
     const {store, getConn, cleanup} = await connectStore();
-    const captured: import('./connections').ConnectionsAction[] = [];
+    const captured: CombinedAction[] = [];
     const origDispatch = store.dispatch;
     store.dispatch = (action) => { captured.push(action); origDispatch(action); };
 
@@ -159,7 +161,7 @@ describe('createSignalingMiddleware (server)', () => {
 
   it('ICE_RESTART_ANSWER_RECEIVED message from server dispatches store action', async () => {
     const {store, getConn, cleanup} = await connectStore();
-    const captured: import('./connections').ConnectionsAction[] = [];
+    const captured: CombinedAction[] = [];
     const origDispatch = store.dispatch;
     store.dispatch = (action) => { captured.push(action); origDispatch(action); };
 

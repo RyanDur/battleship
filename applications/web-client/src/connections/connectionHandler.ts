@@ -2,7 +2,7 @@ import * as Decoder from 'schemawax';
 import { maybe, nothing } from '../lib/maybe';
 import { tryCatch } from '../lib/result';
 import { asyncResult, asyncTryCatch } from '../lib/asyncResult';
-import type { ConnectionsState, ConnectionsAction } from './connections';
+import type {CombinedState, CombinedAction} from './connectionStore';
 
 export type PeerCommand =
   | { type: 'CREATE_OFFER' }
@@ -40,8 +40,9 @@ export type PeerEvent =
   | { type: 'ICE_RESTART_OFFER_CREATED'; signalingPeerId: string; sdp: string }
   | { type: 'ICE_RESTART_ANSWER_CREATED'; signalingPeerId: string; sdp: string }
   | { type: 'MESSAGE_RECEIVED'; peerId: string; text: string }
-import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectPeers, selectSignalingToPeer} from './connectionSelectors';
-import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed} from './connectionActions';
+import {selectOffererPeerIds, selectPeerToSignaling, selectIceRestartAttempts, selectPeerConnectionHealth, selectIntroConnections, selectIntroChannels, selectSignalingToPeer} from '../transport/transportSelectors';
+import {selectPeers} from './connectionSelectors';
+import {introConnectionCleared, iceRestartAttempted, introChannelRegistered, introConnectionRegistered, signalingPeerRegistered, offerFailed} from '../transport/transportActions';
 import type {ConnectionEvent} from '../transport/connectionPort';
 
 const introduceDecoder = Decoder.object({
@@ -97,8 +98,8 @@ type Deps = {
   emit: (event: PeerEvent) => void
   emitToPort: (event: ConnectionEvent) => void
   createPeerConnection: () => RTCPeerConnection
-  getState: () => ConnectionsState
-  dispatch: (action: ConnectionsAction) => void
+  getState: () => CombinedState
+  dispatch: (action: CombinedAction) => void
 }
 
 type Handler = {

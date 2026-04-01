@@ -1,8 +1,12 @@
 import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction} from './connections';
+import {transportReducer, transportInitialState} from '../transport/transport';
+import type {TransportState, TransportAction, HandlerState} from '../transport/transport';
 import {createDispatch} from '../lib/maybe';
-import {selectFlow, selectIntroChannels, selectIsCreatingOffer, selectPeerToSignaling} from './connectionSelectors';
-import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, offerSdpReady, answerSdpReady, introductionReceived, introductionResolved, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, serverOfferReceived, serverAnswerReceived, previousPeersReceived, iceRestartReceived, iceRestartAnswerReceived, emailSharedReceived, emailRevokedReceived, messageReceived} from './connectionActions';
+import {selectIntroChannels, selectIsCreatingOffer, selectPeerToSignaling} from '../transport/transportSelectors';
+import {selectFlow} from '../transport/transportSelectors';
+import {peerConnected, previousPeerConnected, peerNamed, peerDisconnected, peerTrustUpdated, introductionReceived, introductionResolved, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, previousPeersReceived, emailSharedReceived, emailRevokedReceived, messageReceived} from './connectionActions';
+import {offerSdpReady, answerSdpReady, relayOffer, relayAnswer, peerConnectionUnstable, peerConnectionRestored, relayIceRestart, relayIceRestartAnswer, offerFailed, offerEncoded, answerEncoded, acceptOffer, decodeFailed, acceptAnswer, serverOfferReceived, serverAnswerReceived, iceRestartReceived, iceRestartAnswerReceived} from '../transport/transportActions';
 import type {PeerEvent} from './connectionHandler';
 import {encodeConnectionCode, decodeConnectionCode} from '../transport/connectionCode';
 import {createPeerHandler} from './connectionHandler';
@@ -10,34 +14,37 @@ import {startSignaling} from '../transport/signaling';
 import type {ConnectionEvent} from '../transport/connectionPort';
 import type {SignalingConfig, SignalingEvent, SignalingHandle} from '../transport/signaling';
 
+export type CombinedState = ConnectionsState & TransportState
+export type CombinedAction = ConnectionsAction | TransportAction
+
 export type ListenerContext = {
-  prevState: ConnectionsState
-  state: ConnectionsState
-  dispatch: (action: ConnectionsAction) => void
-  getState: () => ConnectionsState
+  prevState: CombinedState
+  state: CombinedState
+  dispatch: (action: CombinedAction) => void
+  getState: () => CombinedState
 }
 
-export type ListenerFn = (action: ConnectionsAction, context: ListenerContext) => void
+export type ListenerFn = (action: CombinedAction, context: ListenerContext) => void
 
 export type ConnectionStore = {
-  getState: () => ConnectionsState
+  getState: () => CombinedState
   subscribe: (fn: () => void) => () => void
-  dispatch: (action: ConnectionsAction) => void
+  dispatch: (action: CombinedAction) => void
   addListener: (fn: ListenerFn) => () => void
 }
 
-type Dispatch = (action: ConnectionsAction) => void
+type Dispatch = (action: CombinedAction) => void
 
 type MiddlewareDeps = {
   dispatch: Dispatch
-  getState: () => ConnectionsState
+  getState: () => CombinedState
 }
 
 export type MiddlewareFactory = (deps: MiddlewareDeps) => (next: Dispatch) => Dispatch
 
 type ListenerFactoryDeps = {
   dispatch: Dispatch
-  getState: () => ConnectionsState
+  getState: () => CombinedState
 }
 
 export type ListenerFactory = (deps: ListenerFactoryDeps) => ListenerFn
@@ -46,8 +53,30 @@ export const applyMiddleware = (factories: MiddlewareFactory[]): MiddlewareFacto
   (deps) => (next) =>
     factories.reduceRight((acc, factory) => factory(deps)(acc), next);
 
+export const combinedInitialState: CombinedState = {...initialState, ...transportInitialState};
+
+const toConnectionsState = (state: CombinedState): ConnectionsState & {handlerState: HandlerState} => ({
+  peers: state.peers,
+  messages: state.messages,
+  pendingIntroductions: state.pendingIntroductions,
+  onlinePeers: state.onlinePeers,
+  previousPeers: state.previousPeers,
+  handlerState: state.handlerState,
+});
+
+const toTransportState = (state: CombinedState): TransportState => ({
+  flow: state.flow,
+  handlerState: state.handlerState,
+  peerConnectionHealth: state.peerConnectionHealth,
+});
+
+const combinedReducer = (state: CombinedState, action: CombinedAction): CombinedState => ({
+  ...connectionsReducer(toConnectionsState(state), action),
+  ...transportReducer(toTransportState(state), action),
+});
+
 export const createConnectionStore = (middlewareFactory?: MiddlewareFactory, listenerFactories?: ListenerFactory[]): ConnectionStore => {
-  let state = initialState;
+  let state = combinedInitialState;
   const subscribers = new Set<() => void>();
   const actionListeners = new Set<ListenerFn>();
 
@@ -55,12 +84,12 @@ export const createConnectionStore = (middlewareFactory?: MiddlewareFactory, lis
     getState: () => state,
     subscribe: (fn) => { subscribers.add(fn); return () => subscribers.delete(fn); },
     addListener: (fn) => { actionListeners.add(fn); return () => actionListeners.delete(fn); },
-    dispatch: (action: ConnectionsAction) => { /* replaced below */ void action; },
+    dispatch: (action: CombinedAction) => { /* replaced below */ void action; },
   };
 
   const baseDispatch: Dispatch = (action) => {
     const prevState = state;
-    state = connectionsReducer(state, action);
+    state = combinedReducer(state, action);
     subscribers.forEach(fn => fn());
     actionListeners.forEach(fn => fn(action, {prevState, state, dispatch: (a) => store.dispatch(a), getState: () => state}));
   };
@@ -80,7 +109,7 @@ type HandlerListenerConfig = {
   portEmit?: (event: ConnectionEvent) => void
 }
 
-const makeHandlerEmit = (dispatch: Dispatch, getState: () => ConnectionsState, portEmit?: (event: ConnectionEvent) => void) => {
+const makeHandlerEmit = (dispatch: Dispatch, getState: () => CombinedState, portEmit?: (event: ConnectionEvent) => void) => {
   const dispatchPeerEvent = createDispatch<PeerEvent>({
     PEER_CONNECTED: (event) => {
       dispatch(peerConnected(event.peerId));
@@ -122,7 +151,7 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit}: Ha
     const handler = createPeerHandler({name, createPeerConnection, emit, emitToPort: portEmit ?? (() => {}), dispatch, getState});
 
     return (action, {prevState}) => {
-      const dispatchHandlerCommand = createDispatch<ConnectionsAction>({
+      const dispatchHandlerCommand = createDispatch<CombinedAction>({
         CREATE_OFFER: () => handler.handleCommand({type: 'CREATE_OFFER'}),
         ACCEPT_OFFER: (action) => handler.handleCommand({type: 'ACCEPT_OFFER', sdp: action.sdp}),
         ACCEPT_ANSWER: (action) => handler.handleCommand({type: 'ACCEPT_ANSWER', peerId: action.peerId, sdp: action.sdp}),
@@ -153,7 +182,7 @@ export const createHandlerListener = ({name, createPeerConnection, portEmit}: Ha
 
 export const encodingMiddleware: MiddlewareFactory =
   ({dispatch, getState}) => (next) =>
-    (action: ConnectionsAction) => {
+    (action: CombinedAction) => {
       const flow = selectFlow(getState());
       if (action.type === 'OFFER_SDP_READY' && flow.phase === 'creating') {
         encodeConnectionCode(action.sdp, flow.passphrase).onSuccess(code => dispatch(offerEncoded(action.peerId, code)));
@@ -165,7 +194,7 @@ export const encodingMiddleware: MiddlewareFactory =
 
 export const codecMiddleware: MiddlewareFactory =
   ({dispatch, getState}) => (next) =>
-    (action: ConnectionsAction) => {
+    (action: CombinedAction) => {
       if (action.type === 'JOIN_OFFER') {
         decodeConnectionCode(action.code, action.passphrase)
           .onSuccess(sdp => dispatch(acceptOffer(sdp)))
@@ -230,7 +259,7 @@ export const createSignalingListener = ({config, portEmit, onReady}: SignalingLi
       },
     });
 
-    const dispatchSignalingAction = createDispatch<ConnectionsAction>({
+    const dispatchSignalingAction = createDispatch<CombinedAction>({
       START_SIGNALING: () => {
         handle = startSignaling(config, dispatchSignalingEvent);
         onReady?.({send: (msg) => handle?.send(msg as Record<string, unknown>)});

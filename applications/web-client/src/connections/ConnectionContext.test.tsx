@@ -1,12 +1,11 @@
 import {render, screen, act} from '@testing-library/react';
 import {ConnectionProvider} from './ConnectionProvider';
 import {useConnectionState, useConnectionStore} from './useConnection';
-import {initialState} from './connections';
-import type {ConnectionStore} from './connectionStore';
-import type {ConnectionsState} from './connections';
-import {createOffer} from './connectionActions';
+import {combinedInitialState} from './connectionStore';
+import type {ConnectionStore, CombinedState} from './connectionStore';
+import {createOffer} from '../transport/transportActions';
 
-const makeFakeStore = (initial: ConnectionsState = initialState): ConnectionStore & {_emit: () => void} => {
+const makeFakeStore = (initial: CombinedState = combinedInitialState): ConnectionStore & {_emit: () => void} => {
   let state = initial;
   const listeners = new Set<() => void>();
   const notify = () => listeners.forEach(fn => fn());
@@ -25,7 +24,7 @@ const makeFakeStore = (initial: ConnectionsState = initialState): ConnectionStor
   };
 };
 
-const TestComponent = ({selector}: {selector: (s: ConnectionsState) => unknown}) => {
+const TestComponent = ({selector}: {selector: (s: CombinedState) => unknown}) => {
   const value = useConnectionState(selector);
   return <div data-testid="value">{JSON.stringify(value)}</div>;
 };

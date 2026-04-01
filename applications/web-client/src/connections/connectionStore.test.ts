@@ -1,10 +1,11 @@
 import {createConnectionStore, createHandlerListener, encodingMiddleware, codecMiddleware, applyMiddleware} from './connectionStore';
 import {createFakePeerConnectionFactory} from '../test/fakePeerConnection';
-import type {ConnectionsAction, ConnectionsState} from './connections';
-import {initialState} from './connections';
-import type {MiddlewareFactory, ListenerFactory} from './connectionStore';
-import {createOffer, joinOffer, acceptAnswerCode, peerConnected, peerNamed, peerDisconnected, grantTrust, revokeTrust, peerTrustUpdated, introductionReceived, acceptIntroduction, declineIntroduction, introductionResolved, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft, connectViaServer} from './connectionActions';
-import {selectFlow, selectPeers, selectPendingIntroductions, selectOnlinePeers, selectPeerConnectionHealth} from './connectionSelectors';
+import type {CombinedState, CombinedAction, MiddlewareFactory, ListenerFactory} from './connectionStore';
+import {combinedInitialState} from './connectionStore';
+import {createOffer, joinOffer, acceptAnswerCode, peerDisconnected, connectViaServer} from '../transport/transportActions';
+import {peerConnected, peerNamed, grantTrust, revokeTrust, peerTrustUpdated, introductionReceived, acceptIntroduction, declineIntroduction, introductionResolved, onlinePeersUpdated, onlinePeerJoined, onlinePeerLeft} from './connectionActions';
+import {selectFlow, selectPeerConnectionHealth} from '../transport/transportSelectors';
+import {selectPeers, selectPendingIntroductions, selectOnlinePeers} from './connectionSelectors';
 
 const makeStore = (extra: MiddlewareFactory[] = []) => {
   const factory = createFakePeerConnectionFactory();
@@ -191,8 +192,8 @@ describe('connectionStore', () => {
 
   describe('ICE restart', () => {
     const connectViaServerAndGetOfferSdp = async (store: ReturnType<typeof makeStore>['store']) => {
-      const dispatched: ConnectionsAction[] = [];
-      store.dispatch = ((original) => (action: ConnectionsAction) => {
+      const dispatched: CombinedAction[] = [];
+      store.dispatch = ((original) => (action: CombinedAction) => {
         dispatched.push(action);
         return original(action);
       })(store.dispatch);
@@ -228,7 +229,7 @@ describe('connectionStore', () => {
     });
 
     it('ICE disconnect triggers RELAY_ICE_RESTART dispatch', async () => {
-      const dispatched: ConnectionsAction[] = [];
+      const dispatched: CombinedAction[] = [];
       const {store, factory} = makeStore([() => (next) => (action) => { dispatched.push(action); next(action); }]);
 
       const offerSdp = await connectViaServerAndGetOfferSdp(store);
@@ -242,15 +243,15 @@ describe('connectionStore', () => {
 
   describe('applyMiddleware (standalone)', () => {
     it('fans out action to all middleware via next chain', () => {
-      const received1: ConnectionsAction[] = [];
-      const received2: ConnectionsAction[] = [];
+      const received1: CombinedAction[] = [];
+      const received2: CombinedAction[] = [];
       const noop = () => {};
       const composed = applyMiddleware([
         () => (next) => (action) => { received1.push(action); next(action); },
         () => (next) => (action) => { received2.push(action); next(action); },
       ]);
       const action = createOffer('secret');
-      const dispatch = composed({dispatch: noop, getState: () => initialState})(noop);
+      const dispatch = composed({dispatch: noop, getState: () => combinedInitialState})(noop);
 
       dispatch(action);
 
@@ -265,7 +266,7 @@ describe('connectionStore', () => {
         () => (next) => (action) => { order.push('middleware'); next(action); },
       ]);
       const baseDispatch = () => order.push('base');
-      const dispatch = composed({dispatch: noop, getState: () => initialState})(baseDispatch);
+      const dispatch = composed({dispatch: noop, getState: () => combinedInitialState})(baseDispatch);
 
       dispatch(createOffer('secret'));
 
@@ -275,14 +276,14 @@ describe('connectionStore', () => {
     it('is a no-op for an empty list', () => {
       const noop = () => {};
       const composed = applyMiddleware([]);
-      const dispatch = composed({dispatch: noop, getState: () => initialState})(noop);
+      const dispatch = composed({dispatch: noop, getState: () => combinedInitialState})(noop);
       expect(() => dispatch(createOffer('secret'))).not.toThrow();
     });
   });
 
   describe('middleware', () => {
     it('receives every dispatched action', () => {
-      const actions: ConnectionsAction[] = [];
+      const actions: CombinedAction[] = [];
       const {store} = makeStore([() => (next) => (action) => { actions.push(action); next(action); }]);
 
       store.dispatch(createOffer('secret'));
@@ -317,7 +318,7 @@ describe('connectionStore', () => {
   describe('addListener', () => {
     it('receives action and prevState and state after dispatch', () => {
       const {store} = makeStore();
-      const received: Array<{action: ConnectionsAction; prevState: ConnectionsState; state: ConnectionsState}> = [];
+      const received: Array<{action: CombinedAction; prevState: CombinedState; state: CombinedState}> = [];
       store.addListener((action, {prevState, state}) => received.push({action, prevState, state}));
 
       store.dispatch(createOffer('secret'));
@@ -330,7 +331,7 @@ describe('connectionStore', () => {
 
     it('receives post-reducer state', () => {
       const {store} = makeStore();
-      let seenState: ConnectionsState | undefined;
+      let seenState: CombinedState | undefined;
       store.addListener((_action, {state}) => { seenState = state; });
 
       store.dispatch(peerConnected('p1'));
@@ -355,7 +356,7 @@ describe('connectionStore', () => {
 
     it('unsubscribe stops listener from receiving actions', () => {
       const {store} = makeStore();
-      const received: ConnectionsAction[] = [];
+      const received: CombinedAction[] = [];
       const unsubscribe = store.addListener((action) => received.push(action));
 
       unsubscribe();
@@ -367,7 +368,7 @@ describe('connectionStore', () => {
 
   describe('listenerFactories', () => {
     it('listener factory receives dispatch and getState and its returned listener fires on every action', () => {
-      const received: ConnectionsAction[] = [];
+      const received: CombinedAction[] = [];
       const factory: ListenerFactory = ({dispatch: _dispatch, getState: _getState}) =>
         (action) => received.push(action);
 
