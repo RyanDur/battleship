@@ -4,6 +4,8 @@ import {useConnectionState, useConnectionStore} from './useConnection';
 import {combinedInitialState} from './connectionStore';
 import type {ConnectionStore, CombinedState} from './connectionStore';
 import {createOffer} from '../transport/transportActions';
+import {selectFlow} from '../transport/transportSelectors';
+import {selectPeers} from './connectionSelectors';
 
 const makeFakeStore = (initial: CombinedState = combinedInitialState): ConnectionStore & {_emit: () => void} => {
   let state = initial;
@@ -18,7 +20,7 @@ const makeFakeStore = (initial: CombinedState = combinedInitialState): Connectio
     dispatch: vi.fn(),
     addListener: () => () => undefined,
     _emit: () => {
-      state = {...state, peers: [{id: 'p1', name: 'Alice'}]};
+      state = {...state, connections: {...state.connections, peers: [{id: 'p1', name: 'Alice'}]}};
       notify();
     },
   };
@@ -35,7 +37,7 @@ describe('ConnectionContext', () => {
       const store = makeFakeStore();
       render(
         <ConnectionProvider store={store}>
-          <TestComponent selector={s => s.flow.phase}/>
+          <TestComponent selector={s => selectFlow(s).phase}/>
         </ConnectionProvider>
       );
 
@@ -46,7 +48,7 @@ describe('ConnectionContext', () => {
       const store = makeFakeStore();
       render(
         <ConnectionProvider store={store}>
-          <TestComponent selector={s => s.peers.length}/>
+          <TestComponent selector={s => selectPeers(s).length}/>
         </ConnectionProvider>
       );
 
@@ -63,7 +65,7 @@ describe('ConnectionContext', () => {
 
       const {unmount} = render(
         <ConnectionProvider store={store}>
-          <TestComponent selector={s => s.flow.phase}/>
+          <TestComponent selector={s => selectFlow(s).phase}/>
         </ConnectionProvider>
       );
 

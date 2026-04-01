@@ -325,8 +325,8 @@ describe('connectionStore', () => {
 
       const entry = received.find(r => r.action.type === 'CREATE_OFFER');
       expect(entry).toBeDefined();
-      expect(entry!.prevState.flow.phase).toBe('idle');
-      expect(entry!.state.flow.phase).toBe('creating');
+      expect(selectFlow(entry!.prevState).phase).toBe('idle');
+      expect(selectFlow(entry!.state).phase).toBe('creating');
     });
 
     it('receives post-reducer state', () => {
@@ -336,7 +336,7 @@ describe('connectionStore', () => {
 
       store.dispatch(peerConnected('p1'));
 
-      expect(seenState?.peers).toContainEqual({id: 'p1'});
+      expect(seenState ? selectPeers(seenState) : undefined).toContainEqual({id: 'p1'});
     });
 
     it('can dispatch from listener and the action enters the full chain', () => {
@@ -382,7 +382,7 @@ describe('connectionStore', () => {
       const entries: Array<{prevPhase: string; phase: string}> = [];
       const factory: ListenerFactory = () =>
         (_action, {prevState, state}) =>
-          entries.push({prevPhase: prevState.flow.phase, phase: state.flow.phase});
+          entries.push({prevPhase: selectFlow(prevState).phase, phase: selectFlow(state).phase});
 
       const store = createConnectionStore(undefined, [factory]);
       store.dispatch(createOffer('secret'));

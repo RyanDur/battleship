@@ -1,7 +1,9 @@
 import type {ConnectionsState} from './connections';
 
-export const selectPeers = (state: ConnectionsState) => state.peers;
-export const selectPendingIntroductions = (state: ConnectionsState) => state.pendingIntroductions;
-export const selectOnlinePeers = (state: ConnectionsState) => state.onlinePeers;
-export const selectPreviousPeers = (state: ConnectionsState) => state.previousPeers;
-export const selectMessages = (state: ConnectionsState) => state.messages;
+type WithConnections = {connections: ConnectionsState}
+
+export const selectPeers = (state: WithConnections) => state.connections.peers;
+export const selectPendingIntroductions = (state: WithConnections) => state.connections.pendingIntroductions;
+export const selectOnlinePeers = (state: WithConnections) => state.connections.onlinePeers;
+export const selectPreviousPeers = (state: WithConnections) => state.connections.previousPeers;
+export const selectMessages = (state: WithConnections) => state.connections.messages;

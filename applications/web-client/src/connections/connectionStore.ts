@@ -1,7 +1,7 @@
 import {connectionsReducer, initialState} from './connections';
 import type {ConnectionsState, ConnectionsAction} from './connections';
 import {transportReducer, transportInitialState} from '../transport/transport';
-import type {TransportState, TransportAction, HandlerState} from '../transport/transport';
+import type {TransportState, TransportAction} from '../transport/transport';
 import {createDispatch} from '../lib/maybe';
 import {selectIntroChannels, selectIsCreatingOffer, selectPeerToSignaling} from '../transport/transportSelectors';
 import {selectFlow} from '../transport/transportSelectors';
@@ -13,8 +13,10 @@ import {createPeerHandler} from './connectionHandler';
 import {startSignaling} from '../transport/signaling';
 import type {ConnectionEvent} from '../transport/connectionPort';
 import type {SignalingConfig, SignalingEvent, SignalingHandle} from '../transport/signaling';
+import {createStore, applyMiddleware as createStoreApplyMiddleware} from '../state/createStore';
+import type {Store, MiddlewareFactory as GenericMiddlewareFactory, ListenerFactory as GenericListenerFactory} from '../state/createStore';
 
-export type CombinedState = ConnectionsState & TransportState
+export type CombinedState = {connections: ConnectionsState; transport: TransportState}
 export type CombinedAction = ConnectionsAction | TransportAction
 
 export type ListenerContext = {
@@ -26,82 +28,36 @@ export type ListenerContext = {
 
 export type ListenerFn = (action: CombinedAction, context: ListenerContext) => void
 
-export type ConnectionStore = {
-  getState: () => CombinedState
-  subscribe: (fn: () => void) => () => void
-  dispatch: (action: CombinedAction) => void
-  addListener: (fn: ListenerFn) => () => void
-}
+export type ConnectionStore = Store<CombinedState, CombinedAction>
 
-type Dispatch = (action: CombinedAction) => void
-
-type MiddlewareDeps = {
-  dispatch: Dispatch
-  getState: () => CombinedState
-}
-
-export type MiddlewareFactory = (deps: MiddlewareDeps) => (next: Dispatch) => Dispatch
-
-type ListenerFactoryDeps = {
-  dispatch: Dispatch
-  getState: () => CombinedState
-}
-
-export type ListenerFactory = (deps: ListenerFactoryDeps) => ListenerFn
+export type MiddlewareFactory = GenericMiddlewareFactory<CombinedState, CombinedAction>
+export type ListenerFactory = GenericListenerFactory<CombinedState, CombinedAction>
 
 export const applyMiddleware = (factories: MiddlewareFactory[]): MiddlewareFactory =>
-  (deps) => (next) =>
-    factories.reduceRight((acc, factory) => factory(deps)(acc), next);
+  createStoreApplyMiddleware(factories);
 
-export const combinedInitialState: CombinedState = {...initialState, ...transportInitialState};
+export const combinedInitialState: CombinedState = {connections: initialState, transport: transportInitialState};
 
-const toConnectionsState = (state: CombinedState): ConnectionsState & {handlerState: HandlerState} => ({
-  peers: state.peers,
-  messages: state.messages,
-  pendingIntroductions: state.pendingIntroductions,
-  onlinePeers: state.onlinePeers,
-  previousPeers: state.previousPeers,
-  handlerState: state.handlerState,
-});
-
-const toTransportState = (state: CombinedState): TransportState => ({
-  flow: state.flow,
-  handlerState: state.handlerState,
-  peerConnectionHealth: state.peerConnectionHealth,
-});
-
-const combinedReducer = (state: CombinedState, action: CombinedAction): CombinedState => ({
-  ...connectionsReducer(toConnectionsState(state), action),
-  ...transportReducer(toTransportState(state), action),
-});
-
-export const createConnectionStore = (middlewareFactory?: MiddlewareFactory, listenerFactories?: ListenerFactory[]): ConnectionStore => {
-  let state = combinedInitialState;
-  const subscribers = new Set<() => void>();
-  const actionListeners = new Set<ListenerFn>();
-
-  const store: ConnectionStore = {
-    getState: () => state,
-    subscribe: (fn) => { subscribers.add(fn); return () => subscribers.delete(fn); },
-    addListener: (fn) => { actionListeners.add(fn); return () => actionListeners.delete(fn); },
-    dispatch: (action: CombinedAction) => { /* replaced below */ void action; },
-  };
-
-  const baseDispatch: Dispatch = (action) => {
-    const prevState = state;
-    state = combinedReducer(state, action);
-    subscribers.forEach(fn => fn());
-    actionListeners.forEach(fn => fn(action, {prevState, state, dispatch: (a) => store.dispatch(a), getState: () => state}));
-  };
-
-  const middlewareAPI: MiddlewareDeps = {dispatch: (action) => store.dispatch(action), getState: () => state};
-  store.dispatch = middlewareFactory ? middlewareFactory(middlewareAPI)(baseDispatch) : baseDispatch;
-
-  const listenerDeps: ListenerFactoryDeps = {dispatch: (action) => store.dispatch(action), getState: () => state};
-  listenerFactories?.forEach(factory => store.addListener(factory(listenerDeps)));
-
-  return store;
+const connectionsSlice = {
+  name: 'connections' as const,
+  initialState,
+  reducer: (state: CombinedState, action: {type: string}): ConnectionsState =>
+    connectionsReducer({...state.connections, handlerState: state.transport.handlerState}, action),
 };
+
+const transportSlice = {
+  name: 'transport' as const,
+  initialState: transportInitialState,
+  reducer: (state: CombinedState, action: {type: string}): TransportState =>
+    transportReducer(state.transport, action),
+};
+
+export const createConnectionStore = (middlewareFactory?: MiddlewareFactory, listenerFactories?: ListenerFactory[]): ConnectionStore =>
+  createStore(
+    [connectionsSlice, transportSlice],
+    listenerFactories,
+    middlewareFactory,
+  );
 
 type HandlerListenerConfig = {
   name: string
@@ -109,7 +65,7 @@ type HandlerListenerConfig = {
   portEmit?: (event: ConnectionEvent) => void
 }
 
-const makeHandlerEmit = (dispatch: Dispatch, getState: () => CombinedState, portEmit?: (event: ConnectionEvent) => void) => {
+const makeHandlerEmit = (dispatch: (action: CombinedAction) => void, getState: () => CombinedState, portEmit?: (event: ConnectionEvent) => void) => {
   const dispatchPeerEvent = createDispatch<PeerEvent>({
     PEER_CONNECTED: (event) => {
       dispatch(peerConnected(event.peerId));
