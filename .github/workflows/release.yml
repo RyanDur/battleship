@@ -128,12 +128,18 @@ jobs:
 
       - name: Smoke test boot jar
         shell: bash
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
         run: |
+          VERSION=${TAG#v}
           JAR=$(ls boot-jar/*.jar | grep -v "\-plain\.jar")
-          java -jar "$JAR" &
+          java -Dapp.version="$VERSION" -jar "$JAR" &
           JAR_PID=$!
           trap "kill $JAR_PID 2>/dev/null" EXIT
-          curl --retry 10 --retry-delay 1 --retry-connrefused --fail http://localhost:8080/health
+
+          RESPONSE=$(curl --retry 10 --retry-delay 1 --retry-connrefused --fail http://localhost:8080/health)
+          echo "$RESPONSE" | grep -q "\"version\":\"$VERSION\"" || \
+            { echo "Smoke test failed. Expected version: $VERSION, got: $RESPONSE"; exit 1; }
 
       - name: Select icon for platform
         shell: bash
@@ -170,7 +176,8 @@ jobs:
             --dest build/jpackage \
             --icon "$ICON_PATH" \
             --java-options "-Xmx256m" \
-            --java-options "-Djava.awt.headless=false"
+            --java-options "-Djava.awt.headless=false" \
+            --java-options "-Dapp.version=$VERSION"
 
       - name: Upload installer
         uses: actions/upload-artifact@v7
