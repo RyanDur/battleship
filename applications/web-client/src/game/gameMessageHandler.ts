@@ -12,7 +12,7 @@ import {
   p2pGameOver, opponentForfeited, p2pStateMismatch, p2pStateSync, opponentBoardRevealed,
   peerConnected, peerNamed, peerDisconnected,
   loadBoard, loadGame, boardSaved, boardLoaded, boardNotFound,
-  gameStarted, fireResult, gameStateReceived, gameNotFound, p2pGameLoaded,
+  gameStarted, fireResult, gameStateReceived, gameNotFound, p2pGameLoaded, p2pGameLoadFailed,
 } from './gameActions';
 
 // Server message decoders
@@ -202,7 +202,10 @@ export const createGameMessageHandler = (deps: GameMessageDeps) =>
             tryCatch(() => JSON.parse(msg.gameState), () => null)
               .onSuccess(gs => {
                 const decoded = serverP2pGameStateDecoder.decode(gs);
-                if (!decoded) return;
+                if (!decoded) {
+                  deps.dispatch(p2pGameLoadFailed());
+                  return;
+                }
                 const localOpponentId = deps.translatePeerId?.(decoded.opponentId);
                 const game: P2pGame = {
                   opponentId: localOpponentId ?? decoded.opponentId,
@@ -219,7 +222,8 @@ export const createGameMessageHandler = (deps: GameMessageDeps) =>
                   announcement: '',
                 };
                 deps.dispatch(p2pGameLoaded(game));
-              });
+              })
+              .onFailure(() => deps.dispatch(p2pGameLoadFailed()));
           }));
       return;
     }
@@ -294,8 +298,8 @@ export const createGameMessageHandler = (deps: GameMessageDeps) =>
           const game = deps.getP2pGame();
           if (!game || game.winner !== 'me') return;
           hashBoard(msg.board)
-            .onSuccess(hash => deps.dispatch(opponentBoardRevealed(msg.board, hash === game.opponentBoardHash)))
-            .onFailure(() => deps.dispatch(opponentBoardRevealed(msg.board, false)));
+            .onSuccess(hash => deps.dispatch(opponentBoardRevealed(msg.board, hash === game.opponentBoardHash ? 'verified' : 'mismatch')))
+            .onFailure(() => deps.dispatch(opponentBoardRevealed(msg.board, 'error')));
         }))
       .or(() => maybe(gameStateSyncDecoder.decode(parsed))
         .map(msg => {

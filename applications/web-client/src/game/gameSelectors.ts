@@ -9,7 +9,8 @@ export const selectOffererPeerIds = (state: GameState) => state.offererPeerIds;
 
 export const selectAnnouncement = (state: GameState): string => {
   if (state.p2pGame) return state.p2pGame.announcement;
-  return state.aiGameState?.announcement ?? '';
+  if (state.aiGameState) return state.aiGameState.announcement;
+  return state.announcement;
 };
 
 export const selectGameView = (state: GameState): GameView | null => {

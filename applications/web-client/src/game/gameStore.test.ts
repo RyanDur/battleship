@@ -9,7 +9,7 @@ import {
   boardLoaded, boardNotFound, saveBoard,
   gameStarted, fireResult, gameStateReceived, gameNotFound,
   peerNamed, peerConnected,
-  p2pGameLoaded,
+  p2pGameLoaded, coinFlipFailed, p2pGameLoadFailed,
 } from './gameActions';
 import {
   selectP2pGame, selectBoard, selectBoardLoading, selectAiGameState,
@@ -125,6 +125,20 @@ describe('P2P game', () => {
       const store = makeSelectingStore();
       store.dispatch(turnOrderDecided(false));
       expect(selectP2pGame(store.getState())?.phase).toBe('their-turn');
+    });
+
+    it('COIN_FLIP_FAILED keeps selecting-turn and sets announcement', () => {
+      const store = makeSelectingStore();
+      store.dispatch(coinFlipFailed());
+      expect(selectP2pGame(store.getState())?.phase).toBe('selecting-turn');
+      expect(selectAnnouncement(store.getState())).toContain("verification failed");
+    });
+
+    it('TURN_ORDER_DECIDED clears announcement set by COIN_FLIP_FAILED', () => {
+      const store = makeSelectingStore();
+      store.dispatch(coinFlipFailed());
+      store.dispatch(turnOrderDecided(true));
+      expect(selectAnnouncement(store.getState())).toBe('');
     });
   });
 
@@ -254,8 +268,29 @@ describe('P2P game', () => {
 
     it('OPPONENT_BOARD_REVEALED while game is in progress is ignored', () => {
       const store = makeInProgressStore();
-      store.dispatch(opponentBoardRevealed({placed: []}, true));
+      store.dispatch(opponentBoardRevealed({placed: []}, 'verified'));
       expect(selectP2pGame(store.getState())?.opponentBoard).toBeNull();
+    });
+
+    it('OPPONENT_BOARD_REVEALED with verified sets boardVerified to verified', () => {
+      const store = makeInProgressStore();
+      store.dispatch(p2pGameOver('me'));
+      store.dispatch(opponentBoardRevealed({placed: []}, 'verified'));
+      expect(selectP2pGame(store.getState())?.boardVerified).toBe('verified');
+    });
+
+    it('OPPONENT_BOARD_REVEALED with mismatch sets boardVerified to mismatch', () => {
+      const store = makeInProgressStore();
+      store.dispatch(p2pGameOver('me'));
+      store.dispatch(opponentBoardRevealed({placed: []}, 'mismatch'));
+      expect(selectP2pGame(store.getState())?.boardVerified).toBe('mismatch');
+    });
+
+    it('OPPONENT_BOARD_REVEALED with error sets boardVerified to error', () => {
+      const store = makeInProgressStore();
+      store.dispatch(p2pGameOver('me'));
+      store.dispatch(opponentBoardRevealed({placed: []}, 'error'));
+      expect(selectP2pGame(store.getState())?.boardVerified).toBe('error');
     });
   });
 
@@ -681,6 +716,24 @@ describe('server message handling', () => {
     const {store, emit} = createStoreWithPort();
     emit({type: 'SERVER_MESSAGE', data: {type: 'P2P_GAME_LOADED', gameState: 'not-json'}});
     expect(selectP2pGame(store.getState())).toBeNull();
+  });
+
+  it('sets announcement on P2P_GAME_LOADED with invalid JSON', () => {
+    const {store, emit} = createStoreWithPort();
+    emit({type: 'SERVER_MESSAGE', data: {type: 'P2P_GAME_LOADED', gameState: 'not-json'}});
+    expect(selectAnnouncement(store.getState())).toContain("saved game");
+  });
+
+  it('sets announcement on P2P_GAME_LOADED with invalid schema', () => {
+    const {store, emit} = createStoreWithPort();
+    emit({type: 'SERVER_MESSAGE', data: {type: 'P2P_GAME_LOADED', gameState: JSON.stringify({invalid: true})}});
+    expect(selectAnnouncement(store.getState())).toContain("saved game");
+  });
+
+  it('P2P_GAME_LOAD_FAILED sets top-level announcement', () => {
+    const store = makeStore();
+    store.dispatch(p2pGameLoadFailed());
+    expect(selectAnnouncement(store.getState())).toContain("saved game");
   });
 
   it('ignores unknown server message types without crashing', () => {

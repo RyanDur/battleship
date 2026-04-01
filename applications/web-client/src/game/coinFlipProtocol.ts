@@ -1,7 +1,7 @@
 import * as Decoder from 'schemawax';
 import {maybe} from '../lib/maybe';
 import {hashValue} from './hashBoard';
-import {turnOrderDecided} from './gameActions';
+import {turnOrderDecided, coinFlipFailed} from './gameActions';
 import type {GameAction} from './game';
 
 const coinFlipCommitDecoder = Decoder.object({required: {type: Decoder.literal('COIN_FLIP_COMMIT'), hash: Decoder.string}});
@@ -60,12 +60,12 @@ export const createCoinFlipProtocol = (deps: CoinFlipDeps): CoinFlipProtocol => 
       hashValue(value.toString())
         .onSuccess(hash => {
           if (hash !== flip.opponentHash) {
-            deps.dispatch(turnOrderDecided(false));
+            deps.dispatch(coinFlipFailed());
             return;
           }
           resolveTurn(peerId, flip, value);
         })
-        .onFailure(() => deps.dispatch(turnOrderDecided(false)));
+        .onFailure(() => deps.dispatch(coinFlipFailed()));
     } else {
       resolveTurn(peerId, flip, value);
     }

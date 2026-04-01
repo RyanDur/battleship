@@ -18,7 +18,7 @@ import {startSignaling, stopSignaling} from './transport/transportActions';
 import {ConnectionProvider} from './connections/ConnectionProvider';
 import {selectSignalingToPeer, selectPeerToSignaling} from './transport/transportSelectors';
 import {clearP2pGame, saveBoard, startGame} from './game/gameActions';
-import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView} from './game/gameSelectors';
+import {selectBoard, selectBoardLoading, selectP2pGame, selectGameView, selectAnnouncement} from './game/gameSelectors';
 import {useGameState, useGameStore} from './game/useGame';
 import {createGameStore, createAiGameListenerFactory, createOfflineFallbackListenerFactory, createSaveOnShotListenerFactory, createReconnectListenerFactory, createGameCommandListenerFactory, createServerBridgeListenerFactory} from './game/gameStore';
 import {GameProvider} from './game/GameProvider';
@@ -41,6 +41,7 @@ const AppMain = () => {
   const boardLoading = useGameState(selectBoardLoading);
   const p2pGame = useGameState(selectP2pGame);
   const gameView = useGameState(selectGameView);
+  const announcement = useGameState(selectAnnouncement);
   const gameStore = useGameStore();
   const [settingUpBoard, setSettingUpBoard] = useState(false);
 
@@ -49,7 +50,12 @@ const AppMain = () => {
   if (settingUpBoard) return <BoardSetup onConfirm={b => { gameStore.dispatch(saveBoard(b)); setSettingUpBoard(false); }}/>;
   if (p2pGame && (p2pGame.phase === 'placing' || p2pGame.phase === 'selecting-turn')) return <GameLobby onSetupBoard={() => setSettingUpBoard(true)}/>;
   if (gameView) return <Game onNewGame={() => p2pGame ? gameStore.dispatch(clearP2pGame()) : gameStore.dispatch(startGame())}/>;
-  return <button className="control" onClick={() => gameStore.dispatch(startGame())}>Play vs AI</button>;
+  return (
+    <>
+      {announcement && <p role="status" className="app-announcement">{announcement}</p>}
+      <button className="control" onClick={() => gameStore.dispatch(startGame())}>Play vs AI</button>
+    </>
+  );
 };
 
 const App = ({config}: Props) => {

@@ -662,7 +662,7 @@ describe('P2P board reveal at game over', () => {
     await vi.waitFor(() => {
       expect(selectP2pGame(aliceGame.getState())?.phase).toBe('game-over');
       expect(selectP2pGame(aliceGame.getState())?.opponentBoard).not.toBeNull();
-      expect(selectP2pGame(aliceGame.getState())?.boardVerified).toBe(true);
+      expect(selectP2pGame(aliceGame.getState())?.boardVerified).toBe('verified');
     });
   });
 
@@ -695,7 +695,7 @@ describe('P2P board reveal at game over', () => {
     await vi.waitFor(() => {
       expect(selectP2pGame(aliceGame.getState())?.phase).toBe('game-over');
       expect(selectP2pGame(aliceGame.getState())?.opponentBoard).not.toBeNull();
-      expect(selectP2pGame(aliceGame.getState())?.boardVerified).toBe(false);
+      expect(selectP2pGame(aliceGame.getState())?.boardVerified).toBe('mismatch');
     });
   });
 });

@@ -39,7 +39,9 @@ export const p2pStateSync = (opponentId: string, myShots: Shot[], opponentShots:
   ({type: 'P2P_STATE_SYNC' as const, opponentId, myShots, opponentShots, phase});
 export const p2pStateMismatch = () => ({type: 'P2P_STATE_MISMATCH' as const});
 export const clearP2pGame = () => ({type: 'CLEAR_P2P_GAME' as const});
-export const opponentBoardRevealed = (board: Board, verified: boolean) => ({type: 'OPPONENT_BOARD_REVEALED' as const, board, verified});
+export const coinFlipFailed = () => ({type: 'COIN_FLIP_FAILED' as const});
+export const p2pGameLoadFailed = () => ({type: 'P2P_GAME_LOAD_FAILED' as const});
+export const opponentBoardRevealed = (board: Board, verified: 'verified' | 'mismatch' | 'error') => ({type: 'OPPONENT_BOARD_REVEALED' as const, board, verified});
 
 export const peerNamed = (peerId: string, name: string) => ({type: 'PEER_NAMED' as const, peerId, name});
 export const peerConnected = (peerId: string, isOfferer: boolean) => ({type: 'PEER_CONNECTED' as const, peerId, isOfferer});

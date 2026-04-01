@@ -129,7 +129,7 @@ describe('coinFlipProtocol', () => {
   });
 
   describe('hash mismatch', () => {
-    it('cheater who reveals wrong value gets iGoFirst: false', async () => {
+    it('cheater who reveals wrong value dispatches COIN_FLIP_FAILED', async () => {
       const {deps, sent, dispatched} = makeDeps();
       const protocol = createCoinFlipProtocol(deps);
 
@@ -144,9 +144,7 @@ describe('coinFlipProtocol', () => {
       protocol.handleMessage('cheater', {type: 'COIN_FLIP_REVEAL', value: 12345});
 
       await vi.waitFor(() => expect(dispatched).toHaveLength(1));
-      const result = dispatched[0];
-      if (result.type !== 'TURN_ORDER_DECIDED') throw new Error('expected TURN_ORDER_DECIDED');
-      expect(result.iGoFirst).toBe(false);
+      expect(dispatched[0].type).toBe('COIN_FLIP_FAILED');
     });
   });
 });

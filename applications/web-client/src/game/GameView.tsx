@@ -63,7 +63,9 @@ export const Game = ({onNewGame}: Props) => {
               {revealedBoard && (
                 <>
                   <p className="board-verification">
-                    {p2pGame?.boardVerified ? 'Board verified' : 'Board hash mismatch'}
+                    {p2pGame?.boardVerified === 'verified' ? 'Board verified'
+                      : p2pGame?.boardVerified === 'error' ? "Couldn't verify board — hash computation failed"
+                      : 'Board hash mismatch'}
                   </p>
                   <section aria-label="Opponent's fleet" className="game-board">
                     {ROWS.flatMap(row =>

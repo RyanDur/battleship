@@ -29,7 +29,7 @@ export type P2pGame = {
   winner: 'me' | 'opponent' | null
   forfeited?: true
   opponentBoard: Board | null
-  boardVerified: boolean | null
+  boardVerified: 'verified' | 'mismatch' | 'error' | null
   announcement: string
 }
 
@@ -47,6 +47,7 @@ export type GameState = {
   p2pGame: P2pGame | null
   opponentNames: Record<string, string>
   offererPeerIds: string[]
+  announcement: string
 }
 
 export type GameAction =
@@ -84,7 +85,9 @@ export type GameAction =
   | {type: 'P2P_STATE_SYNC'; opponentId: string; myShots: Shot[]; opponentShots: Shot[]; phase: P2pGamePhase}
   | {type: 'P2P_STATE_MISMATCH'}
   | {type: 'CLEAR_P2P_GAME'}
-  | {type: 'OPPONENT_BOARD_REVEALED'; board: Board; verified: boolean}
+  | {type: 'COIN_FLIP_FAILED'}
+  | {type: 'P2P_GAME_LOAD_FAILED'}
+  | {type: 'OPPONENT_BOARD_REVEALED'; board: Board; verified: 'verified' | 'mismatch' | 'error'}
   | {type: 'PEER_NAMED'; peerId: string; name: string}
   | {type: 'PEER_CONNECTED'; peerId: string; isOfferer: boolean}
   | {type: 'PEER_DISCONNECTED'; peerId: string}
@@ -96,6 +99,7 @@ export const initialGameState: GameState = {
   p2pGame: null,
   opponentNames: {},
   offererPeerIds: [],
+  announcement: '',
 };
 
 const p2pGameInitial: P2pGame = {
@@ -129,9 +133,13 @@ const p2pGameReducer = createReducer<P2pGame | null, GameAction>({
     const updated = {...game, opponentBoardReady: true, opponentBoardHash: action.boardHash};
     return updated.myBoardReady ? {...updated, phase: 'selecting-turn'} : updated;
   },
+  COIN_FLIP_FAILED: (game) => {
+    if (!game) return game;
+    return {...game, announcement: "Coin flip verification failed — opponent's value didn't match their commitment. Try again."};
+  },
   TURN_ORDER_DECIDED: (game, action) => {
     if (!game) return game;
-    return {...game, phase: action.iGoFirst ? 'my-turn' : 'their-turn'};
+    return {...game, phase: action.iGoFirst ? 'my-turn' : 'their-turn', announcement: ''};
   },
   P2P_FIRE_RESULT: (game, action) => {
     if (!game) return game;
@@ -157,7 +165,7 @@ const p2pGameReducer = createReducer<P2pGame | null, GameAction>({
   P2P_STATE_MISMATCH: (game) => game ? {...game, phase: 'state-mismatch'} : game,
   OPPONENT_BOARD_REVEALED: (game, action) => {
     if (!game || game.phase !== 'game-over' || game.winner !== 'me') return game;
-    return {...game, opponentBoard: action.board, boardVerified: action.verified};
+    return {...game, opponentBoard: action.board, boardVerified: action.verified, announcement: ''};
   },
   CLEAR_P2P_GAME: () => null,
   PEER_DISCONNECTED: (game, action) => {
@@ -168,6 +176,7 @@ const p2pGameReducer = createReducer<P2pGame | null, GameAction>({
 });
 
 const gameHandlers: {[T in GameAction['type']]?: (state: GameState, action: Extract<GameAction, {type: T}>) => GameState} = {
+  P2P_GAME_LOAD_FAILED: (state) => ({...state, announcement: "Couldn't restore your saved game — the saved data was unreadable."}),
   LOAD_BOARD: (state) => ({...state, boardLoading: true}),
   BOARD_LOADED: (state, action) => ({...state, board: action.board, boardLoading: false}),
   BOARD_NOT_FOUND: (state) => ({...state, boardLoading: false}),

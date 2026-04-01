@@ -244,7 +244,7 @@ describe('P2P game', () => {
 
     it('OPPONENT_BOARD_REVEALED while game is in progress is ignored', () => {
       const store = makeInProgressStore();
-      store.dispatch(opponentBoardRevealed({placed: []}, true));
+      store.dispatch(opponentBoardRevealed({placed: []}, 'verified'));
       expect(selectP2pGame(store.getState())?.opponentBoard).toBeNull();
     });
   });
